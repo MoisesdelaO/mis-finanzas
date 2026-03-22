@@ -121,6 +121,9 @@ tr:hover td{background:var(--surface2)}
 .proy-bar{height:100%;border-radius:3px}
 .proy-marker{position:absolute;top:-3px;width:2px;height:12px;background:var(--text2);border-radius:1px}
 .proy-amounts{font-size:11px;min-width:120px;text-align:right;font-family:'DM Mono',monospace}
+.mob-item{display:flex;align-items:center;gap:14px;width:100%;padding:14px 20px;background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);text-align:left;transition:background .1s}
+.mob-item:hover{background:var(--surface2)}
+.mob-item.active{background:var(--purpl);color:var(--purple);font-weight:500}
 @media(max-width:600px){
   .form-grid{grid-template-columns:1fr}.form-grid.triple{grid-template-columns:1fr 1fr}
   .metrics{grid-template-columns:1fr 1fr}.acc-grid{grid-template-columns:1fr 1fr}
@@ -133,7 +136,7 @@ tr:hover td{background:var(--surface2)}
 <div id="toast"></div>
 <nav class="nav">
   <div class="nav-brand">💳 Mis Finanzas</div>
-  <div class="nav-tabs">
+  <div class="nav-tabs" id="nav-tabs-desktop">
     <button class="nav-tab active" onclick="show('dashboard')">Dashboard</button>
     <button class="nav-tab" onclick="show('gastos')">Gastos</button>
     <button class="nav-tab" onclick="show('ingresos')">Ingresos</button>
@@ -146,8 +149,56 @@ tr:hover td{background:var(--surface2)}
   </div>
   <div class="nav-right">
     <button class="sync-btn" onclick="syncAll()"><span class="sync-dot" id="sync-dot"></span><span id="sync-label">Sheets</span></button>
+    <button id="hamburger" onclick="toggleMenu()" style="display:none;background:none;border:1px solid var(--border2);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--text)">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="2" width="18" height="2" rx="1" fill="currentColor"/><rect y="8" width="18" height="2" rx="1" fill="currentColor"/><rect y="14" width="18" height="2" rx="1" fill="currentColor"/></svg>
+    </button>
   </div>
 </nav>
+
+<!-- Mobile menu overlay -->
+<div id="mobile-menu" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;background:rgba(0,0,0,0.4)" onclick="closeMenu()">
+  <div onclick="event.stopPropagation()" style="position:absolute;top:0;right:0;width:75%;max-width:280px;height:100%;background:var(--surface);display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.15)">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+      <span style="font-size:15px;font-weight:600;color:var(--purple)">💳 Mis Finanzas</span>
+      <button onclick="closeMenu()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:22px;line-height:1;padding:0">×</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:8px 0">
+      <button class="mob-item active" id="mob-dashboard" onclick="showMob('dashboard')">
+        <span style="font-size:18px">📊</span><span>Dashboard</span>
+      </button>
+      <button class="mob-item" id="mob-gastos" onclick="showMob('gastos')">
+        <span style="font-size:18px">💳</span><span>Gastos</span>
+      </button>
+      <button class="mob-item" id="mob-ingresos" onclick="showMob('ingresos')">
+        <span style="font-size:18px">💰</span><span>Ingresos</span>
+      </button>
+      <button class="mob-item" id="mob-inversiones" onclick="showMob('inversiones')">
+        <span style="font-size:18px">📈</span><span>Inversiones</span>
+      </button>
+      <button class="mob-item" id="mob-tdc" onclick="showMob('tdc')">
+        <span style="font-size:18px">💳</span><span>Pagos TDC</span>
+      </button>
+      <button class="mob-item" id="mob-metas" onclick="showMob('metas')">
+        <span style="font-size:18px">🎯</span><span>Metas</span>
+      </button>
+      <button class="mob-item" id="mob-recurrentes" onclick="showMob('recurrentes')">
+        <span style="font-size:18px">🔄</span><span>Recurrentes</span>
+      </button>
+      <button class="mob-item" id="mob-anual" onclick="showMob('anual')">
+        <span style="font-size:18px">📅</span><span>Resumen anual</span>
+      </button>
+      <button class="mob-item" id="mob-config" onclick="showMob('config')">
+        <span style="font-size:18px">⚙️</span><span>Configuración</span>
+      </button>
+    </div>
+    <div style="padding:16px 20px;border-top:1px solid var(--border)">
+      <button onclick="syncAll();closeMenu()" style="width:100%;padding:11px;background:var(--purple);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+        <span class="sync-dot" id="sync-dot-mob"></span>
+        <span id="sync-label-mob">Sincronizar Sheets</span>
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ DASHBOARD ═══ -->
 <div id="dashboard" class="screen active">
@@ -450,7 +501,7 @@ function show(id){
 // ══════════════════════════════════════════════════════════
 // SYNC
 // ══════════════════════════════════════════════════════════
-function setSyncStatus(s){const dot=document.getElementById('sync-dot'),lbl=document.getElementById('sync-label');if(s==='ok'){dot.className='sync-dot ok';lbl.textContent='Sincronizado';connected=true;}else if(s==='err'){dot.className='sync-dot err';lbl.textContent='Sin conexión';connected=false;}else{dot.className='sync-dot';lbl.textContent='Sheets';connected=false;}}
+function setSyncStatus(s){const dot=document.getElementById('sync-dot'),lbl=document.getElementById('sync-label');setTimeout(syncMobDot,100);if(s==='ok'){dot.className='sync-dot ok';lbl.textContent='Sincronizado';connected=true;}else if(s==='err'){dot.className='sync-dot err';lbl.textContent='Sin conexión';connected=false;}else{dot.className='sync-dot';lbl.textContent='Sheets';connected=false;}}
 async function syncAll(){if(!DB.config.scriptURL){show('config');toast('Configura tu URL primero','err');return;}toast('Sincronizando...');try{const res=await fetch(DB.config.scriptURL+'?action=getAll');const data=await res.json();if(data.gastos)DB.gastos=data.gastos;if(data.ingresos)DB.ingresos=data.ingresos;if(data.inversiones)DB.inversiones=data.inversiones;if(data.pagosTDC)DB.pagosTDC=data.pagosTDC;if(data.metas)DB.metas=data.metas;save();setSyncStatus('ok');toast('Sincronizado ✓');renderDashboard();}catch(e){setSyncStatus('err');toast('Error de conexión','err');}}
 async function pushSheets(sheet,row){if(!DB.config.scriptURL||!connected)return;try{await fetch(DB.config.scriptURL,{method:'POST',body:JSON.stringify({action:'append',sheet,row})});}catch(e){}}
 function guardarURL(){const url=document.getElementById('script-url').value.trim();if(!url){toast('Pega tu URL primero','err');return;}DB.config.scriptURL=url;save();probarConexion();}
@@ -993,6 +1044,30 @@ function renderDashboard(){
 }
 
 
+function toggleMenu(){
+  var m=document.getElementById('mobile-menu');
+  m.style.display=m.style.display==='none'?'block':'none';
+}
+function closeMenu(){
+  document.getElementById('mobile-menu').style.display='none';
+}
+function showMob(id){
+  // Update mobile menu active state
+  document.querySelectorAll('.mob-item').forEach(function(b){b.classList.remove('active');});
+  var mob=document.getElementById('mob-'+id);
+  if(mob)mob.classList.add('active');
+  closeMenu();
+  show(id);
+}
+function syncMobDot(){
+  var dot=document.getElementById('sync-dot-mob');
+  var lbl=document.getElementById('sync-label-mob');
+  var mainDot=document.getElementById('sync-dot');
+  if(!dot||!lbl||!mainDot)return;
+  dot.className=mainDot.className;
+  lbl.textContent=document.getElementById('sync-label').textContent==='Sincronizado'?'Sincronizado':'Sincronizar Sheets';
+}
+
 // ══════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════
@@ -1474,6 +1549,30 @@ function calcTasa(){
   document.getElementById('c-rdto-total').textContent='+'+fmt(rdtoTotal);
   document.getElementById('c-tip').innerHTML='Pon <strong>'+efectiva.toFixed(2)+'%</strong> como tasa en la app para proyecciones precisas.';
   if(result)result.style.display='block';
+}
+
+function toggleMenu(){
+  var m=document.getElementById('mobile-menu');
+  m.style.display=m.style.display==='none'?'block':'none';
+}
+function closeMenu(){
+  document.getElementById('mobile-menu').style.display='none';
+}
+function showMob(id){
+  // Update mobile menu active state
+  document.querySelectorAll('.mob-item').forEach(function(b){b.classList.remove('active');});
+  var mob=document.getElementById('mob-'+id);
+  if(mob)mob.classList.add('active');
+  closeMenu();
+  show(id);
+}
+function syncMobDot(){
+  var dot=document.getElementById('sync-dot-mob');
+  var lbl=document.getElementById('sync-label-mob');
+  var mainDot=document.getElementById('sync-dot');
+  if(!dot||!lbl||!mainDot)return;
+  dot.className=mainDot.className;
+  lbl.textContent=document.getElementById('sync-label').textContent==='Sincronizado'?'Sincronizado':'Sincronizar Sheets';
 }
 
 // ══════════════════════════════════════════════════════════
