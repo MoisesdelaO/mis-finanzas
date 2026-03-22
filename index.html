@@ -913,6 +913,7 @@ function renderInversiones(){
       '</div>';
 
     body.innerHTML=statsHtml+tramosSection+chartSection+editSection+updateSection;
+    body.addEventListener('click',function(e){e.stopPropagation();});
     card.appendChild(body);
     container.appendChild(card);
   });
@@ -934,6 +935,38 @@ function renderInversiones(){
   }).join('');
 }
 
+function updateTramo(nombre,idx,field,val){
+  if(!DB.cuentasInv[nombre])return;
+  var t=DB.cuentasInv[nombre].tramos[idx];
+  if(!t)return;
+  if(field==='limite') t.limite=parseFloat(val)||null;
+  if(field==='tasa') t.tasa=parseFloat(val)||0;
+  save();
+  var open=getOpenAccs();
+  renderInversiones();
+  restoreOpenAccs(open);
+}
+function addTramoAcc(nombre){
+  if(!DB.cuentasInv[nombre])return;
+  var tramos=DB.cuentasInv[nombre].tramos;
+  var last=tramos[tramos.length-1];
+  tramos.splice(tramos.length-1,0,{limite:(last.limite||0),tasa:0});
+  save();
+  var open=getOpenAccs();
+  renderInversiones();
+  restoreOpenAccs(open);
+}
+function delTramoAcc(nombre,idx){
+  if(!DB.cuentasInv[nombre])return;
+  var tramos=DB.cuentasInv[nombre].tramos;
+  if(tramos.length<=1)return;
+  tramos.splice(idx,1);
+  save();
+  var open=getOpenAccs();
+  renderInversiones();
+  restoreOpenAccs(open);
+}
+
 function toggleAcc(key){
   var body=document.getElementById('body-'+key);
   var arrow=document.getElementById('arrow-'+key);
@@ -941,6 +974,30 @@ function toggleAcc(key){
   var isOpen=body.classList.contains('open');
   body.classList.toggle('open',!isOpen);
   if(arrow)arrow.classList.toggle('open',!isOpen);
+}
+function getOpenAccs(){
+  var open=[];
+  document.querySelectorAll('.acc-body.open').forEach(function(b){open.push(b.id);});
+  return open;
+}
+function restoreOpenAccs(openIds){
+  // Close all first
+  document.querySelectorAll('.acc-body').forEach(function(b){
+    b.classList.remove('open');
+    var key=b.id.replace('body-','');
+    var arrow=document.getElementById('arrow-'+key);
+    if(arrow)arrow.classList.remove('open');
+  });
+  // Re-open the ones that were open
+  openIds.forEach(function(id){
+    var b=document.getElementById(id);
+    if(b){
+      b.classList.add('open');
+      var key=id.replace('body-','');
+      var arrow=document.getElementById('arrow-'+key);
+      if(arrow)arrow.classList.add('open');
+    }
+  });
 }
 
 function calcTramos(saldo, tramos){
@@ -977,7 +1034,7 @@ function actualizarSaldo(nombre,key){
   var row={id:Date.now(),periodo:periodo,cuenta:nombre,ant:prev,actual:val,dif:val-prev,notas:'Actualización manual'};
   DB.inversiones.unshift(row);save();
   pushSheets('Inversiones',[periodo,nombre,prev,val,val-prev,'Actualización manual']);
-  renderInversiones();toast('Saldo de '+nombre+' → '+fmt(val)+' ✓');
+  var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);toast('Saldo de '+nombre+' → '+fmt(val)+' ✓');
 }
 function eliminarInversion(id){DB.inversiones=DB.inversiones.filter(i=>i.id!==id);save();renderInversiones();}
 
