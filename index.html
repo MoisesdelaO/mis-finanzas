@@ -1385,6 +1385,22 @@ function syncMobDot(){
 // INIT
 // ══════════════════════════════════════════════════════════
 load();
+// Auto-sync from Sheets on open
+if(DB.config.scriptURL){
+  setSyncStatus('ok');
+  fetch(DB.config.scriptURL+'?action=getAll')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var updated=false;
+      if(data.gastos&&data.gastos.length){DB.gastos=data.gastos;updated=true;}
+      if(data.ingresos&&data.ingresos.length){DB.ingresos=data.ingresos;updated=true;}
+      if(data.inversiones&&data.inversiones.length){DB.inversiones=data.inversiones;updated=true;}
+      if(data.pagosTDC&&data.pagosTDC.length){DB.pagosTDC=data.pagosTDC;updated=true;}
+      if(data.metas&&data.metas.length){DB.metas=data.metas;updated=true;}
+      if(updated){save();renderDashboard();setSyncStatus('ok');}
+    })
+    .catch(function(){setSyncStatus('err');});
+}
 // Migrate: ensure all cuentasInv have tramos structure
 var defaultTramos = {
   'Openbank':    [{limite:40000,tasa:13},{limite:null,tasa:7.3}],
