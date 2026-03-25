@@ -512,14 +512,28 @@ let DB={
   }
 };
 let connected=false;
-function save(){localStorage.setItem('mf_db',JSON.stringify(DB));}
+let syncing=false;
+
+// ── STORAGE: always localStorage for config/cuentasInv, Sheets for transactional data ──
+function saveLocal(){
+  localStorage.setItem('mf_config',JSON.stringify({
+    config:DB.config,
+    cuentasInv:DB.cuentasInv
+  }));
+}
+function save(){
+  saveLocal();
+  // Also persist transactional data locally as fallback
+  localStorage.setItem('mf_data',JSON.stringify({
+    gastos:DB.gastos,ingresos:DB.ingresos,inversiones:DB.inversiones,
+    pagosTDC:DB.pagosTDC,metas:DB.metas,recurrentes:DB.recurrentes
+  }));
+}
 function load(){
-  const d=localStorage.getItem('mf_db');
-  if(d){
-    const p=JSON.parse(d);
-    DB.gastos=p.gastos||[];DB.ingresos=p.ingresos||[];DB.inversiones=p.inversiones||[];
-    DB.pagosTDC=p.pagosTDC||[];DB.metas=p.metas||[];DB.recurrentes=p.recurrentes||[];
-    if(p.cuentasInv)DB.cuentasInv={...DB.cuentasInv,...p.cuentasInv};
+  // Load config + cuentasInv from localStorage
+  var cfg=localStorage.getItem('mf_config');
+  if(cfg){
+    var p=JSON.parse(cfg);
     if(p.config)DB.config={...DB.config,...p.config,
       categorias:p.config.categorias||DB.config.categorias,
       tdcs:p.config.tdcs||DB.config.tdcs,
@@ -527,7 +541,64 @@ function load(){
       presupuesto:{...DB.config.presupuesto,...(p.config.presupuesto||{})},
       cortesTDC:{...DB.config.cortesTDC,...(p.config.cortesTDC||{})}
     };
+    if(p.cuentasInv)DB.cuentasInv={...DB.cuentasInv,...p.cuentasInv};
   }
+  // Load transactional data from localStorage as fallback
+  var data=localStorage.getItem('mf_data');
+  if(data){
+    var d=JSON.parse(data);
+    DB.gastos=d.gastos||[];DB.ingresos=d.ingresos||[];DB.inversiones=d.inversiones||[];
+    DB.pagosTDC=d.pagosTDC||[];DB.metas=d.metas||[];DB.recurrentes=d.recurrentes||[];
+  }
+  // Legacy migration
+  var legacy=localStorage.getItem('mf_db');
+  if(legacy&&!cfg&&!data){
+    var p=JSON.parse(legacy);
+    DB.gastos=p.gastos||[];DB.ingresos=p.ingresos||[];DB.inversiones=p.inversiones||[];
+    DB.pagosTDC=p.pagosTDC||[];DB.metas=p.metas||[];DB.recurrentes=p.recurrentes||[];
+    if(p.cuentasInv)DB.cuentasInv={...DB.cuentasInv,...p.cuentasInv};
+    if(p.config)DB.config={...DB.config,...p.config};
+    save(); // migrate to new format
+  }
+}
+
+// ── SHEETS SYNC: full bidirectional ──
+async function pullFromSheets(){
+  if(!DB.config.scriptURL)return false;
+  try{
+    var res=await fetch(DB.config.scriptURL+'?action=getAll');
+    var data=await res.json();
+    if(data.error)return false;
+    // Update transactional data
+    if(data.gastos)DB.gastos=data.gastos.map(function(r){return{id:r.id||Date.now(),fecha:r.fecha,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas};});
+    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){return{id:r.id||Date.now(),fecha:r.fecha,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};});
+    if(data.inversiones)DB.inversiones=data.inversiones.map(function(r){return{id:r.id||Date.now(),periodo:r.periodo,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};});
+    if(data.pagosTDC)DB.pagosTDC=data.pagosTDC.map(function(r){return{id:r.id||Date.now(),fecha:r.fecha,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas};});
+    if(data.metas)DB.metas=data.metas.map(function(r){return{id:r.id||Date.now(),nombre:r.nombre,objetivo:parseFloat(r.objetivo)||0,fecha:r.fecha,actual:parseFloat(r.actual)||0,notas:r.notas};});
+    if(data.recurrentes)DB.recurrentes=data.recurrentes.map(function(r){return{id:r.id||Date.now(),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
+    // Update cuentasInv if available
+    if(data.cuentasInv&&Object.keys(data.cuentasInv).length>0){
+      Object.keys(data.cuentasInv).forEach(function(n){
+        if(!DB.cuentasInv[n])DB.cuentasInv[n]={saldo:0,ultimaAct:'',tramos:[{limite:null,tasa:0}]};
+        DB.cuentasInv[n].saldo=parseFloat(data.cuentasInv[n].saldo)||0;
+        DB.cuentasInv[n].ultimaAct=data.cuentasInv[n].ultimaAct||'';
+        if(data.cuentasInv[n].tramos&&data.cuentasInv[n].tramos.length)
+          DB.cuentasInv[n].tramos=data.cuentasInv[n].tramos;
+      });
+    }
+    save();
+    return true;
+  }catch(e){return false;}
+}
+
+async function pushCuentasInv(){
+  if(!DB.config.scriptURL)return;
+  try{
+    await fetch(DB.config.scriptURL,{
+      method:'POST',
+      body:JSON.stringify({action:'syncCuentasInv',cuentas:DB.cuentasInv})
+    });
+  }catch(e){}
 }
 
 // ══════════════════════════════════════════════════════════
@@ -561,11 +632,58 @@ function show(id){
 // ══════════════════════════════════════════════════════════
 // SYNC
 // ══════════════════════════════════════════════════════════
-function setSyncStatus(s){const dot=document.getElementById('sync-dot'),lbl=document.getElementById('sync-label');setTimeout(syncMobDot,100);if(s==='ok'){dot.className='sync-dot ok';lbl.textContent='Sincronizado';connected=true;}else if(s==='err'){dot.className='sync-dot err';lbl.textContent='Sin conexión';connected=false;}else{dot.className='sync-dot';lbl.textContent='Sheets';connected=false;}}
-async function syncAll(){if(!DB.config.scriptURL){show('config');toast('Configura tu URL primero','err');return;}toast('Sincronizando...');try{const res=await fetch(DB.config.scriptURL+'?action=getAll');const data=await res.json();if(data.gastos)DB.gastos=data.gastos;if(data.ingresos)DB.ingresos=data.ingresos;if(data.inversiones)DB.inversiones=data.inversiones;if(data.pagosTDC)DB.pagosTDC=data.pagosTDC;if(data.metas)DB.metas=data.metas;save();setSyncStatus('ok');toast('Sincronizado ✓');renderDashboard();}catch(e){setSyncStatus('err');toast('Error de conexión','err');}}
-async function pushSheets(sheet,row){if(!DB.config.scriptURL||!connected)return;try{await fetch(DB.config.scriptURL,{method:'POST',body:JSON.stringify({action:'append',sheet,row})});}catch(e){}}
+function setSyncStatus(s){
+  var dot=document.getElementById('sync-dot'),lbl=document.getElementById('sync-label');
+  setTimeout(syncMobDot,100);
+  if(s==='ok'){dot.className='sync-dot ok';lbl.textContent='Sincronizado';connected=true;}
+  else if(s==='syncing'){dot.className='sync-dot';lbl.textContent='Sincronizando...';dot.style.background='#BA7517';}
+  else if(s==='err'){dot.className='sync-dot err';lbl.textContent='Sin conexión';connected=false;}
+  else{dot.className='sync-dot';lbl.textContent='Sheets';connected=false;}
+}
+async function syncAll(){
+  if(!DB.config.scriptURL){show('config');toast('Configura tu URL primero','err');return;}
+  setSyncStatus('syncing');
+  toast('Sincronizando...');
+  var ok=await pullFromSheets();
+  if(ok){
+    setSyncStatus('ok');
+    toast('Sincronizado ✓');
+    // Re-render current screen
+    var active=document.querySelector('.screen.active');
+    if(active){
+      var id=active.id;
+      var fn={dashboard:renderDashboard,gastos:renderGastos,ingresos:renderIngresos,
+              inversiones:renderInversiones,tdc:renderTDC,metas:renderMetas,
+              recurrentes:renderRecurrentes,anual:renderAnual,config:renderConfig};
+      if(fn[id])fn[id]();
+    }
+  }else{
+    setSyncStatus('err');
+    toast('Error de conexión','err');
+  }
+}
+async function pushSheets(sheet,row){
+  if(!DB.config.scriptURL)return;
+  try{
+    await fetch(DB.config.scriptURL,{method:'POST',body:JSON.stringify({action:'append',sheet:sheet,row:row})});
+    connected=true;setSyncStatus('ok');
+  }catch(e){setSyncStatus('err');}
+}
 function guardarURL(){const url=document.getElementById('script-url').value.trim();if(!url){toast('Pega tu URL primero','err');return;}DB.config.scriptURL=url;save();probarConexion();}
-async function probarConexion(){if(!DB.config.scriptURL){toast('No hay URL','err');return;}toast('Probando...');try{const res=await fetch(DB.config.scriptURL+'?action=ping');const data=await res.json();if(data.ok){setSyncStatus('ok');toast('Conexión exitosa ✓');}else throw new Error();}catch(e){setSyncStatus('err');toast('No se pudo conectar','err');}}
+async function probarConexion(){
+  if(!DB.config.scriptURL){toast('No hay URL','err');return;}
+  toast('Probando conexión...');
+  try{
+    var res=await fetch(DB.config.scriptURL+'?action=ping');
+    var data=await res.json();
+    if(data.ok){
+      setSyncStatus('ok');
+      toast('Conexión exitosa — jalando datos...');
+      var ok=await pullFromSheets();
+      if(ok){renderDashboard();toast('Datos sincronizados ✓');}
+    }else throw new Error();
+  }catch(e){setSyncStatus('err');toast('No se pudo conectar','err');}
+}
 
 // ══════════════════════════════════════════════════════════
 // IMPORTAR / EXPORTAR
@@ -948,6 +1066,7 @@ function updateTramo(nombre,idx,field,val){
   if(field==='limite') t.limite=parseFloat(val)||null;
   if(field==='tasa') t.tasa=parseFloat(val)||0;
   save();
+  pushCuentasInv();
   var open=getOpenAccs();
   renderInversiones();
   restoreOpenAccs(open);
@@ -1040,7 +1159,7 @@ function actualizarSaldo(nombre,key){
   var row={id:Date.now(),periodo:periodo,cuenta:nombre,ant:prev,actual:val,dif:val-prev,notas:'Actualización manual'};
   DB.inversiones.unshift(row);save();
   pushSheets('Inversiones',[periodo,nombre,prev,val,val-prev,'Actualización manual']);
-  var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);toast('Saldo de '+nombre+' → '+fmt(val)+' ✓');
+  var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);pushCuentasInv();toast('Saldo de '+nombre+' → '+fmt(val)+' ✓');
 }
 function eliminarInversion(id){DB.inversiones=DB.inversiones.filter(i=>i.id!==id);save();renderInversiones();}
 
@@ -1418,19 +1537,16 @@ function syncMobDot(){
 load();
 // Auto-sync from Sheets on open
 if(DB.config.scriptURL){
-  setSyncStatus('ok');
-  fetch(DB.config.scriptURL+'?action=getAll')
-    .then(function(r){return r.json();})
-    .then(function(data){
-      var updated=false;
-      if(data.gastos&&data.gastos.length){DB.gastos=data.gastos;updated=true;}
-      if(data.ingresos&&data.ingresos.length){DB.ingresos=data.ingresos;updated=true;}
-      if(data.inversiones&&data.inversiones.length){DB.inversiones=data.inversiones;updated=true;}
-      if(data.pagosTDC&&data.pagosTDC.length){DB.pagosTDC=data.pagosTDC;updated=true;}
-      if(data.metas&&data.metas.length){DB.metas=data.metas;updated=true;}
-      if(updated){save();renderDashboard();setSyncStatus('ok');}
-    })
-    .catch(function(){setSyncStatus('err');});
+  setSyncStatus('syncing');
+  pullFromSheets().then(function(ok){
+    if(ok){
+      setSyncStatus('ok');
+      renderDashboard();
+      toast('Datos actualizados ✓');
+    }else{
+      setSyncStatus('err');
+    }
+  });
 }
 // Migrate: ensure all cuentasInv have tramos structure
 var defaultTramos = {
