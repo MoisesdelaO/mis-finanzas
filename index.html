@@ -609,8 +609,16 @@ async function pushCuentasInv(){
 // UTILS
 // ══════════════════════════════════════════════════════════
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-function fmt(n){return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
-function fmtK(n){return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
+function fmt(n){
+  var v=Number(n||0);
+  var dec=v%1===0?0:2;
+  return '$'+v.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:2});
+}
+function fmtK(n){
+  var v=Number(n||0);
+  var dec=v%1===0?0:2;
+  return '$'+v.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:2});
+}
 function pct(n){return Math.round((n||0)*100)+'%';}
 function rdtoDia(s,t){return s*(Math.pow(1+t/100,1/365)-1);}
 function rdtoDias(s,t,d){return s*(Math.pow(1+t/100,d/365)-1);}
