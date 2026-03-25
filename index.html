@@ -154,6 +154,8 @@ tr:hover td{background:var(--surface2)}
 .mob-item:hover{background:var(--surface2)}
 .mob-item.active{background:var(--purpl);color:var(--purple);font-weight:500}
 @media(max-width:640px){
+  .cfg-grid{grid-template-columns:1fr !important}
+
   .screen{padding:10px 8px}
   .nav-brand{font-size:13px}
   #nav-tabs-desktop{display:none !important}
@@ -457,7 +459,7 @@ tr:hover td{background:var(--surface2)}
     </div>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+  <div class="dash-grid-2 cfg-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
     <div class="card">
       <div class="card-title">Categorías</div>
       <div id="cfg-cats" style="margin-bottom:10px"></div>
@@ -669,7 +671,7 @@ async function pushSheets(sheet,row){
     connected=true;setSyncStatus('ok');
   }catch(e){setSyncStatus('err');}
 }
-function guardarURL(){const url=document.getElementById('script-url').value.trim();if(!url){toast('Pega tu URL primero','err');return;}DB.config.scriptURL=url;save();probarConexion();}
+function guardarURL(){var url=document.getElementById('script-url').value.trim();if(!url){toast('Pega tu URL primero','err');return;}DB.config.scriptURL=url;saveLocal();probarConexion();}
 async function probarConexion(){
   if(!DB.config.scriptURL){toast('No hay URL','err');return;}
   toast('Probando conexión...');
@@ -1294,7 +1296,7 @@ function renderConfig(){
   document.getElementById('cfg-ctas').innerHTML=DB.config.cuentas.map((c,i)=>chip(c,`quitarCuenta(${i})`)).join('');
   document.getElementById('cfg-cortes').innerHTML=DB.config.tdcs.filter(t=>t!=='Efectivo').map(t=>{
     const v=DB.config.cortesTDC[t]||{corte:'',diasPago:''};
-    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)"><span style="font-size:12px;font-weight:500;min-width:85px">${t}</span><div><div style="font-size:10px;color:var(--text3)">Día corte</div><input type="number" value="${v.corte}" min="1" max="31" onchange="updateCorte('${t}','corte',this.value)" style="width:52px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:center"></div><div><div style="font-size:10px;color:var(--text3)">Días pagar</div><input type="number" value="${v.diasPago}" min="1" max="30" onchange="updateCorte('${t}','diasPago',this.value)" style="width:52px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:center"></div></div>`;}).join('');
+    return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)"><span style="font-size:12px;font-weight:500;min-width:85px">${t}</span><div style="display:flex;gap:10px;flex-wrap:wrap"><div><div style="font-size:10px;color:var(--text3)">Día corte</div><input type="number" value="${v.corte}" min="1" max="31" onchange="updateCorte('${t}','corte',this.value)" style="width:52px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:center"></div><div><div style="font-size:10px;color:var(--text3)">Días pagar</div><input type="number" value="${v.diasPago}" min="1" max="30" onchange="updateCorte('${t}','diasPago',this.value)" style="width:52px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:center"></div></div></div>`;}).join('');
   document.getElementById('cfg-presupuesto').innerHTML=DB.config.categorias.map(cat=>`<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:0.5px solid var(--border)"><span style="font-size:12px;font-weight:500;flex:1">${cat}</span><input type="number" value="${DB.config.presupuesto[cat]||0}" onchange="updatePresupuesto('${cat}',this.value)" style="width:110px;padding:6px 10px;border:1px solid var(--border2);border-radius:6px;font-family:monospace;font-size:12px;text-align:right"></div>`).join('');
   poblarSelects();
 }
@@ -1332,16 +1334,15 @@ function resetearSaldos(){
       body: JSON.stringify({action:'clearSheet', sheet:'Inversiones'})
     }).catch(function(){});
   }
-  toast('Saldos reseteados en este dispositivo. Abre la app en otros dispositivos para que sincronice.');
-  show('inversiones');
+  toast('Saldos reseteados ✓');
 }
 function borrarTodo(){
   if(!confirm('¿Seguro? Borra TODOS los datos en este dispositivo.'))return;
   DB.gastos=[];DB.ingresos=[];DB.inversiones=[];DB.pagosTDC=[];DB.metas=[];DB.recurrentes=[];
   Object.keys(DB.cuentasInv).forEach(function(n){DB.cuentasInv[n].saldo=0;DB.cuentasInv[n].ultimaAct='';});
   save();
-  toast('Datos borrados. Abre Config en otros dispositivos y presiona Sheets para sincronizar.');
-  show('dashboard');
+  toast('Datos borrados ✓');
+  renderDashboard();
 }
 
 // ══════════════════════════════════════════════════════════
