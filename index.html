@@ -705,6 +705,13 @@ async function pushSheets(sheet,row){
     connected=true;setSyncStatus('ok');
   }catch(e){setSyncStatus('err');}
 }
+async function syncSheetDelete(sheet,rows){
+  if(!DB.config.scriptURL)return;
+  try{
+    await fetch(DB.config.scriptURL,{method:'POST',body:JSON.stringify({action:'syncSheet',sheet:sheet,rows:rows})});
+    connected=true;setSyncStatus('ok');
+  }catch(e){setSyncStatus('err');}
+}
 function guardarURL(){var url=document.getElementById('script-url').value.trim();if(!url){toast('Pega tu URL primero','err');return;}DB.config.scriptURL=url;saveLocal();probarConexion();}
 async function probarConexion(){
   if(!DB.config.scriptURL){toast('No hay URL','err');return;}
@@ -788,7 +795,7 @@ function agregarGasto(){
   limpiarGasto();renderGastos();toast('Gasto registrado ✓');
 }
 function limpiarGasto(){['g-fecha','g-monto','g-desc','g-notas'].forEach(id=>document.getElementById(id).value='');['g-cat','g-tdc'].forEach(id=>document.getElementById(id).value='');document.getElementById('g-msi').value='';document.getElementById('msi-meses-field').style.display='none';document.getElementById('g-fecha').value=today();}
-function eliminarGasto(id){DB.gastos=DB.gastos.filter(g=>g.id!==id);save();renderGastos();toast('Eliminado');}
+function eliminarGasto(id){DB.gastos=DB.gastos.filter(function(g){return g.id!==id;});save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Eliminado');}
 function renderGastos(){
   const tbody=document.getElementById('gastos-tbody');
   if(!DB.gastos.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Sin gastos</td></tr>';return;}
@@ -808,7 +815,7 @@ function agregarIngreso(){
   document.getElementById('i-fecha').value=today();['i-monto','i-desc'].forEach(id=>document.getElementById(id).value='');
   renderIngresos();toast('Ingreso registrado ✓');
 }
-function eliminarIngreso(id){DB.ingresos=DB.ingresos.filter(i=>i.id!==id);save();renderIngresos();}
+function eliminarIngreso(id){DB.ingresos=DB.ingresos.filter(function(i){return i.id!==id;});save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);}
 function renderIngresos(){
   const tbody=document.getElementById('ingresos-tbody');
   if(!DB.ingresos.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px">Sin ingresos</td></tr>';return;}
@@ -1196,7 +1203,7 @@ function actualizarSaldo(nombre,key){
   pushSheets('Inversiones',[periodo,nombre,prev,val,val-prev,'Actualización manual']);
   var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);pushCuentasInv();toast('Saldo de '+nombre+' → '+fmt(val)+' ✓');
 }
-function eliminarInversion(id){DB.inversiones=DB.inversiones.filter(i=>i.id!==id);save();renderInversiones();}
+function eliminarInversion(id){DB.inversiones=DB.inversiones.filter(function(i){return i.id!==id;});save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);}
 
 // ══════════════════════════════════════════════════════════
 // PAGOS TDC
@@ -1211,7 +1218,7 @@ function agregarPagoTDC(){
   document.getElementById('t-fecha').value=today();['t-monto','t-notas'].forEach(id=>document.getElementById(id).value='');
   renderTDC();toast('Pago registrado ✓');
 }
-function eliminarPagoTDC(id){DB.pagosTDC=DB.pagosTDC.filter(p=>p.id!==id);save();renderTDC();}
+function eliminarPagoTDC(id){DB.pagosTDC=DB.pagosTDC.filter(function(p){return p.id!==id;});save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);}
 function renderTDC(){
   const tbody=document.getElementById('tdc-tbody');
   if(!DB.pagosTDC.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Sin pagos</td></tr>';return;}
@@ -1229,7 +1236,7 @@ function agregarMeta(){
   renderMetas();toast('Meta agregada ✓');
 }
 function actualizarMeta(id,val){const m=DB.metas.find(m=>m.id===id);if(m){m.actual=parseFloat(val)||0;save();}}
-function eliminarMeta(id){DB.metas=DB.metas.filter(m=>m.id!==id);save();renderMetas();}
+function eliminarMeta(id){DB.metas=DB.metas.filter(function(m){return m.id!==id;});save();renderMetas();syncSheetDelete('Metas',DB.metas);}
 function renderMetas(){
   const c=document.getElementById('metas-list');
   if(!DB.metas.length){c.innerHTML='<div class="card" style="text-align:center;color:var(--text3);padding:32px">Sin metas aún</div>';return;}
@@ -1251,7 +1258,7 @@ function agregarRecurrente(){
   ['r-desc','r-monto','r-dia'].forEach(id=>document.getElementById(id).value='');
   renderRecurrentes();toast('Gasto recurrente agregado ✓');
 }
-function eliminarRecurrente(id){DB.recurrentes=DB.recurrentes.filter(r=>r.id!==id);save();renderRecurrentes();}
+function eliminarRecurrente(id){DB.recurrentes=DB.recurrentes.filter(function(r){return r.id!==id;});save();renderRecurrentes();syncSheetDelete('Recurrentes',DB.recurrentes);}
 function registrarRecurrente(id){
   const r=DB.recurrentes.find(r=>r.id===id);if(!r)return;
   const hoyStr=today();
