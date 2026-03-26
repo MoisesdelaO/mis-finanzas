@@ -1648,8 +1648,10 @@ function renderDashboard(){
     var consumoMesAnt=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mesAnteriorNombre;}).reduce(function(s,g){return s+g.monto;},0);
     var pagosMesAnt=DB.pagosTDC.filter(function(p){return p.tdc===tdc&&p.mes===mesAnteriorNombre;}).reduce(function(s,p){return s+p.monto;},0);
     var pendientePago=Math.max(0,consumoMesAnt-pagosMesAnt);
-    // Próximo pago = consumo del mes seleccionado (lo que se pagará en el próximo corte)
-    var proximoPago=consumo;
+    // Próximo pago:
+    // Si hay pendiente del mes anterior = eso es lo urgente (vence pronto)
+    // Si no hay pendiente = el consumo actual es lo que se pagará al siguiente corte
+    var proximoPago=pendientePago>0?pendientePago:consumo;
     var pagoReqHtml='';
     if(consumoMesAnt>0){
       var prColor=pendientePago>0?(fechaInfo&&fechaInfo.diasFaltan<=3?'var(--coral)':'var(--amber)'):'var(--teal)';
@@ -1688,14 +1690,12 @@ function renderDashboard(){
           '<span class="tag '+cls+'">'+estado+'</span>'+
         '</div>'+
       '</div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">'+
-        '<span>Consumo: <strong style="color:var(--text)">'+fmtK(consumo)+'</strong></span>'+
-        '<span>Próximo pago: <strong style="color:var(--purple)">'+fmtK(proximoPago)+'</strong></span>'+
-      '</div>'+
       fechaHtml+
-      pagoReqHtml+
+      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:5px">'+
+        '<span>Consumo: <strong style="color:var(--text)">'+fmtK(consumo)+'</strong></span>'+
+        '<span>Próximo pago: <strong style="color:var(--purple)">'+fmtK(pendientePago>0?pendientePago:consumo)+'</strong></span>'+
+      '</div>'+
       creditHtml+
-      proximoHtml+
     '</div>';
   }).join('');
 
