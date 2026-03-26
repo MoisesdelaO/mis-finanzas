@@ -199,7 +199,6 @@ tr:hover td{background:var(--surface2)}
     <button class="nav-tab" onclick="show('inversiones')">Inversiones</button>
     <button class="nav-tab" onclick="show('tdc')">TDC</button>
     <button class="nav-tab" onclick="show('metas')">Metas</button>
-    <button class="nav-tab" onclick="show('recurrentes')">Recurrentes</button>
     <button class="nav-tab" onclick="show('anual')">Anual</button>
     <button class="nav-tab" onclick="show('config')">Config</button>
   </div>
@@ -236,9 +235,6 @@ tr:hover td{background:var(--surface2)}
       </button>
       <button class="mob-item" id="mob-metas" onclick="showMob('metas')">
         <span style="font-size:18px">🎯</span><span>Metas</span>
-      </button>
-      <button class="mob-item" id="mob-recurrentes" onclick="showMob('recurrentes')">
-        <span style="font-size:18px">🔄</span><span>Recurrentes</span>
       </button>
       <button class="mob-item" id="mob-anual" onclick="showMob('anual')">
         <span style="font-size:18px">📅</span><span>Resumen anual</span>
@@ -659,7 +655,7 @@ function show(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  const names=['dashboard','gastos','ingresos','inversiones','tdc','metas','recurrentes','anual','config'];
+  const names=['dashboard','gastos','ingresos','inversiones','tdc','metas','anual','config'];
   const idx=names.indexOf(id);if(idx>=0)document.querySelectorAll('.nav-tab')[idx].classList.add('active');
   const fn={dashboard:renderDashboard,gastos:renderGastos,ingresos:renderIngresos,inversiones:renderInversiones,tdc:renderTDC,metas:renderMetas,recurrentes:renderRecurrentes,anual:renderAnual,config:renderConfig};
   if(fn[id])fn[id]();
@@ -797,9 +793,62 @@ function agregarGasto(){
 function limpiarGasto(){['g-fecha','g-monto','g-desc','g-notas'].forEach(id=>document.getElementById(id).value='');['g-cat','g-tdc'].forEach(id=>document.getElementById(id).value='');document.getElementById('g-msi').value='';document.getElementById('msi-meses-field').style.display='none';document.getElementById('g-fecha').value=today();}
 function eliminarGasto(id){DB.gastos=DB.gastos.filter(function(g){return g.id!==id;});save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Eliminado');}
 function renderGastos(){
-  const tbody=document.getElementById('gastos-tbody');
-  if(!DB.gastos.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Sin gastos</td></tr>';return;}
-  tbody.innerHTML=DB.gastos.map(g=>`<tr><td style="font-family:monospace;font-size:11px">${g.fecha}</td><td>${g.desc}</td><td><span class="tag tag-purple">${g.cat}</span></td><td>${g.tdc}</td><td>${g.msi==='Si'?`<span class="msi-badge">${g.meses}m</span>`:'—'}</td><td style="text-align:right;font-family:monospace;font-weight:500">${fmt(g.monto)}</td><td><button onclick="eliminarGasto(${g.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td></tr>`).join('');
+  var tbody=document.getElementById('gastos-tbody');
+  if(!DB.gastos.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Sin gastos</td></tr>';return;}
+  tbody.innerHTML=DB.gastos.map(function(g){
+    return '<tr id="grow-'+g.id+'">'+
+      '<td style="font-family:monospace;font-size:11px">'+g.fecha+'</td>'+
+      '<td>'+g.desc+'</td>'+
+      '<td><span class="tag tag-purple">'+g.cat+'</span></td>'+
+      '<td>'+g.tdc+'</td>'+
+      '<td>'+(g.msi==='Si'?'<span class="msi-badge">'+g.meses+'m</span>':'—')+'</td>'+
+      '<td style="text-align:right;font-family:monospace;font-weight:500">'+fmt(g.monto)+'</td>'+
+      '<td><button onclick="editarGasto('+g.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
+      '<td><button onclick="eliminarGasto('+g.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
+    '</tr>';
+  }).join('');
+}
+function editarGasto(id){
+  var g=DB.gastos.find(function(x){return x.id===id;});
+  if(!g)return;
+  var cats=DB.config.categorias.map(function(c){return '<option'+(c===g.cat?' selected':'')+'>'+c+'</option>';}).join('');
+  var tdcs=DB.config.tdcs.map(function(t){return '<option'+(t===g.tdc?' selected':'')+'>'+t+'</option>';}).join('');
+  var msiOpts=['','Si'].map(function(v){return '<option value="'+v+'"'+(v===g.msi?' selected':'')+'>'+(v===''?'Gasto normal':'Sí, a meses')+'</option>';}).join('');
+  var row=document.getElementById('grow-'+id);
+  if(!row)return;
+  row.innerHTML='<td colspan="8" style="padding:10px 8px;background:var(--purpl)">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="eg-fecha-'+id+'" value="'+g.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO</div><input type="number" id="eg-monto-'+id+'" value="'+g.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">CATEGORÍA</div><select id="eg-cat-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+cats+'</select></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TDC</div><select id="eg-tdc-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tdcs+'</select></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">DESCRIPCIÓN</div><input type="text" id="eg-desc-'+id+'" value="'+g.desc+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MSI</div><select id="eg-msi-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+msiOpts+'</select></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MESES</div><input type="number" id="eg-meses-'+id+'" value="'+(g.meses||'')+'" min="1" max="48" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:center"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<button onclick="guardarGasto('+id+')" class="btn btn-primary btn-sm">Guardar</button>'+
+      '<button onclick="renderGastos()" class="btn btn-ghost btn-sm">Cancelar</button>'+
+    '</div>'+
+  '</td>';
+}
+function guardarGasto(id){
+  var g=DB.gastos.find(function(x){return x.id===id;});
+  if(!g)return;
+  var fecha=document.getElementById('eg-fecha-'+id).value;
+  var monto=parseFloat(document.getElementById('eg-monto-'+id).value);
+  var cat=document.getElementById('eg-cat-'+id).value;
+  var tdc=document.getElementById('eg-tdc-'+id).value;
+  var desc=document.getElementById('eg-desc-'+id).value.trim();
+  var msi=document.getElementById('eg-msi-'+id).value;
+  var meses=document.getElementById('eg-meses-'+id).value;
+  if(!fecha||!monto||!desc){toast('Completa los campos requeridos','err');return;}
+  var m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
+  var mes=m.charAt(0).toUpperCase()+m.slice(1);
+  g.fecha=fecha;g.monto=monto;g.cat=cat;g.tdc=tdc;g.desc=desc;g.msi=msi;g.meses=meses;g.mes=mes;
+  save();syncSheetDelete('Gastos',DB.gastos);renderGastos();toast('Gasto actualizado ✓');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -817,9 +866,51 @@ function agregarIngreso(){
 }
 function eliminarIngreso(id){DB.ingresos=DB.ingresos.filter(function(i){return i.id!==id;});save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);}
 function renderIngresos(){
-  const tbody=document.getElementById('ingresos-tbody');
-  if(!DB.ingresos.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px">Sin ingresos</td></tr>';return;}
-  tbody.innerHTML=DB.ingresos.map(i=>`<tr><td style="font-family:monospace;font-size:11px">${i.fecha}</td><td><span class="tag tag-green">${i.tipo}</span></td><td>${i.desc||'—'}</td><td style="text-align:right;font-family:monospace;font-weight:500;color:var(--teal)">${fmt(i.monto)}</td><td><button onclick="eliminarIngreso(${i.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td></tr>`).join('');
+  var tbody=document.getElementById('ingresos-tbody');
+  if(!DB.ingresos.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin ingresos</td></tr>';return;}
+  tbody.innerHTML=DB.ingresos.map(function(i){
+    return '<tr id="irow-'+i.id+'">'+
+      '<td style="font-family:monospace;font-size:11px">'+i.fecha+'</td>'+
+      '<td><span class="tag tag-green">'+i.tipo+'</span></td>'+
+      '<td>'+(i.desc||'—')+'</td>'+
+      '<td style="text-align:right;font-family:monospace;font-weight:500;color:var(--teal)">'+fmt(i.monto)+'</td>'+
+      '<td><button onclick="editarIngreso('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
+      '<td><button onclick="eliminarIngreso('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
+    '</tr>';
+  }).join('');
+}
+function editarIngreso(id){
+  var ing=DB.ingresos.find(function(x){return x.id===id;});
+  if(!ing)return;
+  var tipos=['Sueldo','Bono / aguinaldo / PTU','Rendimiento inversion','Otro ingreso'];
+  var tipoOpts=tipos.map(function(t){return '<option'+(t===ing.tipo?' selected':'')+'>'+t+'</option>';}).join('');
+  var row=document.getElementById('irow-'+id);
+  if(!row)return;
+  row.innerHTML='<td colspan="6" style="padding:10px 8px;background:var(--teall)">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr;gap:8px;margin-bottom:8px">'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="ei-fecha-'+id+'" value="'+ing.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO</div><input type="number" id="ei-monto-'+id+'" value="'+ing.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TIPO</div><select id="ei-tipo-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tipoOpts+'</select></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">DESCRIPCIÓN</div><input type="text" id="ei-desc-'+id+'" value="'+(ing.desc||'')+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<button onclick="guardarIngreso('+id+')" class="btn btn-primary btn-sm" style="background:var(--teal)">Guardar</button>'+
+      '<button onclick="renderIngresos()" class="btn btn-ghost btn-sm">Cancelar</button>'+
+    '</div>'+
+  '</td>';
+}
+function guardarIngreso(id){
+  var ing=DB.ingresos.find(function(x){return x.id===id;});
+  if(!ing)return;
+  var fecha=document.getElementById('ei-fecha-'+id).value;
+  var monto=parseFloat(document.getElementById('ei-monto-'+id).value);
+  var tipo=document.getElementById('ei-tipo-'+id).value;
+  var desc=document.getElementById('ei-desc-'+id).value.trim();
+  if(!fecha||!monto){toast('Completa fecha y monto','err');return;}
+  var m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
+  var mes=m.charAt(0).toUpperCase()+m.slice(1);
+  ing.fecha=fecha;ing.monto=monto;ing.tipo=tipo;ing.desc=desc;ing.mes=mes;
+  save();syncSheetDelete('Ingresos',DB.ingresos);renderIngresos();toast('Ingreso actualizado ✓');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1520,7 +1611,12 @@ function renderDashboard(){
     return `<div class="progress-row"><span class="progress-label">${cat}</span><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(p*100)}%;background:${color}"></div></div><span class="progress-amounts">${fmtK(total)}${lim?'/'+fmtK(lim):''}</span></div>`;}).join(''):'<div style="text-align:center;color:var(--text3);padding:20px;font-size:13px">Sin gastos este mes</div>';
 
   // TDC
+  // Calcular mes anterior para "pago requerido"
+  var mesAnteriorIdx=(new Date().getMonth()-1+12)%12;
+  var mesAnteriorNombre=MESES[mesAnteriorIdx];
+  var mesActualNombre=mesDeHoy();
   document.getElementById('dash-tdc').innerHTML=DB.config.tdcs.filter(function(t){return t!=='Efectivo';}).map(function(tdc){
+    // Consumo mes seleccionado
     var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mes;}).reduce(function(s,g){return s+g.monto;},0);
     var pago=DB.pagosTDC.filter(function(p){return p.tdc===tdc&&p.mes===mes;}).reduce(function(s,p){return s+p.monto;},0);
     var msiN=DB.gastos.filter(function(g){return g.tdc===tdc&&g.msi==='Si';}).length;
@@ -1548,18 +1644,58 @@ function renderDashboard(){
         '<div style="font-size:10px;color:var(--text3);margin-top:3px">'+Math.round(pctUsado*100)+'% utilizado</div>'+
       '</div>'
     ):'';
+    // Pago requerido = consumo mes anterior - pagos ya realizados de ese mes
+    var consumoMesAnt=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mesAnteriorNombre;}).reduce(function(s,g){return s+g.monto;},0);
+    var pagosMesAnt=DB.pagosTDC.filter(function(p){return p.tdc===tdc&&p.mes===mesAnteriorNombre;}).reduce(function(s,p){return s+p.monto;},0);
+    var pendientePago=Math.max(0,consumoMesAnt-pagosMesAnt);
+    // Próximo pago = consumo del mes seleccionado (lo que se pagará en el próximo corte)
+    var proximoPago=consumo;
+    var pagoReqHtml='';
+    if(consumoMesAnt>0){
+      var prColor=pendientePago>0?(fechaInfo&&fechaInfo.diasFaltan<=3?'var(--coral)':'var(--amber)'):'var(--teal)';
+      pagoReqHtml='<div style="margin-top:7px;padding:7px 10px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center">'+
+          '<span style="font-size:11px;color:var(--text3)">Pago requerido ('+mesAnteriorNombre+')</span>'+
+          '<span style="font-size:13px;font-weight:600;color:'+prColor+';font-family:monospace">'+
+            (pendientePago>0?fmtK(pendientePago):'<span style="color:var(--teal)">Pagado ✓</span>')+
+          '</span>'+
+        '</div>'+
+        (pendientePago>0&&pagosMesAnt>0?
+          '<div style="font-size:10px;color:var(--text3);margin-top:3px">'+
+            'Consumo: '+fmtK(consumoMesAnt)+' · Abonado: '+fmtK(pagosMesAnt)+
+          '</div>':'')+
+      '</div>';
+    }
+    // Próximo periodo — consumo acumulado del mes siguiente al seleccionado
+    var mesIdxSel=MESES.indexOf(mes);
+    var proxMesNombre=MESES[(mesIdxSel+1)%12];
+    var consumoProxPeriodo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===proxMesNombre;}).reduce(function(s,g){return s+g.monto;},0);
+    var proximoHtml='';
+    if(consumoProxPeriodo>0){
+      proximoHtml='<div style="margin-top:6px;padding:6px 10px;background:var(--bluel);border-radius:8px;border:1px solid #B5D4F4">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center">'+
+          '<span style="font-size:11px;color:var(--blue)">Acumulado '+proxMesNombre+'</span>'+
+          '<span style="font-size:13px;font-weight:600;color:var(--blue);font-family:monospace">'+fmtK(consumoProxPeriodo)+'</span>'+
+        '</div>'+
+        '<div style="font-size:10px;color:var(--blue);opacity:.7;margin-top:2px">Lo que pagarás el siguiente corte</div>'+
+      '</div>';
+    }
     return '<div style="padding:9px 0;border-bottom:0.5px solid var(--border)">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'+
         '<span style="font-size:13px;font-weight:500">'+tdc+'</span>'+
-        '<span class="tag '+cls+'">'+estado+'</span>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+          (msiN?'<span class="msi-badge">'+msiN+' MSI</span>':'')+
+          '<span class="tag '+cls+'">'+estado+'</span>'+
+        '</div>'+
       '</div>'+
       '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">'+
         '<span>Consumo: <strong style="color:var(--text)">'+fmtK(consumo)+'</strong></span>'+
-        '<span>Pagado: <strong style="color:var(--text)">'+fmtK(pago)+'</strong></span>'+
-        (msiN?'<span class="msi-badge">'+msiN+' MSI</span>':'')+
+        '<span>Próximo pago: <strong style="color:var(--purple)">'+fmtK(proximoPago)+'</strong></span>'+
       '</div>'+
       fechaHtml+
+      pagoReqHtml+
       creditHtml+
+      proximoHtml+
     '</div>';
   }).join('');
 
