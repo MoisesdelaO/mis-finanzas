@@ -302,7 +302,7 @@ tr:hover td{background:var(--surface2)}
     </div>
     <div class="form-grid triple" style="margin-top:10px">
       <div class="field"><label>¿MSI?</label><select id="g-msi" onchange="toggleMSI()"><option value="">Gasto normal</option><option value="Si">Sí, a meses</option></select></div>
-      <div class="field" id="msi-meses-field" style="display:none"><label># de meses</label><select id="g-meses"><option>3</option><option>6</option><option>9</option><option>12</option><option>18</option><option>24</option></select></div>
+      <div class="field" id="msi-meses-field" style="display:none"><label># de meses</label><input type="number" id="g-meses" min="1" max="48" placeholder="# meses" style="width:100%"></div>
       <div class="field"><label>Notas</label><input type="text" id="g-notas" placeholder="Opcional"></div>
     </div>
     <div style="margin-top:14px;display:flex;gap:10px">
