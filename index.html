@@ -305,7 +305,16 @@ tr:hover td{background:var(--surface2)}
   </div>
   <div class="card">
     <div class="card-title">Historial</div>
-    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>TDC</th><th>MSI</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody id="gastos-tbody"></tbody></table></div>
+    <div class="table-wrap"><table><thead><tr>
+      <th onclick="sortGastos('fecha')" style="cursor:pointer;user-select:none">Fecha <span id="sort-g-fecha"></span></th>
+      <th onclick="sortGastos('desc')" style="cursor:pointer;user-select:none">Descripción <span id="sort-g-desc"></span></th>
+      <th onclick="sortGastos('cat')" style="cursor:pointer;user-select:none">Categoría <span id="sort-g-cat"></span></th>
+      <th onclick="sortGastos('tdc')" style="cursor:pointer;user-select:none">TDC <span id="sort-g-tdc"></span></th>
+      <th>MSI</th>
+      <th onclick="sortGastos('monto')" style="cursor:pointer;user-select:none;text-align:right">Monto <span id="sort-g-monto"></span></th>
+      <th></th><th></th>
+    </tr></thead><tbody id="gastos-tbody"></tbody></table></div>
+    <div id="gastos-paginacion" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:12px;color:var(--text3)"></div>
   </div>
 </div>
 
@@ -323,7 +332,17 @@ tr:hover td{background:var(--surface2)}
     </div>
     <div style="margin-top:14px"><button class="btn btn-primary" onclick="agregarIngreso()" style="width:100%">+ Registrar ingreso</button></div>
   </div>
-  <div class="card"><div class="card-title">Historial</div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody id="ingresos-tbody"></tbody></table></div></div>
+  <div class="card">
+    <div class="card-title">Historial</div>
+    <div class="table-wrap"><table><thead><tr>
+      <th onclick="sortIngresos('fecha')" style="cursor:pointer;user-select:none">Fecha <span id="sort-i-fecha"></span></th>
+      <th onclick="sortIngresos('tipo')" style="cursor:pointer;user-select:none">Tipo <span id="sort-i-tipo"></span></th>
+      <th onclick="sortIngresos('desc')" style="cursor:pointer;user-select:none">Descripción <span id="sort-i-desc"></span></th>
+      <th onclick="sortIngresos('monto')" style="cursor:pointer;user-select:none;text-align:right">Monto <span id="sort-i-monto"></span></th>
+      <th></th><th></th>
+    </tr></thead><tbody id="ingresos-tbody"></tbody></table></div>
+    <div id="ingresos-paginacion" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:12px;color:var(--text3)"></div>
+  </div>
 </div>
 
 <!-- ═══ INVERSIONES ═══ -->
@@ -880,10 +899,36 @@ function agregarGasto(){
 }
 function limpiarGasto(){['g-fecha','g-monto','g-desc','g-notas'].forEach(id=>document.getElementById(id).value='');['g-cat','g-tdc'].forEach(id=>document.getElementById(id).value='');document.getElementById('g-msi').value='';document.getElementById('msi-meses-field').style.display='none';document.getElementById('g-fecha').value=today();}
 function eliminarGasto(id){DB.gastos=DB.gastos.filter(function(g){return g.id!==id;});save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Eliminado');}
+var _gSort={col:'fecha',asc:false};
+var _gPage=0;
+var PER_PAGE=15;
+function sortGastos(col){
+  if(_gSort.col===col){_gSort.asc=!_gSort.asc;}else{_gSort.col=col;_gSort.asc=false;}
+  _gPage=0;
+  renderGastos();
+}
 function renderGastos(){
   var tbody=document.getElementById('gastos-tbody');
-  if(!DB.gastos.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Sin gastos</td></tr>';return;}
-  tbody.innerHTML=DB.gastos.map(function(g){
+  var pag=document.getElementById('gastos-paginacion');
+  if(!DB.gastos.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Sin gastos</td></tr>';if(pag)pag.innerHTML='';return;}
+  // Sort
+  var sorted=DB.gastos.slice().sort(function(a,b){
+    var va=a[_gSort.col]||'',vb=b[_gSort.col]||'';
+    if(_gSort.col==='monto'){va=parseFloat(va)||0;vb=parseFloat(vb)||0;}
+    var r=va<vb?-1:va>vb?1:0;
+    return _gSort.asc?r:-r;
+  });
+  // Sort indicators
+  ['fecha','desc','cat','tdc','monto'].forEach(function(c){
+    var el=document.getElementById('sort-g-'+c);
+    if(el)el.textContent=_gSort.col===c?(_gSort.asc?' ↑':' ↓'):'';
+  });
+  // Pagination
+  var total=sorted.length;
+  var totalPags=Math.ceil(total/PER_PAGE);
+  if(_gPage>=totalPags)_gPage=Math.max(0,totalPags-1);
+  var page=sorted.slice(_gPage*PER_PAGE,(_gPage+1)*PER_PAGE);
+  tbody.innerHTML=page.map(function(g){
     return '<tr id="grow-'+g.id+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(g.fecha)+'</td>'+
       '<td>'+g.desc+'</td>'+
@@ -895,6 +940,16 @@ function renderGastos(){
       '<td><button onclick="eliminarGasto('+g.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
   }).join('');
+  // Pagination controls
+  if(pag){
+    var ini=_gPage*PER_PAGE+1, fin=Math.min((_gPage+1)*PER_PAGE,total);
+    pag.innerHTML=
+      '<span>'+ini+'-'+fin+' de '+total+'</span>'+
+      '<div style="display:flex;gap:6px">'+
+        '<button onclick="_gPage=Math.max(0,_gPage-1);renderGastos()" '+((_gPage===0)?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">← Ant</button>'+
+        '<button onclick="_gPage=Math.min(Math.ceil(DB.gastos.length/PER_PAGE)-1,_gPage+1);renderGastos()" '+((_gPage>=totalPags-1)?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>'+
+      '</div>';
+  }
 }
 function editarGasto(id){
   var g=DB.gastos.find(function(x){return x.id===id;});
@@ -954,10 +1009,31 @@ function agregarIngreso(){
   renderIngresos();toast('Ingreso registrado ✓');
 }
 function eliminarIngreso(id){DB.ingresos=DB.ingresos.filter(function(i){return i.id!==id;});save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);}
+var _iSort={col:'fecha',asc:false};
+var _iPage=0;
+function sortIngresos(col){
+  if(_iSort.col===col){_iSort.asc=!_iSort.asc;}else{_iSort.col=col;_iSort.asc=false;}
+  _iPage=0;renderIngresos();
+}
 function renderIngresos(){
   var tbody=document.getElementById('ingresos-tbody');
-  if(!DB.ingresos.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin ingresos</td></tr>';return;}
-  tbody.innerHTML=DB.ingresos.map(function(i){
+  var pag=document.getElementById('ingresos-paginacion');
+  if(!DB.ingresos.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin ingresos</td></tr>';if(pag)pag.innerHTML='';return;}
+  var sorted=DB.ingresos.slice().sort(function(a,b){
+    var va=a[_iSort.col]||'',vb=b[_iSort.col]||'';
+    if(_iSort.col==='monto'){va=parseFloat(va)||0;vb=parseFloat(vb)||0;}
+    var r=va<vb?-1:va>vb?1:0;
+    return _iSort.asc?r:-r;
+  });
+  ['fecha','tipo','desc','monto'].forEach(function(c){
+    var el=document.getElementById('sort-i-'+c);
+    if(el)el.textContent=_iSort.col===c?(_iSort.asc?' ↑':' ↓'):'';
+  });
+  var total=sorted.length;
+  var totalPags=Math.max(1,Math.ceil(total/PER_PAGE));
+  if(_iPage>=totalPags)_iPage=Math.max(0,totalPags-1);
+  var page=sorted.slice(_iPage*PER_PAGE,(_iPage+1)*PER_PAGE);
+  tbody.innerHTML=page.map(function(i){
     return '<tr id="irow-'+i.id+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(i.fecha)+'</td>'+
       '<td><span class="tag tag-green">'+i.tipo+'</span></td>'+
@@ -967,6 +1043,15 @@ function renderIngresos(){
       '<td><button onclick="eliminarIngreso('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
   }).join('');
+  if(pag){
+    var ini=_iPage*PER_PAGE+1,fin=Math.min((_iPage+1)*PER_PAGE,total);
+    pag.innerHTML=
+      '<span>'+ini+'-'+fin+' de '+total+'</span>'+
+      '<div style="display:flex;gap:6px">'+
+        '<button onclick="_iPage=Math.max(0,_iPage-1);renderIngresos()" '+(_iPage===0?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">← Ant</button>'+
+        '<button onclick="_iPage=Math.min('+( '(Math.ceil(DB.ingresos.length/PER_PAGE)-1)')+',_iPage+1);renderIngresos()" '+(_iPage>=totalPags-1?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>'+
+      '</div>';
+  }
 }
 function editarIngreso(id){
   var ing=DB.ingresos.find(function(x){return x.id===id;});
@@ -2031,8 +2116,10 @@ function renderDashboard(){
     var fechaHtml=fechaInfo?('<div style="font-size:11px;color:'+urgColor+';margin-top:2px;font-weight:500">'+fechaInfo.label+'</div>'):'';
 
     // Bloque "Pagar ahora" — ciclo cerrado
+    // Ocultar si ya está pagado y la fecha de vencimiento ya pasó
+    var yaVencio=fechaInfo&&fechaInfo.diasFaltan<0;
     var pagarAhoraHtml='';
-    if(consumoCicloAnt>0){
+    if(consumoCicloAnt>0&&!(pendienteHoy===0&&yaVencio)){
       var colAhora=pendienteHoy>0?(fechaInfo&&fechaInfo.diasFaltan<=3?'var(--coral)':'var(--amber)'):'var(--teal)';
       pagarAhoraHtml=
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 10px;background:'+(pendienteHoy>0?'var(--amberl)':'var(--greenl)')+';border-radius:8px;border:1px solid '+(pendienteHoy>0?'#EF9F27':'#97C459')+'">'+
