@@ -310,7 +310,8 @@ tr:hover td{background:var(--surface2)}
         <input type="date" id="gf-desde" onchange="renderGastos()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
         <span style="font-size:11px;color:var(--text3)">a</span>
         <input type="date" id="gf-hasta" onchange="renderGastos()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
-
+        <select id="gf-cat" onchange="renderGastos()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)"><option value="">Todas las categorías</option></select>
+        <select id="gf-tdc" onchange="renderGastos()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)"><option value="">Todas las tarjetas</option></select>
         <button onclick="limpiarFiltrosGastos()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:6px;font-size:11px;background:transparent;cursor:pointer;color:var(--text3)">✕ Limpiar</button>
       </div>
     </div>
@@ -936,7 +937,8 @@ function sortGastos(col){
 }
 function limpiarFiltrosGastos(){
   var d=document.getElementById('gf-desde');var h=document.getElementById('gf-hasta');
-  if(d)d.value='';if(h)h.value='';
+  var c=document.getElementById('gf-cat');var t=document.getElementById('gf-tdc');
+  if(d)d.value='';if(h)h.value='';if(c)c.value='';if(t)t.value='';
   _gPage=0;renderGastos();
 }
 function renderGastos(){
@@ -945,9 +947,13 @@ function renderGastos(){
   // Apply filters
   var desde=document.getElementById('gf-desde')?document.getElementById('gf-desde').value:'';
   var hasta=document.getElementById('gf-hasta')?document.getElementById('gf-hasta').value:'';
+  var catF=document.getElementById('gf-cat')?document.getElementById('gf-cat').value:'';
+  var tdcF=document.getElementById('gf-tdc')?document.getElementById('gf-tdc').value:'';
   var filtered=DB.gastos.filter(function(g){
     if(desde&&g.fecha<desde)return false;
     if(hasta&&g.fecha>hasta)return false;
+    if(catF&&g.cat!==catF)return false;
+    if(tdcF&&g.tdc!==tdcF)return false;
     return true;
   });
   if(!filtered.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Sin gastos con estos filtros</td></tr>';if(pag)pag.innerHTML='';return;}
@@ -1991,6 +1997,19 @@ function borrarTodo(){
   Object.keys(DB.cuentasInv).forEach(function(n){DB.cuentasInv[n].saldo=0;DB.cuentasInv[n].ultimaAct='';});
   save();
   toast('Datos borrados ✓');
+  // Populate gastos filter selects
+  var gfCat=document.getElementById('gf-cat');
+  var gfTdc=document.getElementById('gf-tdc');
+  if(gfCat){
+    var catVal=gfCat.value;
+    gfCat.innerHTML='<option value="">Todas las categorías</option>'+
+      DB.config.categorias.map(function(c){return '<option value="'+c+'"'+(c===catVal?' selected':'')+'>'+c+'</option>';}).join('');
+  }
+  if(gfTdc){
+    var tdcVal=gfTdc.value;
+    gfTdc.innerHTML='<option value="">Todas las tarjetas</option>'+
+      DB.config.tdcs.map(function(t){return '<option value="'+t+'"'+(t===tdcVal?' selected':'')+'>'+t+'</option>';}).join('');
+  }
   renderDashboard();
 }
 
