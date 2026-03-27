@@ -304,13 +304,22 @@ tr:hover td{background:var(--surface2)}
     </div>
   </div>
   <div class="card">
-    <div class="card-title">Historial</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin-bottom:0">Historial</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="date" id="gf-desde" onchange="renderGastos()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
+        <span style="font-size:11px;color:var(--text3)">a</span>
+        <input type="date" id="gf-hasta" onchange="renderGastos()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
+
+        <button onclick="limpiarFiltrosGastos()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:6px;font-size:11px;background:transparent;cursor:pointer;color:var(--text3)">✕ Limpiar</button>
+      </div>
+    </div>
     <div class="table-wrap"><table><thead><tr>
       <th onclick="sortGastos('fecha')" style="cursor:pointer;user-select:none">Fecha <span id="sort-g-fecha"></span></th>
       <th onclick="sortGastos('desc')" style="cursor:pointer;user-select:none">Descripción <span id="sort-g-desc"></span></th>
       <th onclick="sortGastos('cat')" style="cursor:pointer;user-select:none">Categoría <span id="sort-g-cat"></span></th>
       <th onclick="sortGastos('tdc')" style="cursor:pointer;user-select:none">TDC <span id="sort-g-tdc"></span></th>
-      <th>MSI</th>
+      <th onclick="sortGastos('msi')" style="cursor:pointer;user-select:none">MSI <span id="sort-g-msi"></span></th>
       <th onclick="sortGastos('monto')" style="cursor:pointer;user-select:none;text-align:right">Monto <span id="sort-g-monto"></span></th>
       <th></th><th></th>
     </tr></thead><tbody id="gastos-tbody"></tbody></table></div>
@@ -333,7 +342,15 @@ tr:hover td{background:var(--surface2)}
     <div style="margin-top:14px"><button class="btn btn-primary" onclick="agregarIngreso()" style="width:100%">+ Registrar ingreso</button></div>
   </div>
   <div class="card">
-    <div class="card-title">Historial</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin-bottom:0">Historial</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="date" id="if-desde" onchange="renderIngresos()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
+        <span style="font-size:11px;color:var(--text3)">a</span>
+        <input type="date" id="if-hasta" onchange="renderIngresos()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
+        <button onclick="limpiarFiltrosIngresos()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:6px;font-size:11px;background:transparent;cursor:pointer;color:var(--text3)">✕ Limpiar</button>
+      </div>
+    </div>
     <div class="table-wrap"><table><thead><tr>
       <th onclick="sortIngresos('fecha')" style="cursor:pointer;user-select:none">Fecha <span id="sort-i-fecha"></span></th>
       <th onclick="sortIngresos('tipo')" style="cursor:pointer;user-select:none">Tipo <span id="sort-i-tipo"></span></th>
@@ -380,7 +397,17 @@ tr:hover td{background:var(--surface2)}
     </div>
     <div style="margin-top:14px"><button class="btn btn-primary" onclick="agregarPagoTDC()" style="width:100%">+ Registrar pago</button></div>
   </div>
-  <div class="card"><div class="card-title">Historial</div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Mes</th><th style="text-align:right">Consumo</th><th style="text-align:right">Pagado</th><th>Estado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin-bottom:0">Historial</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="date" id="tf-desde" onchange="renderTDC()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
+        <span style="font-size:11px;color:var(--text3)">a</span>
+        <input type="date" id="tf-hasta" onchange="renderTDC()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
+        <button onclick="limpiarFiltrosTDC()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:6px;font-size:11px;background:transparent;cursor:pointer;color:var(--text3)">✕ Limpiar</button>
+      </div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Mes</th><th style="text-align:right">Consumo</th><th style="text-align:right">Pagado</th><th>Estado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
 </div>
 
 <!-- ═══ METAS ═══ -->
@@ -907,19 +934,32 @@ function sortGastos(col){
   _gPage=0;
   renderGastos();
 }
+function limpiarFiltrosGastos(){
+  var d=document.getElementById('gf-desde');var h=document.getElementById('gf-hasta');
+  if(d)d.value='';if(h)h.value='';
+  _gPage=0;renderGastos();
+}
 function renderGastos(){
   var tbody=document.getElementById('gastos-tbody');
   var pag=document.getElementById('gastos-paginacion');
-  if(!DB.gastos.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Sin gastos</td></tr>';if(pag)pag.innerHTML='';return;}
+  // Apply filters
+  var desde=document.getElementById('gf-desde')?document.getElementById('gf-desde').value:'';
+  var hasta=document.getElementById('gf-hasta')?document.getElementById('gf-hasta').value:'';
+  var filtered=DB.gastos.filter(function(g){
+    if(desde&&g.fecha<desde)return false;
+    if(hasta&&g.fecha>hasta)return false;
+    return true;
+  });
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Sin gastos con estos filtros</td></tr>';if(pag)pag.innerHTML='';return;}
   // Sort
-  var sorted=DB.gastos.slice().sort(function(a,b){
+  var sorted=filtered.slice().sort(function(a,b){
     var va=a[_gSort.col]||'',vb=b[_gSort.col]||'';
     if(_gSort.col==='monto'){va=parseFloat(va)||0;vb=parseFloat(vb)||0;}
     var r=va<vb?-1:va>vb?1:0;
     return _gSort.asc?r:-r;
   });
   // Sort indicators
-  ['fecha','desc','cat','tdc','monto'].forEach(function(c){
+  ['fecha','desc','cat','tdc','msi','monto'].forEach(function(c){
     var el=document.getElementById('sort-g-'+c);
     if(el)el.textContent=_gSort.col===c?(_gSort.asc?' ↑':' ↓'):'';
   });
@@ -947,7 +987,7 @@ function renderGastos(){
       '<span>'+ini+'-'+fin+' de '+total+'</span>'+
       '<div style="display:flex;gap:6px">'+
         '<button onclick="_gPage=Math.max(0,_gPage-1);renderGastos()" '+((_gPage===0)?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">← Ant</button>'+
-        '<button onclick="_gPage=Math.min(Math.ceil(DB.gastos.length/PER_PAGE)-1,_gPage+1);renderGastos()" '+((_gPage>=totalPags-1)?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>'+
+        '<button onclick="_gPage=Math.min(totalPags-1,_gPage+1);renderGastos()" '+((_gPage>=totalPags-1)?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>'+
       '</div>';
   }
 }
@@ -1015,11 +1055,22 @@ function sortIngresos(col){
   if(_iSort.col===col){_iSort.asc=!_iSort.asc;}else{_iSort.col=col;_iSort.asc=false;}
   _iPage=0;renderIngresos();
 }
+function limpiarFiltrosIngresos(){
+  var d=document.getElementById('if-desde');var h=document.getElementById('if-hasta');
+  if(d)d.value='';if(h)h.value='';_iPage=0;renderIngresos();
+}
 function renderIngresos(){
   var tbody=document.getElementById('ingresos-tbody');
   var pag=document.getElementById('ingresos-paginacion');
-  if(!DB.ingresos.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin ingresos</td></tr>';if(pag)pag.innerHTML='';return;}
-  var sorted=DB.ingresos.slice().sort(function(a,b){
+  var desde=document.getElementById('if-desde')?document.getElementById('if-desde').value:'';
+  var hasta=document.getElementById('if-hasta')?document.getElementById('if-hasta').value:'';
+  var filtered=DB.ingresos.filter(function(i){
+    if(desde&&i.fecha<desde)return false;
+    if(hasta&&i.fecha>hasta)return false;
+    return true;
+  });
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin ingresos con estos filtros</td></tr>';if(pag)pag.innerHTML='';return;}
+  var sorted=filtered.slice().sort(function(a,b){
     var va=a[_iSort.col]||'',vb=b[_iSort.col]||'';
     if(_iSort.col==='monto'){va=parseFloat(va)||0;vb=parseFloat(vb)||0;}
     var r=va<vb?-1:va>vb?1:0;
@@ -1049,7 +1100,7 @@ function renderIngresos(){
       '<span>'+ini+'-'+fin+' de '+total+'</span>'+
       '<div style="display:flex;gap:6px">'+
         '<button onclick="_iPage=Math.max(0,_iPage-1);renderIngresos()" '+(_iPage===0?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">← Ant</button>'+
-        '<button onclick="_iPage=Math.min('+( '(Math.ceil(DB.ingresos.length/PER_PAGE)-1)')+',_iPage+1);renderIngresos()" '+(_iPage>=totalPags-1?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>'+
+        '<button onclick="_iPage=Math.min(totalPags-1,_iPage+1);renderIngresos()" '+(_iPage>=totalPags-1?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>'+
       '</div>';
   }
 }
@@ -1751,10 +1802,21 @@ function guardarPagoTDC(id){
   p.fecha=fecha;p.tdc=tdc;p.mes=mes;p.monto=monto;p.consumo=consumo;p.dif=monto-consumo;p.estado=estado;
   save();syncSheetDelete('PagosTDC',DB.pagosTDC);renderTDC();toast('Pago actualizado ✓');
 }
+function limpiarFiltrosTDC(){
+  var d=document.getElementById('tf-desde');var h=document.getElementById('tf-hasta');
+  if(d)d.value='';if(h)h.value='';renderTDC();
+}
 function renderTDC(){
   const tbody=document.getElementById('tdc-tbody');
+  var desde=document.getElementById('tf-desde')?document.getElementById('tf-desde').value:'';
+  var hasta=document.getElementById('tf-hasta')?document.getElementById('tf-hasta').value:'';
   if(!DB.pagosTDC.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Sin pagos</td></tr>';return;}
-  tbody.innerHTML=DB.pagosTDC.map(function(p){
+  var pagosFiltrados=DB.pagosTDC.filter(function(p){
+    if(desde&&p.fecha<desde)return false;
+    if(hasta&&p.fecha>hasta)return false;
+    return true;
+  });
+  tbody.innerHTML=pagosFiltrados.map(function(p){
     return '<tr id="trow-'+p.id+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(p.fecha)+'</td>'+
       '<td>'+p.tdc+'</td>'+
@@ -2144,8 +2206,8 @@ function renderDashboard(){
         '</div>';
     }
 
-    // Crédito disponible — basado en ciclo actual (lo que BBVA descuenta del límite)
-    var totalUsado=consumoCicloAnt+consumoCicloAct;
+    // Crédito disponible — si el ciclo cerrado ya está pagado, no cuenta contra el límite
+    var totalUsado=(pendienteHoy>0?consumoCicloAnt:0)+consumoCicloAct;
     var limite=(DB.config.limitesTDC&&DB.config.limitesTDC[tdc])||0;
     var disponible=limite>0?Math.max(0,limite-totalUsado):0;
     var pctUsado=limite>0?Math.min(totalUsado/limite,1):0;
