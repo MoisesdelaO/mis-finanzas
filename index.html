@@ -676,7 +676,13 @@ function cicloDeGasto(fechaStr, tdc){
   if(!fechaStr)return null;
   var cfg=DB.config.cortesTDC[tdc];
   var diaCorte=cfg&&cfg.corte?parseInt(cfg.corte):1;
-  var fecha=new Date(fechaStr+'T12:00:00');
+  // Limpiar fecha: tomar solo la parte YYYY-MM-DD sin importar el formato
+  var fechaLimpia=String(fechaStr).split('T')[0].trim();
+  // Si viene como DD/MM/YYYY convertir
+  if(fechaLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+    var p=fechaLimpia.split('/');fechaLimpia=p[2]+'-'+p[1]+'-'+p[0];
+  }
+  var fecha=new Date(fechaLimpia+'T12:00:00');
   var d=fecha.getDate(), m=fecha.getMonth(), y=fecha.getFullYear();
   // Si el día es <= diaCorte, pertenece al ciclo que CIERRA este mes
   // Si el día > diaCorte, pertenece al ciclo que cierra el MES SIGUIENTE
@@ -708,15 +714,21 @@ function cicloAnterior(tdc){
 function migrarCiclos(){
   // Siempre recalcula el ciclo desde la fecha real — no confiar en valor guardado
   DB.gastos.forEach(function(g){
-    if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]&&g.fecha){
-      g.ciclo=cicloDeGasto(g.fecha, g.tdc);
-    } else if(g.fecha){
-      // Efectivo o sin corte: ciclo = mes calendario + año de la fecha
-      var anioGasto=new Date(g.fecha+'T12:00:00').getFullYear();
+    // Limpiar fecha antes de procesar
+    var fechaLimpia=g.fecha?String(g.fecha).split('T')[0].trim():null;
+    if(fechaLimpia&&fechaLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+      var p=fechaLimpia.split('/');fechaLimpia=p[2]+'-'+p[1]+'-'+p[0];
+    }
+    if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]&&fechaLimpia){
+      g.ciclo=cicloDeGasto(fechaLimpia, g.tdc);
+    } else if(fechaLimpia){
+      var anioGasto=new Date(fechaLimpia+'T12:00:00').getFullYear();
       g.ciclo=g.mes+'-'+anioGasto;
     } else {
       g.ciclo=g.mes+'-'+new Date().getFullYear();
     }
+    // Normalizar fecha guardada también
+    if(fechaLimpia)g.fecha=fechaLimpia;
   });
 }
 
