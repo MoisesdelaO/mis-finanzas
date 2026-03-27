@@ -605,6 +605,12 @@ async function pushCuentasInv(){
 // UTILS
 // ══════════════════════════════════════════════════════════
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function fmtFecha(fechaStr){
+  if(!fechaStr)return '—';
+  var p=fechaStr.split('T')[0].split('-');
+  if(p.length<3)return fechaStr;
+  return p[2]+'/'+p[1]+'/'+p[0];
+}
 function fmt(n){
   var v=Number(n||0);
   var dec=v%1===0?0:2;
@@ -646,6 +652,58 @@ function fechaPagoReal(corte, diasPago){
            diasFaltan<0  ? 'Vencida hace '+Math.abs(diasFaltan)+' días' :
            'Pago en '+diasFaltan+' días ('+diaPago+' '+mesPago+')'
   };
+}
+
+// ══════════════════════════════════════════════════════════
+// CICLOS DE CORTE
+// ══════════════════════════════════════════════════════════
+// Dado una fecha y TDC, retorna el ciclo al que pertenece ese gasto
+// Ej: "Mar-2026" si el corte es día 10 y la fecha es 15-feb-2026
+// (porque 15-feb cae entre corte 11-feb y corte 10-mar)
+function cicloDeGasto(fechaStr, tdc){
+  if(!fechaStr)return null;
+  var cfg=DB.config.cortesTDC[tdc];
+  var diaCorte=cfg&&cfg.corte?parseInt(cfg.corte):1;
+  var fecha=new Date(fechaStr+'T12:00:00');
+  var d=fecha.getDate(), m=fecha.getMonth(), y=fecha.getFullYear();
+  // Si el día es <= diaCorte, pertenece al ciclo que CIERRA este mes
+  // Si el día > diaCorte, pertenece al ciclo que cierra el MES SIGUIENTE
+  var cierraM, cierraY;
+  if(d<=diaCorte){ cierraM=m; cierraY=y; }
+  else{ cierraM=m+1; cierraY=y; if(cierraM>11){cierraM=0;cierraY++;} }
+  var nombreMes=MESES[cierraM];
+  return nombreMes+'-'+cierraY;
+}
+// Retorna el ciclo actual de una TDC (el que cierra en el próximo corte)
+function cicloActual(tdc){
+  var hoy=new Date();
+  return cicloDeGasto(hoy.toISOString().split('T')[0], tdc);
+}
+// Retorna el ciclo anterior al actual
+function cicloAnterior(tdc){
+  var cfg=DB.config.cortesTDC[tdc];
+  var diaCorte=cfg&&cfg.corte?parseInt(cfg.corte):1;
+  var hoy=new Date();
+  var d=hoy.getDate(), m=hoy.getMonth(), y=hoy.getFullYear();
+  var cierraM, cierraY;
+  if(d<=diaCorte){ cierraM=m; cierraY=y; }
+  else{ cierraM=m+1; cierraY=y; if(cierraM>11){cierraM=0;cierraY++;} }
+  // Retroceder un mes
+  cierraM--; if(cierraM<0){cierraM=11;cierraY--;}
+  return MESES[cierraM]+'-'+cierraY;
+}
+// Migrar gastos existentes: agregar campo 'ciclo' si no lo tienen
+function migrarCiclos(){
+  DB.gastos.forEach(function(g){
+    if(!g.ciclo){
+      if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){
+        g.ciclo=cicloDeGasto(g.fecha, g.tdc);
+      } else {
+        // Sin TDC con corte: usar mes calendario como ciclo
+        g.ciclo=g.mes+'-'+new Date().getFullYear();
+      }
+    }
+  });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -762,7 +820,8 @@ function renderAlertasTDC(){
     if(!cfg||!cfg.corte)return;
     const fp=fechaPagoReal(cfg.corte, cfg.diasPago);
     const diasParaPagar=fp.diasFaltan;
-    const consumo=DB.gastos.filter(g=>g.tdc===tdc&&g.mes===mesActual).reduce((s,g)=>s+g.monto,0);
+    const cicloAct2=cicloActual(tdc);
+    const consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&(g.ciclo===cicloAct2||(!g.ciclo&&g.mes===mesActual));}).reduce((s,g)=>s+g.monto,0);
     const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.mes===mesActual).reduce((s,p)=>s+p.monto,0);
     if(pagado>=consumo&&consumo>0)return;
     if(consumo===0)return;
@@ -786,7 +845,8 @@ function agregarGasto(){
   const msi=document.getElementById('g-msi').value,meses=msi==='Si'?document.getElementById('g-meses').value:'',notas=document.getElementById('g-notas').value;
   const m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   const mes=m.charAt(0).toUpperCase()+m.slice(1);
-  DB.gastos.unshift({id:Date.now(),fecha,desc,cat,monto,tdc,msi,meses,notas,mes});
+  const ciclo=cicloDeGasto(fecha,tdc)||mes+'-'+new Date(fecha+'T12:00:00').getFullYear();
+  DB.gastos.unshift({id:Date.now(),fecha,desc,cat,monto,tdc,msi,meses,notas,mes,ciclo});
   save();pushSheets('Gastos',[fecha,desc,cat,monto,tdc,mes,msi,meses,notas]);
   limpiarGasto();renderGastos();toast('Gasto registrado ✓');
 }
@@ -797,7 +857,7 @@ function renderGastos(){
   if(!DB.gastos.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Sin gastos</td></tr>';return;}
   tbody.innerHTML=DB.gastos.map(function(g){
     return '<tr id="grow-'+g.id+'">'+
-      '<td style="font-family:monospace;font-size:11px">'+g.fecha+'</td>'+
+      '<td style="font-family:monospace;font-size:11px">'+fmtFecha(g.fecha)+'</td>'+
       '<td>'+g.desc+'</td>'+
       '<td><span class="tag tag-purple">'+g.cat+'</span></td>'+
       '<td>'+g.tdc+'</td>'+
@@ -847,7 +907,8 @@ function guardarGasto(id){
   if(!fecha||!monto||!desc){toast('Completa los campos requeridos','err');return;}
   var m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   var mes=m.charAt(0).toUpperCase()+m.slice(1);
-  g.fecha=fecha;g.monto=monto;g.cat=cat;g.tdc=tdc;g.desc=desc;g.msi=msi;g.meses=meses;g.mes=mes;
+  var cicloEdit=cicloDeGasto(fecha,tdc)||mes+'-'+new Date(fecha+'T12:00:00').getFullYear();
+  g.fecha=fecha;g.monto=monto;g.cat=cat;g.tdc=tdc;g.desc=desc;g.msi=msi;g.meses=meses;g.mes=mes;g.ciclo=cicloEdit;
   save();syncSheetDelete('Gastos',DB.gastos);renderGastos();toast('Gasto actualizado ✓');
 }
 
@@ -870,7 +931,7 @@ function renderIngresos(){
   if(!DB.ingresos.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin ingresos</td></tr>';return;}
   tbody.innerHTML=DB.ingresos.map(function(i){
     return '<tr id="irow-'+i.id+'">'+
-      '<td style="font-family:monospace;font-size:11px">'+i.fecha+'</td>'+
+      '<td style="font-family:monospace;font-size:11px">'+fmtFecha(i.fecha)+'</td>'+
       '<td><span class="tag tag-green">'+i.tipo+'</span></td>'+
       '<td>'+(i.desc||'—')+'</td>'+
       '<td style="text-align:right;font-family:monospace;font-weight:500;color:var(--teal)">'+fmt(i.monto)+'</td>'+
@@ -1313,7 +1374,7 @@ function eliminarPagoTDC(id){DB.pagosTDC=DB.pagosTDC.filter(function(p){return p
 function renderTDC(){
   const tbody=document.getElementById('tdc-tbody');
   if(!DB.pagosTDC.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Sin pagos</td></tr>';return;}
-  tbody.innerHTML=DB.pagosTDC.map(p=>`<tr><td style="font-family:monospace;font-size:11px">${p.fecha}</td><td>${p.tdc}</td><td>${p.mes}</td><td style="text-align:right;font-family:monospace">${fmt(p.consumo)}</td><td style="text-align:right;font-family:monospace;font-weight:500">${fmt(p.monto)}</td><td><span class="tag ${p.estado==='Pagada total'?'tag-green':'tag-amber'}">${p.estado}</span></td><td><button onclick="eliminarPagoTDC(${p.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td></tr>`).join('');
+  tbody.innerHTML=DB.pagosTDC.map(p=>`<tr><td style="font-family:monospace;font-size:11px">${fmtFecha(p.fecha)}</td><td>${p.tdc}</td><td>${p.mes}</td><td style="text-align:right;font-family:monospace">${fmt(p.consumo)}</td><td style="text-align:right;font-family:monospace;font-weight:500">${fmt(p.monto)}</td><td><span class="tag ${p.estado==='Pagada total'?'tag-green':'tag-amber'}">${p.estado}</span></td><td><button onclick="eliminarPagoTDC(${p.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td></tr>`).join('');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1389,7 +1450,15 @@ function renderAnual(){
   let totalIng=0,totalGas=0;
   tbody.innerHTML=MESES.map(mes=>{
     const ing=DB.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0);
-    const gas=DB.gastos.filter(g=>g.mes===mes).reduce((s,g)=>s+g.monto,0);
+    // Para métricas generales usamos ciclo: gastos cuyo ciclo cierra en el mes seleccionado
+  // Para tarjetas con corte: usar cicloDeGasto; para efectivo: usar mes calendario
+  const gas=DB.gastos.filter(function(g){
+    if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){
+      var c=g.ciclo||(cicloDeGasto(g.fecha,g.tdc));
+      return c===mes+'-'+new Date().getFullYear();
+    }
+    return g.mes===mes;
+  }).reduce((s,g)=>s+g.monto,0);
     const bal=ing-gas;
     const ahorro=ing>0?Math.round((bal/ing)*100):0;
     const pat=Object.values(DB.cuentasInv).reduce((s,c)=>s+c.saldo,0);
@@ -1585,7 +1654,15 @@ function renderPatrimonioChart(){
 function renderDashboard(){
   const mes=document.getElementById('mes-selector').value;
   const ing=DB.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0);
-  const gas=DB.gastos.filter(g=>g.mes===mes).reduce((s,g)=>s+g.monto,0);
+  // Para métricas generales usamos ciclo: gastos cuyo ciclo cierra en el mes seleccionado
+  // Para tarjetas con corte: usar cicloDeGasto; para efectivo: usar mes calendario
+  const gas=DB.gastos.filter(function(g){
+    if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){
+      var c=g.ciclo||(cicloDeGasto(g.fecha,g.tdc));
+      return c===mes+'-'+new Date().getFullYear();
+    }
+    return g.mes===mes;
+  }).reduce((s,g)=>s+g.monto,0);
   const bal=ing-gas;
   const pat=Object.values(DB.cuentasInv).reduce((s,c)=>s+c.saldo,0);
   const rdHoy=Object.values(DB.cuentasInv).reduce((s,c)=>s+rdtoDia(c.saldo,c.tasa),0);
@@ -1602,7 +1679,15 @@ function renderDashboard(){
   renderAlertasTDC();
 
   // Categorías
-  const catT={};DB.gastos.filter(g=>g.mes===mes).forEach(g=>{catT[g.cat]=(catT[g.cat]||0)+g.monto;});
+  const anioSel=new Date().getFullYear();
+  const cicloSel=mes+'-'+anioSel;
+  const catT={};DB.gastos.filter(function(g){
+    if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){
+      var c=g.ciclo||(cicloDeGasto(g.fecha,g.tdc));
+      return c===cicloSel;
+    }
+    return g.mes===mes;
+  }).forEach(g=>{catT[g.cat]=(catT[g.cat]||0)+g.monto;});
   const sorted=Object.entries(catT).sort((a,b)=>b[1]-a[1]);
   const colors=['var(--teal)','var(--blue)','var(--purple)','var(--amber)','var(--coral)'];
   document.getElementById('dash-cats').innerHTML=sorted.length?sorted.map(([cat,total],i)=>{
@@ -1610,14 +1695,12 @@ function renderDashboard(){
     const color=over?'var(--coral)':colors[i%colors.length];
     return `<div class="progress-row"><span class="progress-label">${cat}</span><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(p*100)}%;background:${color}"></div></div><span class="progress-amounts">${fmtK(total)}${lim?'/'+fmtK(lim):''}</span></div>`;}).join(''):'<div style="text-align:center;color:var(--text3);padding:20px;font-size:13px">Sin gastos este mes</div>';
 
-  // TDC
-  // Calcular mes anterior para "pago requerido"
-  var mesAnteriorIdx=(new Date().getMonth()-1+12)%12;
-  var mesAnteriorNombre=MESES[mesAnteriorIdx];
-  var mesActualNombre=mesDeHoy();
+  // TDC — usar ciclos de corte reales
   document.getElementById('dash-tdc').innerHTML=DB.config.tdcs.filter(function(t){return t!=='Efectivo';}).map(function(tdc){
-    // Consumo mes seleccionado
-    var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mes;}).reduce(function(s,g){return s+g.monto;},0);
+    var cicloAct=cicloActual(tdc);
+    var cicloAnt=cicloAnterior(tdc);
+    // Consumo del ciclo actual (lo que se pagará al próximo corte)
+    var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&(g.ciclo===cicloAct||(g.ciclo===undefined&&g.mes===mes));}).reduce(function(s,g){return s+g.monto;},0);
     var pago=DB.pagosTDC.filter(function(p){return p.tdc===tdc&&p.mes===mes;}).reduce(function(s,p){return s+p.monto;},0);
     var msiN=DB.gastos.filter(function(g){return g.tdc===tdc&&g.msi==='Si';}).length;
     var estado=consumo===0?'Sin consumo':pago===0?'Pendiente':pago>=consumo?'Pagada':'Parcial';
@@ -1644,34 +1727,33 @@ function renderDashboard(){
         '<div style="font-size:10px;color:var(--text3);margin-top:3px">'+Math.round(pctUsado*100)+'% utilizado</div>'+
       '</div>'
     ):'';
-    // Pago requerido = consumo mes anterior - pagos ya realizados de ese mes
-    var consumoMesAnt=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mesAnteriorNombre;}).reduce(function(s,g){return s+g.monto;},0);
-    var pagosMesAnt=DB.pagosTDC.filter(function(p){return p.tdc===tdc&&p.mes===mesAnteriorNombre;}).reduce(function(s,p){return s+p.monto;},0);
-    var pendientePago=Math.max(0,consumoMesAnt-pagosMesAnt);
-    // Próximo pago:
-    // Si hay pendiente del mes anterior = eso es lo urgente (vence pronto)
-    // Si no hay pendiente = el consumo actual es lo que se pagará al siguiente corte
+    // Pago requerido = consumo ciclo anterior - pagos ya realizados
+    var consumoCicloAnt=DB.gastos.filter(function(g){return g.tdc===tdc&&(g.ciclo===cicloAnt||(g.ciclo===undefined&&g.mes===MESES[(MESES.indexOf(mes)-1+12)%12]));}).reduce(function(s,g){return s+g.monto;},0);
+    var pagosMesAnt=DB.pagosTDC.filter(function(p){return p.tdc===tdc&&p.mes===cicloAnt.split('-')[0];}).reduce(function(s,p){return s+p.monto;},0);
+    var pendientePago=Math.max(0,consumoCicloAnt-pagosMesAnt);
+    // Próximo pago: pendiente del ciclo anterior si lo hay, si no el consumo actual
     var proximoPago=pendientePago>0?pendientePago:consumo;
     var pagoReqHtml='';
-    if(consumoMesAnt>0){
+    if(consumoCicloAnt>0){
       var prColor=pendientePago>0?(fechaInfo&&fechaInfo.diasFaltan<=3?'var(--coral)':'var(--amber)'):'var(--teal)';
       pagoReqHtml='<div style="margin-top:7px;padding:7px 10px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">'+
         '<div style="display:flex;justify-content:space-between;align-items:center">'+
-          '<span style="font-size:11px;color:var(--text3)">Pago requerido ('+mesAnteriorNombre+')</span>'+
+          '<span style="font-size:11px;color:var(--text3)">Pago requerido (ciclo '+cicloAnt+')</span>'+
           '<span style="font-size:13px;font-weight:600;color:'+prColor+';font-family:monospace">'+
             (pendientePago>0?fmtK(pendientePago):'<span style="color:var(--teal)">Pagado ✓</span>')+
           '</span>'+
         '</div>'+
         (pendientePago>0&&pagosMesAnt>0?
           '<div style="font-size:10px;color:var(--text3);margin-top:3px">'+
-            'Consumo: '+fmtK(consumoMesAnt)+' · Abonado: '+fmtK(pagosMesAnt)+
+            'Consumo: '+fmtK(consumoCicloAnt)+' · Abonado: '+fmtK(pagosMesAnt)+
           '</div>':'')+
       '</div>';
     }
-    // Próximo periodo — consumo acumulado del mes siguiente al seleccionado
+    // Próximo ciclo — lo que se está acumulando para el siguiente corte
     var mesIdxSel=MESES.indexOf(mes);
     var proxMesNombre=MESES[(mesIdxSel+1)%12];
-    var consumoProxPeriodo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===proxMesNombre;}).reduce(function(s,g){return s+g.monto;},0);
+    var cicloProx=proxMesNombre+'-'+new Date().getFullYear();
+    var consumoProxPeriodo=DB.gastos.filter(function(g){return g.tdc===tdc&&(g.ciclo===cicloProx||(!g.ciclo&&g.mes===proxMesNombre));}).reduce(function(s,g){return s+g.monto;},0);
     var proximoHtml='';
     if(consumoProxPeriodo>0){
       proximoHtml='<div style="margin-top:6px;padding:6px 10px;background:var(--bluel);border-radius:8px;border:1px solid #B5D4F4">'+
@@ -1702,10 +1784,10 @@ function renderDashboard(){
   // Proyección de cierre
   const diaActual=diaDeHoy(),diasTotales=diasEnMes(),diasRestantes=diasTotales-diaActual;
   document.getElementById('dash-proyeccion').innerHTML=DB.config.categorias.filter(cat=>{
-    const gasAct=DB.gastos.filter(g=>g.mes===mes&&g.cat===cat).reduce((s,g)=>s+g.monto,0);
+    const gasAct=DB.gastos.filter(function(g){if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){var c=g.ciclo||(cicloDeGasto(g.fecha,g.tdc));return c===cicloSel&&g.cat===cat;}return g.mes===mes&&g.cat===cat;}).reduce((s,g)=>s+g.monto,0);
     return gasAct>0;
   }).map(cat=>{
-    const gasAct=DB.gastos.filter(g=>g.mes===mes&&g.cat===cat).reduce((s,g)=>s+g.monto,0);
+    const gasAct=DB.gastos.filter(function(g){if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){var c=g.ciclo||(cicloDeGasto(g.fecha,g.tdc));return c===cicloSel&&g.cat===cat;}return g.mes===mes&&g.cat===cat;}).reduce((s,g)=>s+g.monto,0);
     const lim=DB.config.presupuesto[cat]||0;
     const tasaDia=diaActual>0?gasAct/diaActual:0;
     const proyFin=gasAct+tasaDia*diasRestantes;
@@ -1839,6 +1921,7 @@ DB.config.cuentas.forEach(function(nombre){
   if(!DB.cuentasInv[nombre]) DB.cuentasInv[nombre]={saldo:0,ultimaAct:'',tramos:[{limite:null,tasa:0}]};
   else if(!DB.cuentasInv[nombre].tramos) DB.cuentasInv[nombre].tramos=[{limite:null,tasa:DB.cuentasInv[nombre].tasa||0}];
 });
+migrarCiclos();
 save();
 document.getElementById('g-fecha').value=today();
 document.getElementById('i-fecha').value=today();
