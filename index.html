@@ -739,6 +739,8 @@ async function syncAll(){
   var ok=await pullFromSheets();
   if(ok){
     setSyncStatus('ok');
+    migrarCiclos();
+    save();
     toast('Sincronizado ✓');
     // Re-render current screen
     var active=document.querySelector('.screen.active');
@@ -779,7 +781,7 @@ async function probarConexion(){
       setSyncStatus('ok');
       toast('Conexión exitosa — jalando datos...');
       var ok=await pullFromSheets();
-      if(ok){renderDashboard();toast('Datos sincronizados ✓');}
+      if(ok){migrarCiclos();save();renderDashboard();toast('Datos sincronizados ✓');}
     }else throw new Error();
   }catch(e){setSyncStatus('err');toast('No se pudo conectar','err');}
 }
@@ -1907,6 +1909,8 @@ if(DB.config.scriptURL){
   pullFromSheets().then(function(ok){
     if(ok){
       setSyncStatus('ok');
+      migrarCiclos();
+      save();
       renderDashboard();
       toast('Datos actualizados ✓');
     }else{
