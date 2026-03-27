@@ -343,7 +343,7 @@ tr:hover td{background:var(--surface2)}
   <div id="acc-cards"></div>
 
 
-  <div class="card"><div class="card-title">Historial de registros</div><div class="table-wrap"><table><thead><tr><th>Período</th><th>Cuenta</th><th style="text-align:right">Saldo anterior</th><th style="text-align:right">Saldo actual</th><th style="text-align:right">Diferencia</th><th></th><th></th></tr></thead><tbody id="inv-tbody"></tbody></table></div></div>
+  <div class="card"><div class="card-title">Historial de actualizaciones</div><div id="inv-historial-wrap"></div></div>
 </div>
 
 <!-- ═══ TDC ═══ -->
@@ -1316,30 +1316,68 @@ function renderInversiones(){
         '<button data-nombre="'+nombre+'" data-key="'+key+'" onclick="actualizarSaldo(this.dataset.nombre,this.dataset.key)" style="padding:8px 14px;background:var(--purple);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap">Guardar</button>'+
       '</div>';
 
-    body.innerHTML=statsHtml+tramosSection+chartSection+editSection+updateSection;
+    body.innerHTML=statsHtml+tramosSection+editSection+updateSection;
     body.addEventListener('click',function(e){e.stopPropagation();});
     card.appendChild(body);
     container.appendChild(card);
   });
 
-  // Historial
-  var tbody=document.getElementById('inv-tbody');
+  // Historial — renderizar timeline
+  renderInvHistorial(7);
+}
+function renderInvHistorial(dias){
+  var wrap=document.getElementById('inv-historial-wrap');
+  if(!wrap)return;
   if(!DB.inversiones.length){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin registros</td></tr>';
+    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:13px">Sin registros aún</div>';
     return;
   }
-  tbody.innerHTML=DB.inversiones.map(function(i){
+  // Pills selector
+  var pills=[7,15,30,60,90].map(function(d){
+    return '<button onclick="renderInvHistorial('+d+')" style="padding:4px 12px;border-radius:20px;border:0.5px solid var(--border2);background:'+(d===dias?'var(--purple)':'transparent')+';color:'+(d===dias?'#fff':'var(--text3)')+';font-size:11px;cursor:pointer">'+d+' días</button>';
+  }).join('');
+  var html='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">'+pills+'</div>';
+  // Filtrar registros del periodo seleccionado
+  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-dias);
+  var recientes=DB.inversiones.filter(function(i){
+    var f=i.periodo?new Date(String(i.periodo).split('T')[0]+'T12:00:00'):null;
+    return f&&f>=cutoff;
+  });
+  if(!recientes.length){
+    html+='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin actualizaciones en los últimos '+dias+' días</div>';
+    wrap.innerHTML=html;return;
+  }
+  // Timeline
+  html+='<div style="display:flex;flex-direction:column;gap:0">';
+  recientes.forEach(function(i,idx){
     var pos=i.dif>=0;
     var per=i.periodo?String(i.periodo).split('T')[0]:'-';
-    return '<tr id="invrow-'+i.id+'">'+
-      '<td style="font-family:monospace;font-size:11px">'+per+'</td>'+
-      '<td><span class="tag tag-blue">'+i.cuenta+'</span></td>'+
-      '<td style="text-align:right;font-family:monospace">'+fmt(i.ant)+'</td>'+
-      '<td style="text-align:right;font-family:monospace;font-weight:500">'+fmt(i.actual)+'</td>'+
-      '<td style="text-align:right;font-family:monospace;font-weight:600;color:'+(pos?'var(--teal)':'var(--coral)')+'">'+( pos?'+':'')+fmt(i.dif)+'</td>'+
-      '<td><button onclick="editarInversion('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
-      '<td><button onclick="eliminarInversion('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td></tr>';
-  }).join('');
+    var isLast=idx===recientes.length-1;
+    var color=pos?'var(--teal)':'var(--coral)';
+    html+=
+      '<div style="display:flex;gap:12px;align-items:flex-start">'+
+        '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:12px">'+
+          '<div style="width:10px;height:10px;border-radius:50%;background:'+color+';margin-top:4px;flex-shrink:0"></div>'+
+          (!isLast?'<div style="width:1px;background:var(--border);flex:1;min-height:28px;margin:3px 0"></div>':'')+
+        '</div>'+
+        '<div style="padding-bottom:'+(isLast?'4':'14')+'px;flex:1;display:flex;justify-content:space-between;align-items:flex-start">'+
+          '<div>'+
+            '<div style="font-size:12px;font-weight:500">'+per+'</div>'+
+            '<div style="font-size:11px;color:var(--text3)">'+i.cuenta+' · '+(i.notas||'Actualización')+'</div>'+
+          '</div>'+
+          '<div style="text-align:right;display:flex;gap:6px;align-items:center">'+
+            '<div>'+
+              '<div style="font-size:12px;font-weight:500;font-family:monospace">'+fmt(i.actual)+'</div>'+
+              '<div style="font-size:11px;font-weight:500;color:'+color+';">'+(pos?'+':'')+fmt(i.dif)+'</div>'+
+            '</div>'+
+            '<button onclick="editarInversion('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px">✏️</button>'+
+            '<button onclick="eliminarInversion('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px">×</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+  });
+  html+='</div>';
+  wrap.innerHTML=html;
 }
 
 function updateTramo(nombre,idx,field,val){
@@ -1453,14 +1491,131 @@ function actualizarSaldo(nombre,key){
   var val=parseFloat(document.getElementById('es-'+key).value);
   if(isNaN(val)||val<0){toast('Monto inválido','err');return;}
   var prev=DB.cuentasInv[nombre]?DB.cuentasInv[nombre].saldo:0;
+  var diferencia=val-prev;
+  // Detectar retiro
+  if(diferencia<-1&&prev>0){
+    mostrarModalRetiro(nombre,key,val,prev,Math.abs(diferencia));
+    return;
+  }
+  guardarSaldoInversion(nombre,key,val,prev,'Actualización manual');
+}
+function mostrarModalRetiro(nombre,key,nuevoSaldo,saldoAnterior,montoRetiro){
+  // Quitar modal previo si existe
+  var prevModal=document.getElementById('modal-retiro');
+  if(prevModal)prevModal.remove();
+  var tdcOpts=DB.config.tdcs.filter(function(t){return t!=='Efectivo';}).map(function(t){return '<option>'+t+'</option>';}).join('');
+  var cuentasOpts=DB.config.cuentas.filter(function(c){return c!==nombre;}).map(function(c){return '<option>'+c+'</option>';}).join('');
+  var modal=document.createElement('div');
+  modal.id='modal-retiro';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:500;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=
+    '<div style="background:var(--surface);border-radius:16px;padding:20px;max-width:380px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.15)">'+
+      '<div style="font-size:15px;font-weight:600;margin-bottom:4px">Retiro detectado</div>'+
+      '<div style="font-size:12px;color:var(--text3);margin-bottom:16px">'+nombre+': '+fmt(saldoAnterior)+' → '+fmt(nuevoSaldo)+'</div>'+
+      '<div style="background:var(--amberl);border:1px solid #EF9F27;border-radius:8px;padding:10px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">'+
+        '<span style="font-size:12px;color:var(--amber);font-weight:600">Monto retirado</span>'+
+        '<span style="font-size:16px;font-weight:600;font-family:monospace;color:var(--amber)">'+fmt(montoRetiro)+'</span>'+
+      '</div>'+
+      '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">¿Para qué fue el retiro?</div>'+
+      '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">'+
+        '<label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border2);border-radius:8px;cursor:pointer">'+
+          '<input type="radio" name="motivo-retiro" value="tdc" onchange="toggleModalRetiro()" style="accent-color:var(--purple)">'+
+          '<span style="font-size:13px">Pago de tarjeta (TDC)</span>'+
+        '</label>'+
+        '<label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border2);border-radius:8px;cursor:pointer">'+
+          '<input type="radio" name="motivo-retiro" value="transferencia" onchange="toggleModalRetiro()" style="accent-color:var(--purple)">'+
+          '<span style="font-size:13px">Transferencia a otra inversión</span>'+
+        '</label>'+
+        '<label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border2);border-radius:8px;cursor:pointer">'+
+          '<input type="radio" name="motivo-retiro" value="otro" onchange="toggleModalRetiro()" style="accent-color:var(--purple)">'+
+          '<span style="font-size:13px">Otro motivo</span>'+
+        '</label>'+
+      '</div>'+
+      '<div id="modal-retiro-detalle" style="margin-bottom:16px"></div>'+
+      '<div style="display:flex;gap:8px">'+
+        '<button id="btn-confirmar-retiro" style="flex:1;padding:10px;background:var(--purple);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer">Confirmar</button>'+
+        '<button id="btn-cancelar-retiro" style="padding:10px 16px;background:transparent;border:1px solid var(--border2);border-radius:8px;font-size:13px;cursor:pointer;color:var(--text2)">Cancelar</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(modal);
+  // Attach confirm button via event listener to avoid escaping issues
+  document.getElementById('btn-confirmar-retiro').addEventListener('click',function(){
+    confirmarRetiro(nombre,key,nuevoSaldo,saldoAnterior,montoRetiro);
+  });
+  document.getElementById('btn-cancelar-retiro').addEventListener('click',function(){
+    document.getElementById('modal-retiro').remove();
+  });
+  // Store context
+  modal._ctx={nombre:nombre,key:key,nuevoSaldo:nuevoSaldo,saldoAnterior:saldoAnterior,montoRetiro:montoRetiro,tdcOpts:tdcOpts,cuentasOpts:cuentasOpts};
+}
+function toggleModalRetiro(){
+  var modal=document.getElementById('modal-retiro');
+  if(!modal)return;
+  var motivo=document.querySelector('input[name="motivo-retiro"]:checked');
+  var det=document.getElementById('modal-retiro-detalle');
+  if(!motivo){det.innerHTML='';return;}
+  if(motivo.value==='tdc'){
+    det.innerHTML='<div style="font-size:11px;color:var(--text3);margin-bottom:4px">¿Qué tarjeta pagaste?</div>'+
+      '<select id="retiro-tdc" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-size:13px">'+modal._ctx.tdcOpts+'</select>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:8px;margin-bottom:4px">¿Mes que cubre?</div>'+
+      '<select id="retiro-mes" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-size:13px">'+
+        MESES.map(function(m){return '<option'+(m===mesDeHoy()?' selected':'')+'>'+m+'</option>';}).join('')+
+      '</select>';
+  } else if(motivo.value==='transferencia'){
+    det.innerHTML='<div style="font-size:11px;color:var(--text3);margin-bottom:4px">¿A qué cuenta lo transferiste?</div>'+
+      '<select id="retiro-cuenta-dest" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-size:13px">'+modal._ctx.cuentasOpts+'</select>';
+  } else {
+    det.innerHTML='<input type="text" id="retiro-notas" placeholder="Describe el motivo..." style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;font-size:13px">';
+  }
+}
+function confirmarRetiro(nombre,key,nuevoSaldo,saldoAnterior,montoRetiro){
+  var motivo=document.querySelector('input[name="motivo-retiro"]:checked');
+  if(!motivo){toast('Selecciona el motivo del retiro','err');return;}
+  var notas='Retiro';
+  if(motivo.value==='tdc'){
+    var tdcSel=document.getElementById('retiro-tdc');
+    var mesSel=document.getElementById('retiro-mes');
+    if(!tdcSel){toast('Selecciona la tarjeta','err');return;}
+    var tdc=tdcSel.value, mes=mesSel?mesSel.value:mesDeHoy();
+    // Registrar pago TDC automáticamente
+    var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mes;}).reduce(function(s,g){return s+g.monto;},0);
+    var estado=montoRetiro>=consumo?'Pagada total':'Pago parcial';
+    DB.pagosTDC.unshift({id:Date.now(),fecha:today(),tdc:tdc,mes:mes,consumo:consumo,monto:montoRetiro,dif:montoRetiro-consumo,estado:estado,notas:'Retiro de '+nombre});
+    save();
+    pushSheets('PagosTDC',[today(),tdc,mes,consumo,montoRetiro,montoRetiro-consumo,estado,'Retiro de '+nombre]);
+    notas='Pago '+tdc+' ('+mes+')';
+    toast('Pago de '+tdc+' registrado automáticamente ✓');
+  } else if(motivo.value==='transferencia'){
+    var destEl=document.getElementById('retiro-cuenta-dest');
+    if(!destEl){toast('Selecciona la cuenta destino','err');return;}
+    var dest=destEl.value;
+    // Sumar a cuenta destino
+    if(DB.cuentasInv[dest]){
+      var prevDest=DB.cuentasInv[dest].saldo;
+      DB.cuentasInv[dest].saldo=prevDest+montoRetiro;
+      DB.cuentasInv[dest].ultimaAct=today();
+      var mDest=new Date().toLocaleString('es-MX',{month:'long',year:'numeric'});
+      var perDest=mDest.charAt(0).toUpperCase()+mDest.slice(1);
+      DB.inversiones.unshift({id:Date.now()-1,periodo:perDest,cuenta:dest,ant:prevDest,actual:prevDest+montoRetiro,dif:montoRetiro,notas:'Transferencia desde '+nombre});
+    }
+    notas='Transferencia a '+dest;
+  } else {
+    var notasEl=document.getElementById('retiro-notas');
+    notas=notasEl?notasEl.value||'Retiro':'Retiro';
+  }
+  document.getElementById('modal-retiro').remove();
+  guardarSaldoInversion(nombre,key,nuevoSaldo,saldoAnterior,notas);
+}
+function guardarSaldoInversion(nombre,key,val,prev,notas){
   DB.cuentasInv[nombre].saldo=val;
   DB.cuentasInv[nombre].ultimaAct=today();
   var m=new Date().toLocaleString('es-MX',{month:'long',year:'numeric'});
   var periodo=m.charAt(0).toUpperCase()+m.slice(1);
-  var row={id:Date.now(),periodo:periodo,cuenta:nombre,ant:prev,actual:val,dif:val-prev,notas:'Actualización manual'};
+  var row={id:Date.now(),periodo:periodo,cuenta:nombre,ant:prev,actual:val,dif:val-prev,notas:notas};
   DB.inversiones.unshift(row);save();
-  pushSheets('Inversiones',[periodo,nombre,prev,val,val-prev,'Actualización manual']);
-  var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);pushCuentasInv();toast('Saldo de '+nombre+' → '+fmt(val)+' ✓');
+  pushSheets('Inversiones',[periodo,nombre,prev,val,val-prev,notas]);
+  var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);pushCuentasInv();
+  toast('Saldo de '+nombre+' actualizado ✓');
 }
 function eliminarInversion(id){DB.inversiones=DB.inversiones.filter(function(i){return i.id!==id;});save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);}
 
