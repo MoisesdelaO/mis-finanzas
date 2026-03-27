@@ -1041,12 +1041,14 @@ function saldoProyectado(cuenta){
   var calc=calcTramos(saldo,tramos);
   var tasaAnual=saldo>0?(calc.rdtoAnual/saldo*100):0;
   if(!tasaAnual)return saldo;
-  // Días desde última actualización
-  var ultimaFecha=new Date(cuenta.ultimaAct+'T12:00:00');
+  // Limpiar fecha igual que cicloDeGasto
+  var fechaLimpia=String(cuenta.ultimaAct).split('T')[0].trim();
+  if(!fechaLimpia||fechaLimpia==='undefined')return saldo;
+  var ultimaFecha=new Date(fechaLimpia+'T12:00:00');
+  if(isNaN(ultimaFecha.getTime()))return saldo;
   var hoy=new Date();
   var dias=Math.floor((hoy-ultimaFecha)/(1000*60*60*24));
   if(dias<=0)return saldo;
-  // Interés compuesto diario
   return saldo*Math.pow(1+tasaAnual/100,dias/365);
 }
 function tasaEfectiva(saldo, tramos){
@@ -1430,12 +1432,14 @@ function saldoProyectado(cuenta){
   var calc=calcTramos(saldo,tramos);
   var tasaAnual=saldo>0?(calc.rdtoAnual/saldo*100):0;
   if(!tasaAnual)return saldo;
-  // Días desde última actualización
-  var ultimaFecha=new Date(cuenta.ultimaAct+'T12:00:00');
+  // Limpiar fecha igual que cicloDeGasto
+  var fechaLimpia=String(cuenta.ultimaAct).split('T')[0].trim();
+  if(!fechaLimpia||fechaLimpia==='undefined')return saldo;
+  var ultimaFecha=new Date(fechaLimpia+'T12:00:00');
+  if(isNaN(ultimaFecha.getTime()))return saldo;
   var hoy=new Date();
   var dias=Math.floor((hoy-ultimaFecha)/(1000*60*60*24));
   if(dias<=0)return saldo;
-  // Interés compuesto diario
   return saldo*Math.pow(1+tasaAnual/100,dias/365);
 }
 function tasaEfectiva(saldo, tramos){
