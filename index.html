@@ -408,7 +408,7 @@ tr:hover td{background:var(--surface2)}
         <button onclick="limpiarFiltrosTDC()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:6px;font-size:11px;background:transparent;cursor:pointer;color:var(--text3)">✕ Limpiar</button>
       </div>
     </div>
-    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Mes</th><th style="text-align:right">Consumo</th><th style="text-align:right">Pagado</th><th>Estado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Ciclo</th><th style="text-align:right">Consumo</th><th style="text-align:right">Pagado</th><th>Estado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
 </div>
 
 <!-- ═══ METAS ═══ -->
@@ -459,7 +459,7 @@ tr:hover td{background:var(--surface2)}
     <div class="card-title">Resumen anual 2025</div>
     <div style="overflow-x:auto">
       <table class="anual-table">
-        <thead><tr><th>Mes</th><th>Ingresos</th><th>Gastos</th><th>Balance</th><th>% Ahorro</th><th>Patrimonio inv.</th></tr></thead>
+        <thead><tr><th>Ciclo</th><th>Ingresos</th><th>Gastos</th><th>Balance</th><th>% Ahorro</th><th>Patrimonio inv.</th></tr></thead>
         <tbody id="anual-tbody"></tbody>
       </table>
     </div>
@@ -898,7 +898,7 @@ function renderAlertasTDC(){
     const cicloAct2=cicloActual(tdc);
     const consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&(g.ciclo===cicloAct2||(!g.ciclo&&g.mes===mesActual));}).reduce((s,g)=>s+g.monto,0);
     const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.mes===mesActual).reduce((s,p)=>s+p.monto,0);
-    if(pagado>=consumo&&consumo>0)return;
+    if(pagado>=consumo)return; // Si ya está pagada, no mostrar alerta
     if(consumo===0)return;
     if(diasParaPagar<=3&&diasParaPagar>=0){
       alertas.push({tipo:'urgent',msg:'<strong>'+tdc+'</strong> vence '+(diasParaPagar===0?'hoy':'en '+diasParaPagar+' días')+' ('+fp.diaPago+' '+fp.mesPago+')'});
@@ -988,7 +988,7 @@ function renderGastos(){
   }).join('');
   // Pagination controls
   if(pag){
-    var ini=_gPage*PER_PAGE+1, fin=Math.min((_gPage+1)*PER_PAGE,total);
+    var totalPags=Math.ceil(total/PER_PAGE)||1; var ini=_gPage*PER_PAGE+1, fin=Math.min((_gPage+1)*PER_PAGE,total);
     pag.innerHTML=
       '<span>'+ini+'-'+fin+' de '+total+'</span>'+
       '<div style="display:flex;gap:6px">'+
@@ -1739,14 +1739,14 @@ function editarPagoTDC(id){
   var p=DB.pagosTDC.find(function(x){return x.id===id;});
   if(!p)return;
   var tdcOpts=DB.config.tdcs.filter(function(t){return t!=='Efectivo';}).map(function(t){return '<option'+(t===p.tdc?' selected':'')+'>'+t+'</option>';}).join('');
-  var mesOpts=MESES.map(function(m){return '<option'+(m===p.mes?' selected':'')+'>'+m+'</option>';}).join('');
+  var cicloDisplay=p.ciclo||'Desconocido';
   var row=document.getElementById('trow-'+id);
   if(!row)return;
   row.innerHTML='<td colspan="8" style="padding:10px 8px;background:var(--amberl)">'+
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="et-fecha-'+id+'" value="'+p.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TARJETA</div><select id="et-tdc-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tdcOpts+'</select></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MES</div><select id="et-mes-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+mesOpts+'</select></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">CICLO</div><input type="text" id="et-ciclo-'+id+'" value="'+cicloDisplay+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text3)" readonly></div>'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO PAGADO</div><input type="number" id="et-monto-'+id+'" value="'+p.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
     '</div>'+
     '<div style="display:flex;gap:8px">'+
@@ -1760,12 +1760,12 @@ function guardarPagoTDC(id){
   if(!p)return;
   var fecha=document.getElementById('et-fecha-'+id).value;
   var tdc=document.getElementById('et-tdc-'+id).value;
-  var mes=document.getElementById('et-mes-'+id).value;
+  var ciclo=document.getElementById('et-ciclo-'+id)?document.getElementById('et-ciclo-'+id).value:p.ciclo;
   var monto=parseFloat(document.getElementById('et-monto-'+id).value);
   if(!fecha||!monto){toast('Completa los campos requeridos','err');return;}
-  var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mes;}).reduce(function(s,g){return s+g.monto;},0);
+  var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.ciclo===ciclo;}).reduce(function(s,g){return s+g.monto;},0);
   var estado=monto>=consumo?'Pagada total':'Pago parcial';
-  p.fecha=fecha;p.tdc=tdc;p.mes=mes;p.monto=monto;p.consumo=consumo;p.dif=monto-consumo;p.estado=estado;
+  p.fecha=fecha;p.tdc=tdc;p.ciclo=ciclo;p.monto=monto;p.consumo=consumo;p.dif=monto-consumo;p.estado=estado;
   save();syncSheetDelete('PagosTDC',DB.pagosTDC);renderTDC();toast('Pago actualizado ✓');
 }
 function limpiarFiltrosTDC(){
