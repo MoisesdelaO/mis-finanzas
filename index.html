@@ -1720,12 +1720,7 @@ function renderInvHistorial(){
   // Crecimiento total
   html+='<div style="background:var(--surface2);border-radius:6px;padding:12px;margin-bottom:16px;text-align:center">';
   html+='<div style="font-size:11px;color:var(--text3);margin-bottom:4px">CRECIMIENTO TOTAL</div>';
-  html+='<div style="font-size:20px;font-weight:600;color:var(--teal);font-family:monospace">'+(ganancia>=0?'+':'')+fmtK(ganancia)+' ('+Math.round(pctCrecimiento*10)/10+'%)</div>';
-  html+='</div>';
-  
-  // Meta
-  html+='<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:'+Math.round(progreso)+'%;background:var(--purple);border-radius:3px;transition:width .4s"></div></div>';
-  html+='<div style="font-size:10px;color:var(--text3)">Meta: '+fmtK(meta)+' ('+Math.round(progreso)+'% completado)</div>';
+  html+='<div style="font-size:20px;font-weight:600;color:var(--teal);font-family:monospace">'+(ganancia>=0?'+':'')+fmtK(ganancia)+'</div>';
   html+='</div>';
   
   html+='</div>';
