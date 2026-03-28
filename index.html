@@ -2196,7 +2196,7 @@ function renderDashboard(){
     var cicloAct=cicloActual(tdc);   // ciclo abierto ahora (se pagará al próximo corte)
     var cicloAnt=cicloAnterior(tdc); // ciclo cerrado (ya venció o vence pronto)
 
-    // Gastos del ciclo CERRADO (estado de cuenta más reciente)
+    // Gastos del ciclo CERRADO (estado de cuenta más reciente) — usar ciclo calculado por fecha
     var consumoCicloAnt=DB.gastos.filter(function(g){
       return g.tdc===tdc&&g.ciclo===cicloAnt;
     }).reduce(function(s,g){return s+g.monto;},0);
@@ -2215,8 +2215,18 @@ function renderDashboard(){
     }).reduce(function(s,g){return s+(g.monto/g.meses);},0);
     consumoCicloAnt+=cuotasMSIAnt;
 
-    // Pagos registrados para el ciclo anterior
+    // Pagos registrados para el ciclo anterior — buscar por ciclo exacto
     var pagadoCicloAnt=DB.pagosTDC.filter(function(p){
+      // Convertir fecha de pago a ciclo para comparar correctamente
+      if(p.fecha&&p.tdc===tdc){
+        var fechaPagoLimpia=p.fecha?String(p.fecha).split('T')[0].trim():null;
+        if(fechaPagoLimpia&&fechaPagoLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+          var pp=fechaPagoLimpia.split('/');fechaPagoLimpia=pp[2]+'-'+pp[1]+'-'+pp[0];
+        }
+        var cicloPago=cicloDeGasto(fechaPagoLimpia, tdc);
+        return cicloPago===cicloAnt;
+      }
+      // Fallback: usar mes si no hay fecha
       return p.tdc===tdc&&p.mes===cicloAnt.split('-')[0];
     }).reduce(function(s,p){return s+p.monto;},0);
 
