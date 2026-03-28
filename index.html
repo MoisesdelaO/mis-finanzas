@@ -1,30 +1,9 @@
-<!--
-  ┌─────────────────────────────────────────────────────────────────────────┐
-  │                     MIS FINANZAS v2.1 - CORREGIDO                       │
-  ├─────────────────────────────────────────────────────────────────────────┤
-  │ Versión:     2.1                                                        │
-  │ Fecha:       Marzo 28, 2026                                            │
-  │ Cambios:     4 correcciones críticas aplicadas                         │
-  ├─────────────────────────────────────────────────────────────────────────┤
-  │ CORRECCIONES REALIZADAS:                                               │
-  │ ✅ 1. Alertas TDC - No aparecen si ya se pagó                          │
-  │ ✅ 2. Paginación - Botones Anterior/Siguiente funcionan                │
-  │ ✅ 3. Filtros - Categorías y tarjetas dinámicas                        │
-  │ ✅ 4. TDC - Usa CICLO en lugar de MES (consistente)                    │
-  ├─────────────────────────────────────────────────────────────────────────┤
-  │ CAMBIOS EN EL CÓDIGO:                                                   │
-  │ • renderAlertasTDC(): if(pagado>=consumo)return;                       │
-  │ • renderGastos(): var totalPags=Math.ceil(total/PER_PAGE)||1;          │
-  │ • editarPagoTDC(): Cambio MES → CICLO (readonly)                       │
-  │ • guardarPagoTDC(): g.mes → g.ciclo en filtros                         │
-  └─────────────────────────────────────────────────────────────────────────┘
--->
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mis Finanzas v2.1</title>
+<title>Mis Finanzas</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -202,10 +181,40 @@ tr:hover td{background:var(--surface2)}
   .tag{font-size:10px;padding:2px 6px}
   .alert-urgent,.alert-warn,.alert-ok{font-size:11px}
 }
+/* PRÓXIMOS PAGOS - ESTILOS MEJORADOS */
+.pagos-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:10px}
+.pago-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:16px;overflow:hidden}
+.pago-card.urgente{border-color:var(--coral);background:#fff9f7}
+.pago-card.proximo{border-color:var(--blue);background:#f0f7ff}
+.pago-card.realizado{border-color:var(--teal);background:#f0fdf9}
+
+.pago-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.pago-banco{font-size:13px;font-weight:600;color:var(--text)}
+.pago-estado{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px}
+
+.pago-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border)}
+.pago-row:last-child{border-bottom:none}
+.pago-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.02em}
+.pago-valor{font-size:13px;font-weight:600;color:var(--text);font-family:monospace;text-align:right}
+
+.pago-total{background:var(--surface2);padding:12px;border-radius:8px;margin-top:10px;display:flex;justify-content:space-between;align-items:center}
+.pago-total-label{font-size:11px;font-weight:600;color:var(--text3)}
+.pago-total-monto{font-size:16px;font-weight:700;font-family:monospace;color:var(--text)}
+
+.pago-fecha{font-size:10px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)}
+.pago-fecha.vence-hoy{color:var(--coral);font-weight:600}
+.pago-fecha.urgente{color:var(--amber);font-weight:600}
+
+.pago-detalles-toggle{display:flex;justify-content:space-between;align-items:center;padding:8px 0;margin-top:8px;border-top:0.5px solid var(--border);cursor:pointer;color:var(--purple);font-size:11px;font-weight:600}
+
+.pago-detalles{display:none;margin-top:10px;padding:10px;background:var(--surface2);border-radius:6px}
+.pago-detalles.open{display:block}
+
 @media(max-width:380px){
   .metrics{grid-template-columns:1fr}
   .screen{padding:8px 6px}
   .metric-value{font-size:14px}
+  .pagos-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -288,6 +297,10 @@ tr:hover td{background:var(--surface2)}
     <div class="card" style="margin-bottom:0"><div class="card-title">Estado TDC</div><div id="dash-tdc"></div></div>
   </div>
 
+  <div class="card">
+    <div class="card-title">Salud financiera</div>
+    <div id="dash-salud"></div>
+  </div>
   <div class="card">
     <div class="card-title">Patrimonio histórico <span>saldo de inversiones por mes</span></div>
     <div style="position:relative;height:110px;width:100%"><canvas id="pat-chart"></canvas></div>
@@ -397,28 +410,7 @@ tr:hover td{background:var(--surface2)}
   <div id="acc-cards"></div>
 
 
-  <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <div class="card-title" style="margin-bottom:0">Crecimiento de inversiones</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <select id="inv-periodo" onchange="renderInvHistorial()" style="padding:6px 10px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface);cursor:pointer;color:var(--text)">
-          <option value="7">7 días</option>
-          <option value="15">15 días</option>
-          <option value="30" selected>30 días</option>
-          <option value="60">60 días</option>
-          <option value="90">90 días</option>
-          <option value="0">Todo</option>
-          <option value="custom">📅 Custom</option>
-        </select>
-        <div id="inv-custom-dates" style="display:none;gap:6px;align-items:center;flex-wrap:wrap">
-          <input type="date" id="inv-fecha-desde" onchange="renderInvHistorial()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
-          <span style="font-size:11px;color:var(--text3)">a</span>
-          <input type="date" id="inv-fecha-hasta" onchange="renderInvHistorial()" style="padding:5px 8px;border:0.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface)">
-        </div>
-      </div>
-    </div>
-    <div id="inv-historial-wrap"></div>
-  </div>
+  <div class="card"><div class="card-title">Historial de actualizaciones</div><div id="inv-historial-wrap"></div></div>
 </div>
 
 <!-- ═══ TDC ═══ -->
@@ -446,7 +438,7 @@ tr:hover td{background:var(--surface2)}
         <button onclick="limpiarFiltrosTDC()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:6px;font-size:11px;background:transparent;cursor:pointer;color:var(--text3)">✕ Limpiar</button>
       </div>
     </div>
-    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Ciclo</th><th style="text-align:right">Pagado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Mes</th><th style="text-align:right">Consumo</th><th style="text-align:right">Pagado</th><th>Estado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
 </div>
 
 <!-- ═══ METAS ═══ -->
@@ -497,7 +489,7 @@ tr:hover td{background:var(--surface2)}
     <div class="card-title">Resumen anual 2025</div>
     <div style="overflow-x:auto">
       <table class="anual-table">
-        <thead><tr><th>Ciclo</th><th>Ingresos</th><th>Gastos</th><th>Balance</th><th>% Ahorro</th><th>Patrimonio inv.</th></tr></thead>
+        <thead><tr><th>Mes</th><th>Ingresos</th><th>Gastos</th><th>Balance</th><th>% Ahorro</th><th>Patrimonio inv.</th></tr></thead>
         <tbody id="anual-tbody"></tbody>
       </table>
     </div>
@@ -778,47 +770,6 @@ function cicloDeGasto(fechaStr, tdc){
   return nombreMes+'-'+cierraY;
 }
 // Retorna el ciclo actual de una TDC (el que cierra en el próximo corte)
-
-// ═══════════════════════════════════════════════════════════════════════════
-// AUTO-CORRECCIÓN DE DATOS (Se ejecuta automáticamente)
-// ═══════════════════════════════════════════════════════════════════════════
-function autoCorregirDatos(){
-  console.log('🔄 Auto-corrigiendo datos...');
-  
-  // Arreglar pagos TDC
-  if(DB && DB.pagosTDC){
-    DB.pagosTDC.forEach(pago => {
-      if(!pago.ciclo && pago.fecha){
-        const [año, mes, día] = pago.fecha.split('-');
-        const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                       'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-        const mesNum = parseInt(mes) - 1;
-        pago.ciclo = meses[mesNum] + '-' + año;
-        console.log('✅ Pago corregido:', pago.ciclo);
-      }
-    });
-  }
-  
-  // Arreglar gastos
-  if(DB && DB.gastos){
-    DB.gastos.forEach(gasto => {
-      if(!gasto.ciclo && gasto.fecha){
-        const [año, mes, día] = gasto.fecha.split('-');
-        const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                       'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-        const mesNum = parseInt(mes) - 1;
-        gasto.ciclo = meses[mesNum] + '-' + año;
-      }
-    });
-  }
-  
-  save();
-  console.log('✅ Datos corregidos automáticamente');
-}
-
-// Ejecutar auto-corrección al cargar
-window.addEventListener('load', autoCorregirDatos);
-
 function cicloActual(tdc){
   var hoy=new Date();
   return cicloDeGasto(hoy.toISOString().split('T')[0], tdc);
@@ -974,10 +925,10 @@ function renderAlertasTDC(){
     if(!cfg||!cfg.corte)return;
     const fp=fechaPagoReal(cfg.corte, cfg.diasPago);
     const diasParaPagar=fp.diasFaltan;
-    const cicloAnt=cicloAnterior(tdc); // CAMBIO: usar cicloAnterior (el que vence, no el actual)
-    const consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.ciclo===cicloAnt;}).reduce((s,g)=>s+g.monto,0);
-    const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.ciclo===cicloAnt).reduce((s,p)=>s+p.monto,0);
-    if(pagado>=consumo)return; // Si ya está pagada, no mostrar alerta
+    const cicloAct2=cicloActual(tdc);
+    const consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&(g.ciclo===cicloAct2||(!g.ciclo&&g.mes===mesActual));}).reduce((s,g)=>s+g.monto,0);
+    const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.mes===mesActual).reduce((s,p)=>s+p.monto,0);
+    if(pagado>=consumo&&consumo>0)return;
     if(consumo===0)return;
     if(diasParaPagar<=3&&diasParaPagar>=0){
       alertas.push({tipo:'urgent',msg:'<strong>'+tdc+'</strong> vence '+(diasParaPagar===0?'hoy':'en '+diasParaPagar+' días')+' ('+fp.diaPago+' '+fp.mesPago+')'});
@@ -1053,10 +1004,6 @@ function renderGastos(){
   var totalPags=Math.ceil(total/PER_PAGE);
   if(_gPage>=totalPags)_gPage=Math.max(0,totalPags-1);
   var page=sorted.slice(_gPage*PER_PAGE,(_gPage+1)*PER_PAGE);
-  
-  // Calcular total de gastos filtrados
-  var totalGastos=filtered.reduce(function(s,g){return s+parseFloat(g.monto)||0;},0);
-  
   tbody.innerHTML=page.map(function(g){
     return '<tr id="grow-'+g.id+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(g.fecha)+'</td>'+
@@ -1069,45 +1016,16 @@ function renderGastos(){
       '<td><button onclick="eliminarGasto('+g.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
   }).join('');
-  
-  // Agregar fila de totales
-  tbody.innerHTML+='<tr style="background:var(--surface2);border-top:1px solid var(--border);font-weight:600">'+
-    '<td colspan="5" style="padding:10px;text-align:right">TOTAL:</td>'+
-    '<td style="text-align:right;font-family:monospace;font-weight:600;padding:10px;color:var(--coral)">'+fmt(totalGastos)+'</td>'+
-    '<td colspan="2"></td>'+
-  '</tr>';
   // Pagination controls
   if(pag){
-    var totalPags=Math.ceil(total/PER_PAGE)||1; 
-    var ini=_gPage*PER_PAGE+1; 
-    var fin=Math.min((_gPage+1)*PER_PAGE,total);
-    var btnAnt='<button onclick="paginarGastos(-1)" '+((_gPage===0)?'disabled=true':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">← Ant</button>';
-    var btnSig='<button onclick="paginarGastos(1)" '+((_gPage>=totalPags-1)?'disabled=true':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>';
+    var ini=_gPage*PER_PAGE+1, fin=Math.min((_gPage+1)*PER_PAGE,total);
     pag.innerHTML=
       '<span>'+ini+'-'+fin+' de '+total+'</span>'+
-      '<div style="display:flex;gap:6px">'+btnAnt+btnSig+'</div>';
+      '<div style="display:flex;gap:6px">'+
+        '<button onclick="_gPage=Math.max(0,_gPage-1);renderGastos()" '+((_gPage===0)?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">← Ant</button>'+
+        '<button onclick="_gPage=Math.min(totalPags-1,_gPage+1);renderGastos()" '+((_gPage>=totalPags-1)?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>'+
+      '</div>';
   }
-  
-  // Populate gastos filter selects - IMPORTANTE: Se ejecuta siempre
-  var gfCat=document.getElementById('gf-cat');
-  var gfTdc=document.getElementById('gf-tdc');
-  if(gfCat){
-    var catVal=gfCat.value;
-    gfCat.innerHTML='<option value="">Todas las categorías</option>'+
-      DB.config.categorias.map(function(c){return '<option value="'+c+'"'+(c===catVal?' selected':'')+'>'+c+'</option>';}).join('');
-  }
-  if(gfTdc){
-    var tdcVal=gfTdc.value;
-    gfTdc.innerHTML='<option value="">Todas las tarjetas</option>'+
-      DB.config.tdcs.map(function(t){return '<option value="'+t+'"'+(t===tdcVal?' selected':'')+'>'+t+'</option>';}).join('');
-  }
-}
-
-// Nueva función para paginar
-function paginarGastos(dir){
-  var totalPags=Math.ceil(DB.gastos.length/PER_PAGE)||1;
-  _gPage=Math.max(0,Math.min(_gPage+dir,totalPags-1));
-  renderGastos();
 }
 function editarGasto(id){
   var g=DB.gastos.find(function(x){return x.id===id;});
@@ -1202,10 +1120,6 @@ function renderIngresos(){
   var totalPags=Math.max(1,Math.ceil(total/PER_PAGE));
   if(_iPage>=totalPags)_iPage=Math.max(0,totalPags-1);
   var page=sorted.slice(_iPage*PER_PAGE,(_iPage+1)*PER_PAGE);
-  
-  // Calcular total de ingresos filtrados
-  var totalIngresos=filtered.reduce(function(s,i){return s+parseFloat(i.monto)||0;},0);
-  
   tbody.innerHTML=page.map(function(i){
     return '<tr id="irow-'+i.id+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(i.fecha)+'</td>'+
@@ -1216,13 +1130,6 @@ function renderIngresos(){
       '<td><button onclick="eliminarIngreso('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
   }).join('');
-  
-  // Agregar fila de totales
-  tbody.innerHTML+='<tr style="background:var(--surface2);border-top:1px solid var(--border);font-weight:600">'+
-    '<td colspan="3" style="padding:10px;text-align:right">TOTAL:</td>'+
-    '<td style="text-align:right;font-family:monospace;font-weight:600;padding:10px;color:var(--teal)">'+fmt(totalIngresos)+'</td>'+
-    '<td colspan="2"></td>'+
-  '</tr>';
   if(pag){
     var ini=_iPage*PER_PAGE+1,fin=Math.min((_iPage+1)*PER_PAGE,total);
     pag.innerHTML=
@@ -1588,143 +1495,60 @@ function renderInversiones(){
   });
 
   // Historial — renderizar timeline
-  renderInvHistorial();
+  renderInvHistorial(7);
 }
-function renderInvHistorial(){
+function renderInvHistorial(dias){
   var wrap=document.getElementById('inv-historial-wrap');
   if(!wrap)return;
   if(!DB.inversiones.length){
     wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:13px">Sin registros aún</div>';
     return;
   }
-  
-  // Obtener período seleccionado
-  var periodoSelect=document.getElementById('inv-periodo');
-  var periodo=periodoSelect?periodoSelect.value:'30';
-  var customDatesDiv=document.getElementById('inv-custom-dates');
-  
-  // Mostrar/ocultar date pickers custom
-  if(customDatesDiv){
-    if(periodo==='custom'){
-      customDatesDiv.style.display='flex';
-    }else{
-      customDatesDiv.style.display='none';
-    }
-  }
-  
-  // Agrupar inversiones por mes/periodo
-  var meses={};
-  DB.inversiones.forEach(function(i){
-    if(!i.periodo)return;
-    var fechaStr=String(i.periodo).split('T')[0];
-    var fecha=new Date(fechaStr+'T12:00:00');
-    var mesKey=fecha.getFullYear()+'-'+(fecha.getMonth()+1).toString().padStart(2,'0');
-    
-    // Guardar saldo de TODAS las cuentas en esa fecha
-    var saldoTotal=0;
-    Object.keys(DB.cuentasInv).forEach(function(cuenta){
-      // Buscar el saldo más reciente de esa cuenta antes o en esa fecha
-      var saldoCuenta=0;
-      DB.inversiones.forEach(function(inv){
-        if(inv.cuenta===cuenta && inv.periodo<=i.periodo){
-          saldoCuenta=inv.actual||0;
-        }
-      });
-      saldoTotal+=saldoCuenta;
-    });
-    
-    if(!meses[mesKey]){
-      meses[mesKey]={fecha:fechaStr,saldo:0};
-    }
-    meses[mesKey].saldo=saldoTotal;
+  // Pills selector
+  var pills=[7,15,30,60,90].map(function(d){
+    return '<button onclick="renderInvHistorial('+d+')" style="padding:4px 12px;border-radius:20px;border:0.5px solid var(--border2);background:'+(d===dias?'var(--purple)':'transparent')+';color:'+(d===dias?'#fff':'var(--text3)')+';font-size:11px;cursor:pointer">'+d+' días</button>';
+  }).join('');
+  var html='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">'+pills+'</div>';
+  // Filtrar registros del periodo seleccionado
+  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-dias);
+  var recientes=DB.inversiones.filter(function(i){
+    var f=i.periodo?new Date(String(i.periodo).split('T')[0]+'T12:00:00'):null;
+    return f&&f>=cutoff;
   });
-  
-  var mesesLista=Object.keys(meses).sort();
-  if(!mesesLista.length){
-    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin registros</div>';
-    return;
+  if(!recientes.length){
+    html+='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin actualizaciones en los últimos '+dias+' días</div>';
+    wrap.innerHTML=html;return;
   }
-  
-  // Obtener saldo ACTUAL (suma de todas las cuentas con proyección, como en dashboard)
-  var saldoActual=Object.values(DB.cuentasInv).reduce(function(s,c){
-    return s+saldoProyectado(c);
-  },0);
-  
-  var mesActualNombre=new Date().toLocaleDateString('es-MX',{month:'long',year:'numeric'});
-  
-  // Filtrar por período
-  var fechaHoy=new Date();
-  var fechaInicio=new Date(fechaHoy);
-  var mesesEnPeriodo=[];
-  
-  if(periodo==='custom'){
-    var desdeInput=document.getElementById('inv-fecha-desde');
-    var hastaInput=document.getElementById('inv-fecha-hasta');
-    
-    if(!desdeInput || !desdeInput.value){
-      wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Selecciona rango de fechas</div>';
-      return;
-    }
-    
-    var desde=desdeInput.value;
-    var hasta=hastaInput && hastaInput.value?hastaInput.value:desde;
-    
-    mesesEnPeriodo=mesesLista.filter(function(m){
-      return m>=desde.substring(0,7) && m<=hasta.substring(0,7);
-    });
-  }else if(periodo==='0'){
-    // Todo el tiempo
-    mesesEnPeriodo=mesesLista.slice();
-  }else{
-    // Últimos N días
-    var dias=parseInt(periodo)||30;
-    fechaInicio.setDate(fechaHoy.getDate()-dias);
-    var mesDesde=(fechaInicio.getFullYear())+'-'+(fechaInicio.getMonth()+1).toString().padStart(2,'0');
-    
-    mesesEnPeriodo=mesesLista.filter(function(m){
-      return m>=mesDesde;
-    });
-  }
-  
-  if(!mesesEnPeriodo.length){
-    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin cambios en este período</div>';
-    return;
-  }
-  
-  // Calcular saldo inicial del período
-  // Si hay múltiples meses, usar el más antiguo; si solo hay uno, usarlo como inicio
-  var saldoInicio=mesesEnPeriodo.length>1?meses[mesesEnPeriodo[mesesEnPeriodo.length-1]].saldo:meses[mesesEnPeriodo[0]].saldo;
-  var ganancia=saldoActual-saldoInicio;
-  var pctCrecimiento=saldoInicio>0?(ganancia/saldoInicio)*100:0;
-  
-  // Meta
-  var meta=saldoActual*1.5;
-  var progreso=Math.min((saldoActual/meta)*100,100);
-  
-  // Mes de inicio
-  var mesInicio=new Date(mesesEnPeriodo[0]+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long'});
-  
-  // ANTES Y DESPUÉS
-  var html='<div style="padding:16px;background:var(--purpl);border-radius:8px;margin-bottom:16px">';
-  
-  // Comparativa visual
-  html+='<div style="margin-bottom:16px">';
-  html+='<div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase">Tu patrimonio en inversiones</div>';
-  html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px">';
-  html+='<div style="text-align:center;flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">INICIO ('+mesInicio+')</div><div style="font-size:18px;font-weight:600;color:var(--purple);font-family:monospace">'+fmtK(saldoInicio)+'</div></div>';
-  html+='<div style="font-size:24px;color:var(--teal);font-weight:600">→</div>';
-  html+='<div style="text-align:center;flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">ACTUAL ('+mesActualNombre+')</div><div style="font-size:18px;font-weight:600;color:var(--teal);font-family:monospace">'+fmtK(saldoActual)+'</div></div>';
+  // Timeline
+  html+='<div style="display:flex;flex-direction:column;gap:0">';
+  recientes.forEach(function(i,idx){
+    var pos=i.dif>=0;
+    var per=i.periodo?String(i.periodo).split('T')[0]:'-';
+    var isLast=idx===recientes.length-1;
+    var color=pos?'var(--teal)':'var(--coral)';
+    html+=
+      '<div style="display:flex;gap:12px;align-items:flex-start">'+
+        '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:12px">'+
+          '<div style="width:10px;height:10px;border-radius:50%;background:'+color+';margin-top:4px;flex-shrink:0"></div>'+
+          (!isLast?'<div style="width:1px;background:var(--border);flex:1;min-height:28px;margin:3px 0"></div>':'')+
+        '</div>'+
+        '<div style="padding-bottom:'+(isLast?'4':'14')+'px;flex:1;display:flex;justify-content:space-between;align-items:flex-start">'+
+          '<div>'+
+            '<div style="font-size:12px;font-weight:500">'+per+'</div>'+
+            '<div style="font-size:11px;color:var(--text3)">'+i.cuenta+' · '+(i.notas||'Actualización')+'</div>'+
+          '</div>'+
+          '<div style="text-align:right;display:flex;gap:6px;align-items:center">'+
+            '<div>'+
+              '<div style="font-size:12px;font-weight:500;font-family:monospace">'+fmt(i.actual)+'</div>'+
+              '<div style="font-size:11px;font-weight:500;color:'+color+';">'+(pos?'+':'')+fmt(i.dif)+'</div>'+
+            '</div>'+
+            '<button onclick="editarInversion('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px">✏️</button>'+
+            '<button onclick="eliminarInversion('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px">×</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+  });
   html+='</div>';
-  html+='</div>';
-  
-  // Crecimiento total
-  html+='<div style="background:var(--surface2);border-radius:6px;padding:12px;margin-bottom:16px;text-align:center">';
-  html+='<div style="font-size:11px;color:var(--text3);margin-bottom:4px">CRECIMIENTO TOTAL</div>';
-  html+='<div style="font-size:20px;font-weight:600;color:var(--teal);font-family:monospace">'+(ganancia>=0?'+':'')+fmtK(ganancia)+'</div>';
-  html+='</div>';
-  
-  html+='</div>';
-  
   wrap.innerHTML=html;
 }
 
@@ -1792,6 +1616,46 @@ function restoreOpenAccs(openIds){
       if(arrow)arrow.classList.add('open');
     }
   });
+}
+
+function calcTramos(saldo, tramos){
+  // Returns {rdtoDia, rdtoAnual, tramoData}
+  var restante=saldo, prev=0, rdtoAnual=0, tramoData=[];
+  tramos.forEach(function(t){
+    if(restante<=0)return;
+    var enT=t.limite?Math.min(restante,t.limite-prev):restante;
+    if(enT<=0)return;
+    var rdtoT=enT*t.tasa/100;
+    rdtoAnual+=rdtoT;
+    tramoData.push({limite:t.limite,tasa:t.tasa,saldoEnTramo:enT,rdtoAnual:rdtoT});
+    prev=t.limite||prev;
+    restante-=enT;
+  });
+  var rdtoDiaVal=saldo*(Math.pow(1+rdtoAnual/saldo,1/365)-1)||0;
+  return {rdtoDia:rdtoDiaVal,rdtoAnual:rdtoAnual,tramoData:tramoData};
+}
+// Calcula el saldo proyectado desde la última actualización hasta hoy
+function saldoProyectado(cuenta){
+  var saldo=cuenta.saldo||0;
+  if(!saldo||!cuenta.ultimaAct)return saldo;
+  var tramos=cuenta.tramos||[{limite:null,tasa:0}];
+  var calc=calcTramos(saldo,tramos);
+  var tasaAnual=saldo>0?(calc.rdtoAnual/saldo*100):0;
+  if(!tasaAnual)return saldo;
+  // Limpiar fecha igual que cicloDeGasto
+  var fechaLimpia=String(cuenta.ultimaAct).split('T')[0].trim();
+  if(!fechaLimpia||fechaLimpia==='undefined')return saldo;
+  var ultimaFecha=new Date(fechaLimpia+'T12:00:00');
+  if(isNaN(ultimaFecha.getTime()))return saldo;
+  var hoy=new Date();
+  var dias=Math.floor((hoy-ultimaFecha)/(1000*60*60*24));
+  if(dias<=0)return saldo;
+  return saldo*Math.pow(1+tasaAnual/100,dias/365);
+}
+function tasaEfectiva(saldo, tramos){
+  if(!saldo)return 0;
+  var r=calcTramos(saldo,tramos);
+  return r.rdtoAnual/saldo*100;
 }
 
 
@@ -1935,7 +1799,7 @@ function agregarPagoTDC(){
   if(!fecha||!tdc||!mes||!monto){toast('Completa todos los campos','err');return;}
   const consumo=DB.gastos.filter(g=>g.tdc===tdc&&g.mes===mes).reduce((s,g)=>s+g.monto,0);
   const estado=monto>=consumo?'Pagada total':'Pago parcial';
-  DB.pagosTDC.unshift({id:Date.now(),fecha,tdc,mes,ciclo,consumo,monto,dif:monto-consumo,estado,notas});save();
+  DB.pagosTDC.unshift({id:Date.now(),fecha,tdc,mes,consumo,monto,dif:monto-consumo,estado,notas});save();
   pushSheets('PagosTDC',[fecha,tdc,mes,consumo,monto,monto-consumo,estado,notas]);
   document.getElementById('t-fecha').value=today();['t-monto','t-notas'].forEach(id=>document.getElementById(id).value='');
   renderTDC();toast('Pago registrado ✓');
@@ -1945,14 +1809,14 @@ function editarPagoTDC(id){
   var p=DB.pagosTDC.find(function(x){return x.id===id;});
   if(!p)return;
   var tdcOpts=DB.config.tdcs.filter(function(t){return t!=='Efectivo';}).map(function(t){return '<option'+(t===p.tdc?' selected':'')+'>'+t+'</option>';}).join('');
-  var cicloDisplay=p.ciclo||'Desconocido';
+  var mesOpts=MESES.map(function(m){return '<option'+(m===p.mes?' selected':'')+'>'+m+'</option>';}).join('');
   var row=document.getElementById('trow-'+id);
   if(!row)return;
   row.innerHTML='<td colspan="8" style="padding:10px 8px;background:var(--amberl)">'+
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="et-fecha-'+id+'" value="'+p.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TARJETA</div><select id="et-tdc-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tdcOpts+'</select></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">CICLO</div><input type="text" id="et-ciclo-'+id+'" value="'+cicloDisplay+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text3)" readonly></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MES</div><select id="et-mes-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+mesOpts+'</select></div>'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO PAGADO</div><input type="number" id="et-monto-'+id+'" value="'+p.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
     '</div>'+
     '<div style="display:flex;gap:8px">'+
@@ -1966,12 +1830,12 @@ function guardarPagoTDC(id){
   if(!p)return;
   var fecha=document.getElementById('et-fecha-'+id).value;
   var tdc=document.getElementById('et-tdc-'+id).value;
-  var ciclo=document.getElementById('et-ciclo-'+id)?document.getElementById('et-ciclo-'+id).value:p.ciclo;
+  var mes=document.getElementById('et-mes-'+id).value;
   var monto=parseFloat(document.getElementById('et-monto-'+id).value);
   if(!fecha||!monto){toast('Completa los campos requeridos','err');return;}
-  var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.ciclo===ciclo;}).reduce(function(s,g){return s+g.monto;},0);
+  var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mes;}).reduce(function(s,g){return s+g.monto;},0);
   var estado=monto>=consumo?'Pagada total':'Pago parcial';
-  p.fecha=fecha;p.tdc=tdc;p.ciclo=ciclo;p.monto=monto;p.consumo=consumo;p.dif=monto-consumo;p.estado=estado;
+  p.fecha=fecha;p.tdc=tdc;p.mes=mes;p.monto=monto;p.consumo=consumo;p.dif=monto-consumo;p.estado=estado;
   save();syncSheetDelete('PagosTDC',DB.pagosTDC);renderTDC();toast('Pago actualizado ✓');
 }
 function limpiarFiltrosTDC(){
@@ -1982,7 +1846,7 @@ function renderTDC(){
   const tbody=document.getElementById('tdc-tbody');
   var desde=document.getElementById('tf-desde')?document.getElementById('tf-desde').value:'';
   var hasta=document.getElementById('tf-hasta')?document.getElementById('tf-hasta').value:'';
-  if(!DB.pagosTDC.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin pagos</td></tr>';return;}
+  if(!DB.pagosTDC.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Sin pagos</td></tr>';return;}
   var pagosFiltrados=DB.pagosTDC.filter(function(p){
     if(desde&&p.fecha<desde)return false;
     if(hasta&&p.fecha>hasta)return false;
@@ -1992,8 +1856,10 @@ function renderTDC(){
     return '<tr id="trow-'+p.id+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(p.fecha)+'</td>'+
       '<td>'+p.tdc+'</td>'+
-      '<td>'+p.ciclo+'</td>'+
+      '<td>'+p.mes+'</td>'+
+      '<td style="text-align:right;font-family:monospace">'+fmt(p.consumo)+'</td>'+
       '<td style="text-align:right;font-family:monospace;font-weight:500">'+fmt(p.monto)+'</td>'+
+      '<td><span class="tag '+(p.estado==='Pagada total'?'tag-green':'tag-amber')+'">'+p.estado+'</span></td>'+
       '<td><button onclick="editarPagoTDC('+p.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
       '<td><button onclick="eliminarPagoTDC('+p.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
@@ -2071,43 +1937,15 @@ function renderAnual(){
   const tbody=document.getElementById('anual-tbody');
   const mesActual=mesDeHoy();
   let totalIng=0,totalGas=0;
-  
-  // Obtener el primer mes con inversiones
-  var primerMesInv=null;
-  DB.inversiones.forEach(inv=>{
-    if(inv.periodo){
-      var mes=String(inv.periodo).split('T')[0];
-      var fecha=new Date(mes+'T12:00:00');
-      var mesKey=MESES[fecha.getMonth()];
-      if(!primerMesInv || MESES.indexOf(mesKey)<MESES.indexOf(primerMesInv)){
-        primerMesInv=mesKey;
-      }
-    }
-  });
-  
-  tbody.innerHTML=MESES.map((mes,idx)=>{
-    // Mostrar todos los meses, pero solo con datos si es presente o pasado
-    var mesActualIdx=MESES.indexOf(mesActual);
-    var esPresenterOPasado=idx<=mesActualIdx;
-    
-    const ing=esPresenterOPasado?DB.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0):0;
+  tbody.innerHTML=MESES.map(mes=>{
+    const ing=DB.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0);
     // Anual: mes calendario (cuando se hizo el gasto, no cuando se paga)
-    const gas=esPresenterOPasado?DB.gastos.filter(function(g){return g.mes===mes;}).reduce((s,g)=>s+g.monto,0):0;
+    const gas=DB.gastos.filter(function(g){return g.mes===mes;}).reduce((s,g)=>s+g.monto,0);
     const bal=ing-gas;
     const ahorro=ing>0?Math.round((bal/ing)*100):0;
-    
-    // Patrimonio: solo mostrar si es después del primer mes con inversión Y es presente o pasado
-    var pat=0;
-    var mostrarPat=false;
-    if(esPresenterOPasado && primerMesInv && MESES.indexOf(mes)>=MESES.indexOf(primerMesInv)){
-      pat=Object.values(DB.cuentasInv).reduce(function(s,c){return s+saldoProyectado(c);},0);
-      mostrarPat=pat>0;
-    }
-    
+    const pat=Object.values(DB.cuentasInv).reduce(function(s,c){return s+saldoProyectado(c);},0);
     const sinDatos=ing===0&&gas===0;
-    if(esPresenterOPasado){
-      totalIng+=ing;totalGas+=gas;
-    }
+    totalIng+=ing;totalGas+=gas;
     const isCurrent=mes===mesActual;
     return `<tr class="${isCurrent?'current-month':''}">
       <td style="font-weight:${isCurrent?'600':'400'}">${mes}${isCurrent?' ←':''}</td>
@@ -2115,7 +1953,7 @@ function renderAnual(){
       <td style="color:${gas>0?'var(--coral)':'var(--text3)'}">${sinDatos?'—':fmtK(gas)}</td>
       <td style="color:${bal>0?'var(--teal)':bal<0?'var(--coral)':'var(--text3)'}">${sinDatos?'—':fmtK(bal)}</td>
       <td style="color:${ahorro>50?'var(--teal)':ahorro>30?'var(--amber)':'var(--text3)'}">${sinDatos?'—':ahorro+'%'}</td>
-      <td style="color:${pat>0?'var(--blue)':'var(--text3)'}">${mostrarPat?fmtK(pat):'—'}</td>
+      <td style="color:${pat>0?'var(--blue)':'var(--text3)'}">${pat>0?fmtK(pat):'—'}</td>
     </tr>`;}).join('');
   // Totales
   tbody.innerHTML+=`<tr class="total-row"><td>Total año</td><td style="color:var(--teal)">${fmtK(totalIng)}</td><td style="color:var(--coral)">${fmtK(totalGas)}</td><td style="color:${totalIng-totalGas>=0?'var(--teal)':'var(--coral)'}">${fmtK(totalIng-totalGas)}</td><td style="color:var(--text2)">${totalIng>0?Math.round(((totalIng-totalGas)/totalIng)*100)+'%':'—'}</td><td>—</td></tr>`;
@@ -2365,7 +2203,7 @@ function renderDashboard(){
 
     // Pagos registrados para el ciclo anterior
     var pagadoCicloAnt=DB.pagosTDC.filter(function(p){
-      return p.tdc===tdc&&p.ciclo===cicloAnt;
+      return p.tdc===tdc&&p.mes===cicloAnt.split('-')[0];
     }).reduce(function(s,p){return s+p.monto;},0);
 
     // Lo que falta pagar del ciclo cerrado
@@ -2394,26 +2232,37 @@ function renderDashboard(){
     var pagarAhoraHtml='';
     if(consumoCicloAnt>0&&!(pendienteHoy===0&&yaVencio)){
       var colAhora=pendienteHoy>0?(fechaInfo&&fechaInfo.diasFaltan<=3?'var(--coral)':'var(--amber)'):'var(--teal)';
+      var bgColor=pendienteHoy>0?(fechaInfo&&fechaInfo.diasFaltan<=3?'#fff4f3':'#fffef5'):'#f0fdf9';
+      var borderColor=pendienteHoy>0?(fechaInfo&&fechaInfo.diasFaltan<=3?'#F09595':'#EF9F27'):'#97C459';
+      var icono=pendienteHoy>0?(fechaInfo&&fechaInfo.diasFaltan<=3?'🔴':'⚠️'):'✅';
       pagarAhoraHtml=
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 10px;background:'+(pendienteHoy>0?'var(--amberl)':'var(--greenl)')+';border-radius:8px;border:1px solid '+(pendienteHoy>0?'#EF9F27':'#97C459')+'">'+
-          '<div>'+
-            '<div style="font-size:10px;font-weight:600;color:'+colAhora+'">Pagar antes del '+fechaInfo.diaPago+' '+fechaInfo.mesPago+'</div>'+
-            (pagadoCicloAnt>0?'<div style="font-size:10px;color:var(--text3);margin-top:1px">Abonado: '+fmtK(pagadoCicloAnt)+'</div>':'')+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:10px 12px;background:'+bgColor+';border-radius:8px;border:1.5px solid '+borderColor+'">'+
+          '<div style="flex:1">'+
+            '<div style="font-size:11px;font-weight:600;color:'+colAhora+'">'+icono+' Pagar antes del '+fechaInfo.diaPago+' '+fechaInfo.mesPago+'</div>'+
+            (pagadoCicloAnt>0?'<div style="font-size:10px;color:var(--text3);margin-top:2px">Abonado: '+fmtK(pagadoCicloAnt)+' | Pendiente: '+fmtK(pendienteHoy)+'</div>':'')+
           '</div>'+
-          '<span style="font-size:15px;font-weight:600;font-family:monospace;color:'+colAhora+'">'+(pendienteHoy>0?fmtK(pendienteHoy):'Pagado ✓')+'</span>'+
+          '<div style="text-align:right;margin-left:10px">'+
+            '<div style="font-size:16px;font-weight:700;font-family:monospace;color:'+colAhora+'">'+(pendienteHoy>0?fmtK(pendienteHoy):'Pagado')+'</div>'+
+            (pendienteHoy>0?'<div style="font-size:9px;color:'+colAhora+'">en '+Math.max(0,fechaInfo.diasFaltan)+' días</div>':'')+
+          '</div>'+
         '</div>';
     }
 
     // Bloque "Siguiente corte" — ciclo abierto
     var sigCorteHtml='';
     if(consumoCicloAct>0){
+      var fechaSigCorte=cfg&&cfg.corte?fechaPagoReal(cfg.corte,cfg.diasPago+30):null;
+      var diasSigCorte=fechaSigCorte?fechaSigCorte.diasFaltan:0;
       sigCorteHtml=
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;padding:6px 10px;background:var(--bluel);border-radius:8px;border:1px solid #B5D4F4">'+
-          '<div>'+
-            '<div style="font-size:10px;font-weight:600;color:var(--blue)">Siguiente corte ('+cicloAct.split('-')[0]+')</div>'+
-            '<div style="font-size:10px;color:var(--blue);opacity:.7;margin-top:1px">Acumulado del ciclo actual</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;padding:8px 10px;background:var(--bluel);border-radius:8px;border:1.5px solid #B5D4F4">'+
+          '<div style="flex:1">'+
+            '<div style="font-size:11px;font-weight:600;color:var(--blue)">📅 Siguiente corte ('+cicloAct.split('-')[0]+')</div>'+
+            '<div style="font-size:10px;color:var(--blue);opacity:.8;margin-top:2px">Se pagará el '+fechaSigCorte.diaPago+' '+fechaSigCorte.mesPago+'</div>'+
           '</div>'+
-          '<span style="font-size:15px;font-weight:600;font-family:monospace;color:var(--blue)">'+fmtK(consumoCicloAct)+'</span>'+
+          '<div style="text-align:right">'+
+            '<div style="font-size:16px;font-weight:700;font-family:monospace;color:var(--blue)">'+fmtK(consumoCicloAct)+'</div>'+
+            '<div style="font-size:9px;color:var(--blue);opacity:.6;margin-top:2px">en '+diasSigCorte+' días</div>'+
+          '</div>'+
         '</div>';
     }
 
@@ -2424,15 +2273,18 @@ function renderDashboard(){
     var pctUsado=limite>0?Math.min(totalUsado/limite,1):0;
     var barColor=pctUsado>0.8?'var(--coral)':pctUsado>0.5?'var(--amber)':'var(--teal)';
     var creditHtml=limite>0?(
-      '<div style="margin-top:8px">'+
-        '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:4px">'+
-          '<span>Crédito disponible</span>'+
-          '<span style="font-weight:600;color:var(--text)">'+fmtK(disponible)+' / '+fmtK(limite)+'</span>'+
+      '<div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:8px;border:0.5px solid var(--border)">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+          '<span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase">Crédito disponible</span>'+
+          '<span style="font-size:12px;font-weight:700;font-family:monospace;color:'+barColor+'">'+fmtK(disponible)+'</span>'+
         '</div>'+
-        '<div style="height:4px;background:var(--border);border-radius:3px;overflow:hidden">'+
+        '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-bottom:4px">'+
+          '<span>Límite: '+fmtK(limite)+'</span>'+
+          '<span>Usado: '+Math.round(pctUsado*100)+'%</span>'+
+        '</div>'+
+        '<div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">'+
           '<div style="height:100%;width:'+Math.round(pctUsado*100)+'%;background:'+barColor+';border-radius:3px;transition:width .4s"></div>'+
         '</div>'+
-        '<div style="font-size:10px;color:var(--text3);margin-top:3px">'+Math.round(pctUsado*100)+'% utilizado</div>'+
       '</div>'
     ):'';
 
@@ -2453,7 +2305,15 @@ function renderDashboard(){
 
 
 
-  
+  // Salud
+  const pG=ing>0?gas/ing:0,pA=ing>0?(ing-gas)/ing:0;
+  const msiTotal=DB.gastos.filter(g=>g.msi==='Si').reduce((s,g)=>s+g.monto,0);
+  document.getElementById('dash-salud').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+    <div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">% Gastado</div><div style="font-size:22px;font-weight:600;color:${pG>0.8?'var(--coral)':'var(--text)'};font-family:monospace">${Math.round(pG*100)}%</div><div class="bar-wrap" style="margin-top:5px"><div class="bar-fill" style="width:${Math.round(pG*100)}%;background:${pG>0.8?'var(--coral)':'var(--amber)'}"></div></div></div>
+    <div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">% Conservado</div><div style="font-size:22px;font-weight:600;color:var(--teal);font-family:monospace">${Math.round(pA*100)}%</div><div class="bar-wrap" style="margin-top:5px"><div class="bar-fill" style="width:${Math.round(pA*100)}%;background:var(--teal)"></div></div></div>
+    <div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Total MSI</div><div style="font-size:22px;font-weight:600;color:var(--purple);font-family:monospace">${fmtK(msiTotal)}</div><div style="font-size:11px;color:var(--text3);margin-top:5px">${DB.gastos.filter(g=>g.msi==='Si').length} compras a meses</div></div>
+  </div>`;
+
   // Gráfica patrimonio
   setTimeout(renderPatrimonioChart,50);
 }
@@ -2576,12 +2436,4 @@ if(DB.config.scriptURL)setSyncStatus('ok');
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js">
 </script>
 </body>
-
-<!--
-  ═══════════════════════════════════════════════════════════════════════════
-  MODIFICADO: 2026-03-28 v2.1
-  HASH: sha256-CORRECCIONES-APLICADAS-v2-1-FINAL
-  ═══════════════════════════════════════════════════════════════════════════
--->
-
 </html>
