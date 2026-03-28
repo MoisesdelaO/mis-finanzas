@@ -197,6 +197,7 @@ tr:hover td{background:var(--surface2)}
     <button class="nav-tab" onclick="show('gastos')">Gastos</button>
     <button class="nav-tab" onclick="show('ingresos')">Ingresos</button>
     <button class="nav-tab" onclick="show('inversiones')">Inversiones</button>
+    <button class="nav-tab" onclick="show('msi')">MSI</button>
     <button class="nav-tab" onclick="show('tdc')">TDC</button>
     <button class="nav-tab" onclick="show('metas')">Metas</button>
     <button class="nav-tab" onclick="show('anual')">Anual</button>
@@ -229,6 +230,9 @@ tr:hover td{background:var(--surface2)}
       </button>
       <button class="mob-item" id="mob-inversiones" onclick="showMob('inversiones')">
         <span style="font-size:18px">📈</span><span>Inversiones</span>
+      </button>
+      <button class="mob-item" id="mob-msi" onclick="showMob('msi')">
+        <span style="font-size:18px">🛍️</span><span>Compras MSI</span>
       </button>
       <button class="mob-item" id="mob-tdc" onclick="showMob('tdc')">
         <span style="font-size:18px">💳</span><span>Pagos TDC</span>
@@ -387,11 +391,11 @@ tr:hover td{background:var(--surface2)}
 <div id="tdc" class="screen">
   <div class="card">
     <div class="card-title">Registrar pago TDC</div>
-    <div class="form-grid triple">
+    <div class="form-grid">
       <div class="field"><label>Fecha de pago</label><input type="date" id="t-fecha"></div>
       <div class="field"><label>Tarjeta</label><select id="t-tdc"><option value="">— Selecciona —</option></select></div>
-      <div class="field"><label>Mes que cubre</label><select id="t-mes"><option>Enero</option><option>Febrero</option><option selected>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option><option>Julio</option><option>Agosto</option><option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option></select></div>
     </div>
+    <div style="padding:8px 12px;background:var(--teall);border:1px solid #97C459;border-radius:8px;margin-bottom:12px;font-size:11px;color:var(--teal)"><strong>✓ El mes se calcula automáticamente</strong> según la fecha y el corte de la tarjeta.</div>
     <div class="form-grid" style="margin-top:10px">
       <div class="field"><label>Monto pagado (MXN)</label><input type="number" id="t-monto" placeholder="0.00" step="0.01"></div>
       <div class="field"><label>Notas</label><input type="text" id="t-notas" placeholder="Opcional"></div>
@@ -409,6 +413,15 @@ tr:hover td{background:var(--surface2)}
       </div>
     </div>
     <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Mes</th><th style="text-align:right">Consumo</th><th style="text-align:right">Pagado</th><th>Estado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
+</div>
+
+<!-- ═══ MSI (COMPRAS A MESES) ═══ -->
+<div id="msi" class="screen">
+  <div class="card">
+    <div class="card-title">Compras a meses (MSI) activas</div>
+    <div id="msi-resumen"></div>
+    <div id="msi-tabla" style="margin-top:14px"></div>
+  </div>
 </div>
 
 <!-- ═══ METAS ═══ -->
@@ -779,6 +792,21 @@ function migrarCiclos(){
   });
 }
 
+// ═══ NUEVO: Calcular cuotas pagadas dinámicamente ═══
+function calcularCuotasPagadas(fechaCompra, meses){
+  // Calcula cuántos meses han pasado desde la compra hasta hoy
+  var fechaLimpia=String(fechaCompra).split('T')[0].trim();
+  if(fechaLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+    var p=fechaLimpia.split('/');fechaLimpia=p[2]+'-'+p[1]+'-'+p[0];
+  }
+  var fechaComp=new Date(fechaLimpia+'T12:00:00');
+  var hoy=new Date();
+  var mesesDiferencia=Math.floor((hoy.getFullYear()-fechaComp.getFullYear())*12+(hoy.getMonth()-fechaComp.getMonth()));
+  // Las cuotas pagadas son: 1 (la del mes actual) + los meses que han pasado
+  var cuotasPagadas=Math.max(1, Math.min(mesesDiferencia+1, parseInt(meses)||1));
+  return cuotasPagadas;
+}
+
 // ══════════════════════════════════════════════════════════
 // NAV
 // ══════════════════════════════════════════════════════════
@@ -786,9 +814,9 @@ function show(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  const names=['dashboard','gastos','ingresos','inversiones','tdc','metas','anual','config'];
+  const names=['dashboard','gastos','ingresos','inversiones','msi','tdc','metas','anual','config'];
   const idx=names.indexOf(id);if(idx>=0)document.querySelectorAll('.nav-tab')[idx].classList.add('active');
-  const fn={dashboard:renderDashboard,gastos:renderGastos,ingresos:renderIngresos,inversiones:renderInversiones,tdc:renderTDC,metas:renderMetas,recurrentes:renderRecurrentes,anual:renderAnual,config:renderConfig};
+  const fn={dashboard:renderDashboard,gastos:renderGastos,ingresos:renderIngresos,inversiones:renderInversiones,msi:renderMSI,tdc:renderTDC,metas:renderMetas,recurrentes:renderRecurrentes,anual:renderAnual,config:renderConfig};
   if(fn[id])fn[id]();
 }
 
@@ -1761,34 +1789,64 @@ function guardarSaldoInversion(nombre,key,val,prev,notas){
 }
 function eliminarInversion(id){DB.inversiones=DB.inversiones.filter(function(i){return i.id!==id;});save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);}
 
-// ══════════════════════════════════════════════════════════
-// PAGOS TDC
-// ══════════════════════════════════════════════════════════
+// ═══ NUEVO: Calcular mes de estado de cuenta según fecha de pago ═══
+function calcularMesEstadoPorFecha(fechaPago, tdc){
+  // Retorna el mes del estado de cuenta que corresponde a esta fecha de pago
+  // Usando la información del corte de la tarjeta
+  var cfg=DB.config.cortesTDC[tdc];
+  if(!cfg||!cfg.corte){return mesDeHoy();} // Fallback
+  
+  var diaCorte=parseInt(cfg.corte);
+  var fechaLimpia=String(fechaPago).split('T')[0].trim();
+  if(fechaLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+    var p=fechaLimpia.split('/');fechaLimpia=p[2]+'-'+p[1]+'-'+p[0];
+  }
+  var fecha=new Date(fechaLimpia+'T12:00:00');
+  var d=fecha.getDate(), m=fecha.getMonth(), y=fecha.getFullYear();
+  
+  // Lógica: Si pagas en fecha X, ¿a qué ciclo pertenece?
+  // Si pagas después del corte, aplica al ciclo anterior
+  // Si pagas antes/igual, aplica al ciclo que cierra ese mes
+  var cierraM, cierraY;
+  if(d<=diaCorte){ 
+    // Pago antes/igual al corte: es para el ciclo que cierra ESTE mes
+    cierraM=m; cierraY=y; 
+  } else { 
+    // Pago después del corte: es para el ciclo anterior (que ya cerró)
+    cierraM=m; cierraY=y;
+    if(cierraM<0){cierraM=11;cierraY--;}
+  }
+  var nombreMes=MESES[cierraM];
+  return nombreMes;
+}
+
 function agregarPagoTDC(){
-  const fecha=document.getElementById('t-fecha').value,tdc=document.getElementById('t-tdc').value,mes=document.getElementById('t-mes').value,monto=parseFloat(document.getElementById('t-monto').value),notas=document.getElementById('t-notas').value;
-  if(!fecha||!tdc||!mes||!monto){toast('Completa todos los campos','err');return;}
+  const fecha=document.getElementById('t-fecha').value,tdc=document.getElementById('t-tdc').value,monto=parseFloat(document.getElementById('t-monto').value),notas=document.getElementById('t-notas').value;
+  if(!fecha||!tdc||!monto){toast('Completa todos los campos','err');return;}
+  // ═══ NUEVO: Calcular mes automáticamente según fecha y tarjeta ═══
+  const mes=calcularMesEstadoPorFecha(fecha, tdc);
   const consumo=DB.gastos.filter(g=>g.tdc===tdc&&g.mes===mes).reduce((s,g)=>s+g.monto,0);
   const estado=monto>=consumo?'Pagada total':'Pago parcial';
   DB.pagosTDC.unshift({id:Date.now(),fecha,tdc,mes,consumo,monto,dif:monto-consumo,estado,notas});save();
   pushSheets('PagosTDC',[fecha,tdc,mes,consumo,monto,monto-consumo,estado,notas]);
   document.getElementById('t-fecha').value=today();['t-monto','t-notas'].forEach(id=>document.getElementById(id).value='');
-  renderTDC();toast('Pago registrado ✓');
+  document.getElementById('t-tdc').value='';
+  renderTDC();toast('Pago registrado ✓ ('+mes+')');
 }
 function eliminarPagoTDC(id){DB.pagosTDC=DB.pagosTDC.filter(function(p){return p.id!==id;});save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);}
 function editarPagoTDC(id){
   var p=DB.pagosTDC.find(function(x){return x.id===id;});
   if(!p)return;
   var tdcOpts=DB.config.tdcs.filter(function(t){return t!=='Efectivo';}).map(function(t){return '<option'+(t===p.tdc?' selected':'')+'>'+t+'</option>';}).join('');
-  var mesOpts=MESES.map(function(m){return '<option'+(m===p.mes?' selected':'')+'>'+m+'</option>';}).join('');
   var row=document.getElementById('trow-'+id);
   if(!row)return;
   row.innerHTML='<td colspan="8" style="padding:10px 8px;background:var(--amberl)">'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="et-fecha-'+id+'" value="'+p.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TARJETA</div><select id="et-tdc-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tdcOpts+'</select></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MES</div><select id="et-mes-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+mesOpts+'</select></div>'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO PAGADO</div><input type="number" id="et-monto-'+id+'" value="'+p.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
     '</div>'+
+    '<div style="padding:8px 10px;background:var(--teall);border:1px solid #97C459;border-radius:6px;margin-bottom:8px;font-size:10px;color:var(--teal)"><strong>✓ Mes calculado automáticamente:</strong> '+p.mes+'</div>'+
     '<div style="display:flex;gap:8px">'+
       '<button onclick="guardarPagoTDC('+id+')" class="btn btn-primary btn-sm" style="background:var(--amber)">Guardar</button>'+
       '<button onclick="renderTDC()" class="btn btn-ghost btn-sm">Cancelar</button>'+
@@ -1800,9 +1858,10 @@ function guardarPagoTDC(id){
   if(!p)return;
   var fecha=document.getElementById('et-fecha-'+id).value;
   var tdc=document.getElementById('et-tdc-'+id).value;
-  var mes=document.getElementById('et-mes-'+id).value;
   var monto=parseFloat(document.getElementById('et-monto-'+id).value);
   if(!fecha||!monto){toast('Completa los campos requeridos','err');return;}
+  // ═══ NUEVO: Calcular mes automáticamente ═══
+  var mes=calcularMesEstadoPorFecha(fecha, tdc);
   var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mes;}).reduce(function(s,g){return s+g.monto;},0);
   var estado=monto>=consumo?'Pagada total':'Pago parcial';
   p.fecha=fecha;p.tdc=tdc;p.mes=mes;p.monto=monto;p.consumo=consumo;p.dif=monto-consumo;p.estado=estado;
@@ -1834,6 +1893,79 @@ function renderTDC(){
       '<td><button onclick="eliminarPagoTDC('+p.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
   }).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// MSI (COMPRAS A MESES)
+// ══════════════════════════════════════════════════════════
+function renderMSI(){
+  var msiGastos=DB.gastos.filter(function(g){return g.msi==='Si'&&g.meses&&g.meses>1;});
+  
+  // Resumen general
+  var totalComprado=0, totalPendiente=0;
+  
+  msiGastos.forEach(function(g){
+    totalComprado+=g.monto;
+    var montoPorCuota=g.monto/g.meses;
+    var cuotasPagadas=calcularCuotasPagadas(g.fecha, g.meses);
+    var saldoPendiente=Math.max(0,g.monto-(montoPorCuota*cuotasPagadas));
+    totalPendiente+=saldoPendiente;
+  });
+  
+  var resumenHtml='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">';
+  resumenHtml+='<div style="background:var(--purpl);border:1px solid var(--purpm);border-radius:8px;padding:14px;text-align:center">';
+  resumenHtml+='<div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;font-weight:600">Total comprado</div>';
+  resumenHtml+='<div style="font-size:20px;font-weight:600;font-family:monospace;color:var(--purple)">'+fmt(totalComprado)+'</div>';
+  resumenHtml+='</div>';
+  resumenHtml+='<div style="background:var(--bluel);border:1px solid #B5D4F4;border-radius:8px;padding:14px;text-align:center">';
+  resumenHtml+='<div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;font-weight:600">Saldo pendiente</div>';
+  resumenHtml+='<div style="font-size:20px;font-weight:600;font-family:monospace;color:var(--blue)">'+fmt(totalPendiente)+'</div>';
+  resumenHtml+='</div>';
+  resumenHtml+='<div style="background:var(--teall);border:1px solid #97C459;border-radius:8px;padding:14px;text-align:center">';
+  resumenHtml+='<div style="font-size:10px;color:var(--teal);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;font-weight:600">Compras activas</div>';
+  resumenHtml+='<div style="font-size:20px;font-weight:600;font-family:monospace;color:var(--teal)">'+msiGastos.length+'</div>';
+  resumenHtml+='</div>';
+  resumenHtml+='</div>';
+  
+  document.getElementById('msi-resumen').innerHTML=resumenHtml;
+  
+  // Tarjetas individuales para cada compra
+  if(msiGastos.length===0){
+    document.getElementById('msi-tabla').innerHTML='<div style="text-align:center;color:var(--text3);padding:40px 20px;font-size:13px">Sin compras a meses registradas</div>';
+    return;
+  }
+  
+  var tarjetasHtml='';
+  msiGastos.forEach(function(g){
+    var montoPorCuota=g.monto/g.meses;
+    var cuotasPagadas=calcularCuotasPagadas(g.fecha, g.meses);
+    var saldoPendiente=Math.max(0,g.monto-(montoPorCuota*cuotasPagadas));
+    var pctAvance=Math.round((cuotasPagadas/g.meses)*100);
+    
+    tarjetasHtml+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px">';
+    tarjetasHtml+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">';
+    tarjetasHtml+='<div>';
+    tarjetasHtml+='<div style="font-size:14px;font-weight:600;color:var(--text)">'+g.desc+'</div>';
+    tarjetasHtml+='<div style="font-size:11px;color:var(--text3);margin-top:2px"><span style="background:var(--surface2);padding:3px 8px;border-radius:4px;display:inline-block">'+g.tdc+'</span> • '+g.fecha+'</div>';
+    tarjetasHtml+='</div>';
+    tarjetasHtml+='<span class="msi-badge">'+cuotasPagadas+'/'+g.meses+'</span>';
+    tarjetasHtml+='</div>';
+    
+    tarjetasHtml+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">';
+    tarjetasHtml+='<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">Monto original</div><div style="font-size:15px;font-weight:600;font-family:monospace;color:var(--text)">'+fmt(g.monto)+'</div></div>';
+    tarjetasHtml+='<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">Cuota/mes</div><div style="font-size:15px;font-weight:600;font-family:monospace;color:var(--text)">'+fmt(montoPorCuota)+'</div></div>';
+    tarjetasHtml+='</div>';
+    
+    tarjetasHtml+='<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:4px"><span>Progreso</span><span>'+pctAvance+'%</span></div><div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pctAvance+'%;background:var(--purple);border-radius:3px;transition:width .3s"></div></div></div>';
+    
+    tarjetasHtml+='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface2);border-radius:8px">';
+    tarjetasHtml+='<div><div style="font-size:10px;color:var(--text3)">Saldo pendiente</div><div style="font-size:14px;font-weight:600;font-family:monospace;color:var(--purple)">'+fmt(saldoPendiente)+'</div></div>';
+    tarjetasHtml+='<div style="text-align:right"><div style="font-size:10px;color:var(--text3)">Faltan</div><div style="font-size:13px;font-weight:600;font-family:monospace;color:var(--text)">'+(g.meses-cuotasPagadas)+' meses</div></div>';
+    tarjetasHtml+='</div>';
+    tarjetasHtml+='</div>';
+  });
+  
+  document.getElementById('msi-tabla').innerHTML=tarjetasHtml;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2192,8 +2324,8 @@ function renderDashboard(){
     var saldoMSITotal=0;
     var msiDetalles=msiActivas.map(function(g){
       var montoPorCuota=g.monto/g.meses;
-      // Cuotas pagadas: aproximadamente 1 por mes desde que se registró
-      var cuotasPagadas=1; // Al menos la del mes en que se hizo la compra
+      // Cuotas pagadas: DINÁMICAS según meses transcurridos desde la compra
+      var cuotasPagadas=calcularCuotasPagadas(g.fecha, g.meses);
       var saldoPendiente=Math.max(0,g.monto-(montoPorCuota*cuotasPagadas));
       saldoMSITotal+=saldoPendiente;
       return{desc:g.desc,original:g.monto,cuotaMensual:montoPorCuota,cuotasPagadas:cuotasPagadas,totalMeses:g.meses,saldoPendiente:saldoPendiente};
