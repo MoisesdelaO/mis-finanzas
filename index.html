@@ -1612,101 +1612,82 @@ function renderInvHistorial(){
     }
   }
   
-  // Agrupar por mes y calcular saldo
+  // Agrupar por mes de TODOS los registros
   var meses={};
-  var fechaHoy=new Date();
-  fechaHoy.setHours(23,59,59,999);
-  var fechaInicio=new Date(fechaHoy);
+  DB.inversiones.forEach(function(i){
+    if(!i.periodo)return;
+    var fechaStr=String(i.periodo).split('T')[0];
+    var fecha=new Date(fechaStr+'T12:00:00');
+    var mesKey=fecha.getFullYear()+'-'+(fecha.getMonth()+1).toString().padStart(2,'0');
+    meses[mesKey]={fecha:fechaStr,saldo:i.actual||0};
+  });
   
-  // Calcular fecha de inicio según período
+  var mesesLista=Object.keys(meses).sort();
+  if(!mesesLista.length){
+    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin registros</div>';
+    return;
+  }
+  
+  // Obtener saldo actual (el más reciente)
+  var mesesOrdenados=mesesLista.slice().reverse();
+  var saldoActual=meses[mesesOrdenados[0]].saldo;
+  var mesActualNombre=new Date(mesesOrdenados[0]+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+  
+  // Filtrar por período
+  var fechaHoy=new Date();
+  var fechaInicio=new Date(fechaHoy);
+  var mesesEnPeriodo=[];
+  
   if(periodo==='custom'){
     var desdeInput=document.getElementById('inv-fecha-desde');
     var hastaInput=document.getElementById('inv-fecha-hasta');
     
-    if(desdeInput && desdeInput.value){
-      fechaInicio=new Date(desdeInput.value+'T00:00:00');
-    }else{
-      // Si no hay fecha desde, mostrar mensaje
+    if(!desdeInput || !desdeInput.value){
       wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Selecciona rango de fechas</div>';
       return;
     }
     
-    if(hastaInput && hastaInput.value){
-      fechaHoy=new Date(hastaInput.value+'T23:59:59');
-    }
+    var desde=desdeInput.value;
+    var hasta=hastaInput && hastaInput.value?hastaInput.value:desde;
+    
+    mesesEnPeriodo=mesesLista.filter(function(m){
+      return m>=desde.substring(0,7) && m<=hasta.substring(0,7);
+    });
   }else if(periodo==='0'){
     // Todo el tiempo
-    fechaInicio=new Date('2000-01-01T00:00:00');
+    mesesEnPeriodo=mesesLista.slice();
   }else{
-    // Restar días
+    // Últimos N días
     var dias=parseInt(periodo)||30;
     fechaInicio.setDate(fechaHoy.getDate()-dias);
-    fechaInicio.setHours(0,0,0,0);
+    var mesDesde=(fechaInicio.getFullYear())+'-'+(fechaInicio.getMonth()+1).toString().padStart(2,'0');
+    
+    mesesEnPeriodo=mesesLista.filter(function(m){
+      return m>=mesDesde;
+    });
   }
   
-  DB.inversiones.forEach(function(i){
-    if(!i.periodo)return;
-    var fechaStr=String(i.periodo).split('T')[0];
-    var fecha=new Date(fechaStr+'T12:00:00');
-    
-    // Incluir todos los registros para calcular saldo actual
-    var mesKey=fecha.getFullYear()+'-'+(fecha.getMonth()+1).toString().padStart(2,'0');
-    if(!meses[mesKey]){
-      meses[mesKey]={fecha:fecha,saldo:0,movimientos:0};
-    }
-    meses[mesKey].saldo=i.actual||0;
-    meses[mesKey].movimientos++;
-  });
-  
-  // Obtener saldo actual (el más reciente)
-  var saldoActual=0;
-  var mesActualKey='';
-  var mesActualNombre='';
-  if(Object.keys(meses).length>0){
-    var mesesOrdenadosTodos=Object.keys(meses).sort().reverse();
-    mesActualKey=mesesOrdenadosTodos[0];
-    saldoActual=meses[mesActualKey].saldo;
-    mesActualNombre=new Date(mesActualKey+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long',year:'numeric'});
-  }
-  
-  // Ahora filtrar por período para obtener saldo inicial de comparación
-  var mesesEnPeriodo={};
-  DB.inversiones.forEach(function(i){
-    if(!i.periodo)return;
-    var fechaStr=String(i.periodo).split('T')[0];
-    var fecha=new Date(fechaStr+'T12:00:00');
-    
-    // Solo incluir si está dentro del rango
-    if(fecha<fechaInicio || fecha>fechaHoy)return;
-    
-    var mesKey=fecha.getFullYear()+'-'+(fecha.getMonth()+1).toString().padStart(2,'0');
-    if(!mesesEnPeriodo[mesKey]){
-      mesesEnPeriodo[mesKey]={fecha:fecha,saldo:0,movimientos:0};
-    }
-    mesesEnPeriodo[mesKey].saldo=i.actual||0;
-    mesesEnPeriodo[mesKey].movimientos++;
-  });
-  
-  // Ordenar meses del período
-  var mesesOrdenados=Object.keys(mesesEnPeriodo).sort().reverse();
-  
-  // Si no hay datos en el período, mostrar mensaje
-  if(!mesesOrdenados.length && periodo!=='0'){
+  if(!mesesEnPeriodo.length && periodo!=='0'){
     wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin cambios en este período</div>';
     return;
   }
   
-  // Calcular ganancia en el período
-  var saldoInicio=mesesOrdenados.length>0?mesesEnPeriodo[mesesOrdenados[mesesOrdenados.length-1]].saldo:saldoActual;
+  if(!mesesEnPeriodo.length){
+    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin registros</div>';
+    return;
+  }
+  
+  // Calcular saldo inicial del período
+  var saldoInicio=meses[mesesEnPeriodo[0]].saldo;
   var ganancia=saldoActual-saldoInicio;
   var pctCrecimiento=saldoInicio>0?(ganancia/saldoInicio)*100:0;
   
-  // Encontrar meta
+  // Meta
   var meta=saldoActual*1.5;
   var progreso=Math.min((saldoActual/meta)*100,100);
   
-  // Obtener nombres de meses
-  var mesInicio=mesesOrdenados.length>0?new Date(mesesOrdenados[mesesOrdenados.length-1]+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long'}):mesActualNombre;
+  // Mes de inicio
+  var mesInicio=new Date(mesesEnPeriodo[0]+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long'});
   
   // ANTES Y DESPUÉS
   var html='<div style="padding:16px;background:var(--purpl);border-radius:8px;margin-bottom:16px">';
@@ -1715,7 +1696,7 @@ function renderInvHistorial(){
   html+='<div style="margin-bottom:16px">';
   html+='<div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase">Tu patrimonio en inversiones</div>';
   html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px">';
-  html+='<div style="text-align:center;flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">INICIO ('+mesInicio+')</div><div style="font-size:18px;font-weight:600;color:var(--purple);font-family:monospace">'+fmtK(saldoInicial)+'</div></div>';
+  html+='<div style="text-align:center;flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">INICIO ('+mesInicio+')</div><div style="font-size:18px;font-weight:600;color:var(--purple);font-family:monospace">'+fmtK(saldoInicio)+'</div></div>';
   html+='<div style="font-size:24px;color:var(--teal);font-weight:600">→</div>';
   html+='<div style="text-align:center;flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">ACTUAL ('+mesActualNombre+')</div><div style="font-size:18px;font-weight:600;color:var(--teal);font-family:monospace">'+fmtK(saldoActual)+'</div></div>';
   html+='</div>';
@@ -1737,16 +1718,17 @@ function renderInvHistorial(){
   html+='<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:10px;text-transform:uppercase">Desglose mes a mes:</div>';
   
   // Calcular promedio
-  var promedioCrecimiento=mesesOrdenados.length>1?(ganancia/(mesesOrdenados.length-1))/saldoInicio*100:0;
+  var promedioCrecimiento=mesesEnPeriodo.length>1?(ganancia/(mesesEnPeriodo.length-1))/saldoInicio*100:0;
   
   html+='<div style="display:flex;flex-direction:column;gap:8px">';
-  mesesOrdenados.forEach(function(mesKey,idx){
-    var m=mesesEnPeriodo[mesKey];
-    var cambio=idx<mesesOrdenados.length-1?m.saldo-mesesEnPeriodo[mesesOrdenados[idx+1]].saldo:0;
+  mesesEnPeriodo.reverse().forEach(function(mesKey,idx){
+    var m=meses[mesKey];
+    var proxMesIdx=idx+1;
+    var cambio=proxMesIdx<mesesEnPeriodo.length?m.saldo-meses[mesesEnPeriodo[proxMesIdx]].saldo:0;
     var pct=saldoInicio>0?(cambio/saldoInicio)*100:0;
     var esGanancia=cambio>=0;
     var mesNombre=new Date(mesKey+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long',year:'numeric'});
-    var esUltimo=idx===mesesOrdenados.length-1;
+    var esUltimo=proxMesIdx>=mesesEnPeriodo.length;
     
     html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--surface2);border-radius:6px">';
     html+='<div>';
@@ -2130,7 +2112,11 @@ function renderAnual(){
     }
   });
   
-  tbody.innerHTML=MESES.map(mes=>{
+  tbody.innerHTML=MESES.map((mes,idx)=>{
+    // Solo mostrar meses hasta el mes actual
+    var mesActualIdx=MESES.indexOf(mesActual);
+    if(idx>mesActualIdx)return '';
+    
     const ing=DB.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0);
     // Anual: mes calendario (cuando se hizo el gasto, no cuando se paga)
     const gas=DB.gastos.filter(function(g){return g.mes===mes;}).reduce((s,g)=>s+g.monto,0);
@@ -2155,7 +2141,7 @@ function renderAnual(){
       <td style="color:${bal>0?'var(--teal)':bal<0?'var(--coral)':'var(--text3)'}">${sinDatos?'—':fmtK(bal)}</td>
       <td style="color:${ahorro>50?'var(--teal)':ahorro>30?'var(--amber)':'var(--text3)'}">${sinDatos?'—':ahorro+'%'}</td>
       <td style="color:${pat>0?'var(--blue)':'var(--text3)'}">${mostrarPat?fmtK(pat):'—'}</td>
-    </tr>`;}).join('');
+    </tr>`;}).filter(r=>r).join('');
   // Totales
   tbody.innerHTML+=`<tr class="total-row"><td>Total año</td><td style="color:var(--teal)">${fmtK(totalIng)}</td><td style="color:var(--coral)">${fmtK(totalGas)}</td><td style="color:${totalIng-totalGas>=0?'var(--teal)':'var(--coral)'}">${fmtK(totalIng-totalGas)}</td><td style="color:var(--text2)">${totalIng>0?Math.round(((totalIng-totalGas)/totalIng)*100)+'%':'—'}</td><td>—</td></tr>`;
 
