@@ -580,7 +580,7 @@ let DB={
     tdcs:['Nu','BBVA Azul','Banamex Joy','Efectivo'],
     cuentas:['Openbank','Nu Cajita','DiDi Cuenta','Revolut'],
     presupuesto:{Comida:5000,Transporte:3000,Salud:1500,Entretenimiento:1000,'Ropa y cuidado personal':1000,'Deudas / creditos / TDC':4000,'Ahorro / inversion':3000,Otros:500},
-    cortesTDC:{Nu:{corte:5,diasPago:20},'BBVA Azul':{corte:10,diasPago:20},'Banamex Joy':{corte:20,diasPago:20}},
+    cortesTDC:{Nu:{corte:5,diasPago:20},'BBVA Azul':{corte:10,diasPago:20},'Banamex Joy':{corte:20,diasPago:10}},
     limitesTDC:{Nu:15000,'BBVA Azul':47400,'Banamex Joy':42500}
   }
 };
@@ -2267,7 +2267,7 @@ function renderDashboard(){
     }
 
     // Crédito disponible — si el ciclo cerrado ya está pagado, no cuenta contra el límite
-    var totalUsado=(pendienteHoy>0?consumoCicloAnt:0)+consumoCicloAct;
+    var totalUsado=consumoCicloAnt+consumoCicloAct;
     var limite=(DB.config.limitesTDC&&DB.config.limitesTDC[tdc])||0;
     var disponible=limite>0?Math.max(0,limite-totalUsado):0;
     var pctUsado=limite>0?Math.min(totalUsado/limite,1):0;
