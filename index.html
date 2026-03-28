@@ -2215,19 +2215,27 @@ function renderDashboard(){
     }).reduce(function(s,g){return s+(g.monto/g.meses);},0);
     consumoCicloAnt+=cuotasMSIAnt;
 
-    // Pagos registrados para el ciclo anterior — buscar por ciclo exacto
+    // Pagos registrados para el ciclo anterior — comparar fechas de pago con rango del ciclo
     var pagadoCicloAnt=DB.pagosTDC.filter(function(p){
-      // Convertir fecha de pago a ciclo para comparar correctamente
-      if(p.fecha&&p.tdc===tdc){
-        var fechaPagoLimpia=p.fecha?String(p.fecha).split('T')[0].trim():null;
-        if(fechaPagoLimpia&&fechaPagoLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
-          var pp=fechaPagoLimpia.split('/');fechaPagoLimpia=pp[2]+'-'+pp[1]+'-'+pp[0];
-        }
-        var cicloPago=cicloDeGasto(fechaPagoLimpia, tdc);
-        return cicloPago===cicloAnt;
+      if(p.tdc!==tdc||!p.fecha) return false;
+      // Convertir fecha de pago a formato YYYY-MM-DD si es necesario
+      var fechaPago=p.fecha?String(p.fecha).split('T')[0].trim():null;
+      if(fechaPago&&fechaPago.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+        var pp=fechaPago.split('/');fechaPago=pp[2]+'-'+pp[1]+'-'+pp[0];
       }
-      // Fallback: usar mes si no hay fecha
-      return p.tdc===tdc&&p.mes===cicloAnt.split('-')[0];
+      if(!fechaPago) return false;
+      
+      // Calcular qué ciclo es esta fecha de pago
+      var fechaObj=new Date(fechaPago+'T12:00:00');
+      var diaCorte=cfg&&cfg.corte?parseInt(cfg.corte):1;
+      var diaPago=fechaObj.getDate(), mesPago=fechaObj.getMonth(), anioPago=fechaObj.getFullYear();
+      
+      var cierraMes=mesPago, cierraAnio=anioPago;
+      if(diaPago<=diaCorte){cierraMes=mesPago;cierraAnio=anioPago;}
+      else{cierraMes=mesPago+1;cierraAnio=anioPago;if(cierraMes>11){cierraMes=0;cierraAnio++;}}
+      
+      var cicloPago=MESES[cierraMes]+'-'+cierraAnio;
+      return cicloPago===cicloAnt;
     }).reduce(function(s,p){return s+p.monto;},0);
 
     // Lo que falta pagar del ciclo cerrado
