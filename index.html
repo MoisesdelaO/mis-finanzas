@@ -1593,22 +1593,33 @@ function renderInvHistorial(){
   // Agrupar por mes y calcular saldo
   var meses={};
   var fechaHoy=new Date();
-  var fechaInicio=new Date();
+  fechaHoy.setHours(23,59,59,999);
+  var fechaInicio=new Date(fechaHoy);
   
   // Calcular fecha de inicio según período
   if(periodo==='custom'){
     var desdeInput=document.getElementById('inv-fecha-desde');
     var hastaInput=document.getElementById('inv-fecha-hasta');
+    
     if(desdeInput && desdeInput.value){
       fechaInicio=new Date(desdeInput.value+'T00:00:00');
+    }else{
+      // Si no hay fecha desde, mostrar mensaje
+      wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Selecciona rango de fechas</div>';
+      return;
     }
+    
     if(hastaInput && hastaInput.value){
       fechaHoy=new Date(hastaInput.value+'T23:59:59');
     }
-  }else if(periodo!=='0'){
-    fechaInicio.setDate(fechaHoy.getDate()-parseInt(periodo));
+  }else if(periodo==='0'){
+    // Todo el tiempo
+    fechaInicio=new Date('2000-01-01T00:00:00');
   }else{
-    fechaInicio=new Date('2000-01-01'); // Todo el tiempo
+    // Restar días
+    var dias=parseInt(periodo)||30;
+    fechaInicio.setDate(fechaHoy.getDate()-dias);
+    fechaInicio.setHours(0,0,0,0);
   }
   
   DB.inversiones.forEach(function(i){
