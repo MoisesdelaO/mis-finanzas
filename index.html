@@ -1612,14 +1612,31 @@ function renderInvHistorial(){
     }
   }
   
-  // Agrupar por mes de TODOS los registros
+  // Agrupar inversiones por mes/periodo
   var meses={};
   DB.inversiones.forEach(function(i){
     if(!i.periodo)return;
     var fechaStr=String(i.periodo).split('T')[0];
     var fecha=new Date(fechaStr+'T12:00:00');
     var mesKey=fecha.getFullYear()+'-'+(fecha.getMonth()+1).toString().padStart(2,'0');
-    meses[mesKey]={fecha:fechaStr,saldo:i.actual||0};
+    
+    // Guardar saldo de TODAS las cuentas en esa fecha
+    var saldoTotal=0;
+    Object.keys(DB.cuentasInv).forEach(function(cuenta){
+      // Buscar el saldo más reciente de esa cuenta antes o en esa fecha
+      var saldoCuenta=0;
+      DB.inversiones.forEach(function(inv){
+        if(inv.cuenta===cuenta && inv.periodo<=i.periodo){
+          saldoCuenta=inv.actual||0;
+        }
+      });
+      saldoTotal+=saldoCuenta;
+    });
+    
+    if(!meses[mesKey]){
+      meses[mesKey]={fecha:fechaStr,saldo:0};
+    }
+    meses[mesKey].saldo=saldoTotal;
   });
   
   var mesesLista=Object.keys(meses).sort();
@@ -1628,10 +1645,12 @@ function renderInvHistorial(){
     return;
   }
   
-  // Obtener saldo actual (el más reciente)
-  var mesesOrdenados=mesesLista.slice().reverse();
-  var saldoActual=meses[mesesOrdenados[0]].saldo;
-  var mesActualNombre=new Date(mesesOrdenados[0]+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+  // Obtener saldo ACTUAL (suma de todas las cuentas hoy)
+  var saldoActual=Object.values(DB.cuentasInv).reduce(function(s,c){
+    return s+(c.saldo||0);
+  },0);
+  
+  var mesActualNombre=new Date().toLocaleDateString('es-MX',{month:'long',year:'numeric'});
   
   // Filtrar por período
   var fechaHoy=new Date();
@@ -1667,13 +1686,8 @@ function renderInvHistorial(){
     });
   }
   
-  if(!mesesEnPeriodo.length && periodo!=='0'){
-    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin cambios en este período</div>';
-    return;
-  }
-  
   if(!mesesEnPeriodo.length){
-    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin registros</div>';
+    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin cambios en este período</div>';
     return;
   }
   
@@ -2113,26 +2127,28 @@ function renderAnual(){
   });
   
   tbody.innerHTML=MESES.map((mes,idx)=>{
-    // Solo mostrar meses hasta el mes actual
+    // Mostrar todos los meses, pero solo con datos si es presente o pasado
     var mesActualIdx=MESES.indexOf(mesActual);
-    if(idx>mesActualIdx)return '';
+    var esPresenterOPasado=idx<=mesActualIdx;
     
-    const ing=DB.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0);
+    const ing=esPresenterOPasado?DB.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0):0;
     // Anual: mes calendario (cuando se hizo el gasto, no cuando se paga)
-    const gas=DB.gastos.filter(function(g){return g.mes===mes;}).reduce((s,g)=>s+g.monto,0);
+    const gas=esPresenterOPasado?DB.gastos.filter(function(g){return g.mes===mes;}).reduce((s,g)=>s+g.monto,0):0;
     const bal=ing-gas;
     const ahorro=ing>0?Math.round((bal/ing)*100):0;
     
-    // Patrimonio: solo mostrar si es después del primer mes con inversión
+    // Patrimonio: solo mostrar si es después del primer mes con inversión Y es presente o pasado
     var pat=0;
     var mostrarPat=false;
-    if(primerMesInv && MESES.indexOf(mes)>=MESES.indexOf(primerMesInv)){
+    if(esPresenterOPasado && primerMesInv && MESES.indexOf(mes)>=MESES.indexOf(primerMesInv)){
       pat=Object.values(DB.cuentasInv).reduce(function(s,c){return s+saldoProyectado(c);},0);
       mostrarPat=pat>0;
     }
     
     const sinDatos=ing===0&&gas===0;
-    totalIng+=ing;totalGas+=gas;
+    if(esPresenterOPasado){
+      totalIng+=ing;totalGas+=gas;
+    }
     const isCurrent=mes===mesActual;
     return `<tr class="${isCurrent?'current-month':''}">
       <td style="font-weight:${isCurrent?'600':'400'}">${mes}${isCurrent?' ←':''}</td>
@@ -2141,7 +2157,7 @@ function renderAnual(){
       <td style="color:${bal>0?'var(--teal)':bal<0?'var(--coral)':'var(--text3)'}">${sinDatos?'—':fmtK(bal)}</td>
       <td style="color:${ahorro>50?'var(--teal)':ahorro>30?'var(--amber)':'var(--text3)'}">${sinDatos?'—':ahorro+'%'}</td>
       <td style="color:${pat>0?'var(--blue)':'var(--text3)'}">${mostrarPat?fmtK(pat):'—'}</td>
-    </tr>`;}).filter(r=>r).join('');
+    </tr>`;}).join('');
   // Totales
   tbody.innerHTML+=`<tr class="total-row"><td>Total año</td><td style="color:var(--teal)">${fmtK(totalIng)}</td><td style="color:var(--coral)">${fmtK(totalGas)}</td><td style="color:${totalIng-totalGas>=0?'var(--teal)':'var(--coral)'}">${fmtK(totalIng-totalGas)}</td><td style="color:var(--text2)">${totalIng>0?Math.round(((totalIng-totalGas)/totalIng)*100)+'%':'—'}</td><td>—</td></tr>`;
 
