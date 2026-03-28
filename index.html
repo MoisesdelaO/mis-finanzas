@@ -771,6 +771,18 @@ function cicloAnterior(tdc){
   return MESES[cierraM]+'-'+cierraY;
 }
 
+// ═══ NUEVO: Retorna el ciclo anterior al anterior (dos ciclos atrás) ═══
+function cicloAnteriorAlAnterior(tdc){
+  var cicloAnt=cicloAnterior(tdc);
+  // Extraer mes y año
+  var partes=cicloAnt.split('-');
+  var mesIdx=MESES.indexOf(partes[0]);
+  var anio=parseInt(partes[1]);
+  // Retroceder un mes
+  mesIdx--; if(mesIdx<0){mesIdx=11;anio--;}
+  return MESES[mesIdx]+'-'+anio;
+}
+
 // ═══ NUEVO: Calcular fecha de pago (fecha límite) basada en la fecha de gasto ═══
 function fechaPagoPorGasto(fechaGastoStr, tdc){
   if(!fechaGastoStr)return null;
@@ -2353,8 +2365,19 @@ function renderDashboard(){
       return p.tdc===tdc&&p.ciclo===cicloAnt;
     }).reduce(function(s,p){return s+p.monto;},0);
 
-    // Lo que falta pagar del ciclo cerrado
-    var pendienteHoy=Math.max(0,consumoCicloAnt-pagadoCicloAnt);
+    // ═══ NUEVO: Calcular adeudo anterior (saldo pendiente del ciclo aún más anterior) ═══
+    // Esto es lo que quedó sin pagar del ciclo antes del anterior
+    var cicloAnteAnt=cicloAnteriorAlAnterior(tdc);
+    var consumoCicloAnteAnt=DB.gastos.filter(function(g){
+      return g.tdc===tdc&&g.ciclo===cicloAnteAnt;
+    }).reduce(function(s,g){return s+g.monto;},0);
+    var pagadoCicloAnteAnt=DB.pagosTDC.filter(function(p){
+      return p.tdc===tdc&&p.ciclo===cicloAnteAnt;
+    }).reduce(function(s,p){return s+p.monto;},0);
+    var adeudoAnterior=Math.max(0,consumoCicloAnteAnt-pagadoCicloAnteAnt);
+
+    // Lo que falta pagar del ciclo cerrado (incluye adeudo anterior)
+    var pendienteHoy=Math.max(0,adeudoAnterior+consumoCicloAnt-pagadoCicloAnt);
 
     // Gastos del ciclo ABIERTO (lo que se acumula para pagar al siguiente corte)
     var consumoCicloAct=DB.gastos.filter(function(g){
