@@ -1053,6 +1053,10 @@ function renderGastos(){
   var totalPags=Math.ceil(total/PER_PAGE);
   if(_gPage>=totalPags)_gPage=Math.max(0,totalPags-1);
   var page=sorted.slice(_gPage*PER_PAGE,(_gPage+1)*PER_PAGE);
+  
+  // Calcular total de gastos filtrados
+  var totalGastos=filtered.reduce(function(s,g){return s+parseFloat(g.monto)||0;},0);
+  
   tbody.innerHTML=page.map(function(g){
     return '<tr id="grow-'+g.id+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(g.fecha)+'</td>'+
@@ -1065,6 +1069,13 @@ function renderGastos(){
       '<td><button onclick="eliminarGasto('+g.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
   }).join('');
+  
+  // Agregar fila de totales
+  tbody.innerHTML+='<tr style="background:var(--surface2);border-top:1px solid var(--border);font-weight:600">'+
+    '<td colspan="5" style="padding:10px;text-align:right">TOTAL:</td>'+
+    '<td style="text-align:right;font-family:monospace;font-weight:600;padding:10px;color:var(--coral)">'+fmt(totalGastos)+'</td>'+
+    '<td colspan="2"></td>'+
+  '</tr>';
   // Pagination controls
   if(pag){
     var totalPags=Math.ceil(total/PER_PAGE)||1; 
@@ -1191,6 +1202,10 @@ function renderIngresos(){
   var totalPags=Math.max(1,Math.ceil(total/PER_PAGE));
   if(_iPage>=totalPags)_iPage=Math.max(0,totalPags-1);
   var page=sorted.slice(_iPage*PER_PAGE,(_iPage+1)*PER_PAGE);
+  
+  // Calcular total de ingresos filtrados
+  var totalIngresos=filtered.reduce(function(s,i){return s+parseFloat(i.monto)||0;},0);
+  
   tbody.innerHTML=page.map(function(i){
     return '<tr id="irow-'+i.id+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(i.fecha)+'</td>'+
@@ -1201,6 +1216,13 @@ function renderIngresos(){
       '<td><button onclick="eliminarIngreso('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
   }).join('');
+  
+  // Agregar fila de totales
+  tbody.innerHTML+='<tr style="background:var(--surface2);border-top:1px solid var(--border);font-weight:600">'+
+    '<td colspan="3" style="padding:10px;text-align:right">TOTAL:</td>'+
+    '<td style="text-align:right;font-family:monospace;font-weight:600;padding:10px;color:var(--teal)">'+fmt(totalIngresos)+'</td>'+
+    '<td colspan="2"></td>'+
+  '</tr>';
   if(pag){
     var ini=_iPage*PER_PAGE+1,fin=Math.min((_iPage+1)*PER_PAGE,total);
     pag.innerHTML=
@@ -1627,9 +1649,7 @@ function renderInvHistorial(){
     var fechaStr=String(i.periodo).split('T')[0];
     var fecha=new Date(fechaStr+'T12:00:00');
     
-    // Solo incluir si está dentro del rango
-    if(fecha<fechaInicio || fecha>fechaHoy)return;
-    
+    // Incluir todos los registros para calcular saldo actual
     var mesKey=fecha.getFullYear()+'-'+(fecha.getMonth()+1).toString().padStart(2,'0');
     if(!meses[mesKey]){
       meses[mesKey]={fecha:fecha,saldo:0,movimientos:0};
@@ -1638,26 +1658,55 @@ function renderInvHistorial(){
     meses[mesKey].movimientos++;
   });
   
-  // Ordenar meses
-  var mesesOrdenados=Object.keys(meses).sort().reverse();
-  if(!mesesOrdenados.length){
-    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin datos en este período</div>';
+  // Obtener saldo actual (el más reciente)
+  var saldoActual=0;
+  var mesActualKey='';
+  var mesActualNombre='';
+  if(Object.keys(meses).length>0){
+    var mesesOrdenadosTodos=Object.keys(meses).sort().reverse();
+    mesActualKey=mesesOrdenadosTodos[0];
+    saldoActual=meses[mesActualKey].saldo;
+    mesActualNombre=new Date(mesActualKey+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+  }
+  
+  // Ahora filtrar por período para obtener saldo inicial de comparación
+  var mesesEnPeriodo={};
+  DB.inversiones.forEach(function(i){
+    if(!i.periodo)return;
+    var fechaStr=String(i.periodo).split('T')[0];
+    var fecha=new Date(fechaStr+'T12:00:00');
+    
+    // Solo incluir si está dentro del rango
+    if(fecha<fechaInicio || fecha>fechaHoy)return;
+    
+    var mesKey=fecha.getFullYear()+'-'+(fecha.getMonth()+1).toString().padStart(2,'0');
+    if(!mesesEnPeriodo[mesKey]){
+      mesesEnPeriodo[mesKey]={fecha:fecha,saldo:0,movimientos:0};
+    }
+    mesesEnPeriodo[mesKey].saldo=i.actual||0;
+    mesesEnPeriodo[mesKey].movimientos++;
+  });
+  
+  // Ordenar meses del período
+  var mesesOrdenados=Object.keys(mesesEnPeriodo).sort().reverse();
+  
+  // Si no hay datos en el período, mostrar mensaje
+  if(!mesesOrdenados.length && periodo!=='0'){
+    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin cambios en este período</div>';
     return;
   }
   
-  // Calcular totales
-  var saldoActual=meses[mesesOrdenados[0]].saldo;
-  var saldoInicial=meses[mesesOrdenados[mesesOrdenados.length-1]].saldo;
-  var ganancia=saldoActual-saldoInicial;
-  var pctCrecimiento=saldoInicial>0?(ganancia/saldoInicial)*100:0;
+  // Calcular ganancia en el período
+  var saldoInicio=mesesOrdenados.length>0?mesesEnPeriodo[mesesOrdenados[mesesOrdenados.length-1]].saldo:saldoActual;
+  var ganancia=saldoActual-saldoInicio;
+  var pctCrecimiento=saldoInicio>0?(ganancia/saldoInicio)*100:0;
   
   // Encontrar meta
   var meta=saldoActual*1.5;
   var progreso=Math.min((saldoActual/meta)*100,100);
   
-  // Obtener nombres de meses inicio y actual
-  var mesInicio=new Date(mesesOrdenados[mesesOrdenados.length-1]+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long'});
-  var mesActual=new Date(mesesOrdenados[0]+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long'});
+  // Obtener nombres de meses
+  var mesInicio=mesesOrdenados.length>0?new Date(mesesOrdenados[mesesOrdenados.length-1]+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long'}):mesActualNombre;
   
   // ANTES Y DESPUÉS
   var html='<div style="padding:16px;background:var(--purpl);border-radius:8px;margin-bottom:16px">';
@@ -1668,7 +1717,7 @@ function renderInvHistorial(){
   html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px">';
   html+='<div style="text-align:center;flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">INICIO ('+mesInicio+')</div><div style="font-size:18px;font-weight:600;color:var(--purple);font-family:monospace">'+fmtK(saldoInicial)+'</div></div>';
   html+='<div style="font-size:24px;color:var(--teal);font-weight:600">→</div>';
-  html+='<div style="text-align:center;flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">ACTUAL ('+mesActual+')</div><div style="font-size:18px;font-weight:600;color:var(--teal);font-family:monospace">'+fmtK(saldoActual)+'</div></div>';
+  html+='<div style="text-align:center;flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">ACTUAL ('+mesActualNombre+')</div><div style="font-size:18px;font-weight:600;color:var(--teal);font-family:monospace">'+fmtK(saldoActual)+'</div></div>';
   html+='</div>';
   html+='</div>';
   
@@ -1688,13 +1737,13 @@ function renderInvHistorial(){
   html+='<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:10px;text-transform:uppercase">Desglose mes a mes:</div>';
   
   // Calcular promedio
-  var promedioCrecimiento=mesesOrdenados.length>1?(ganancia/(mesesOrdenados.length-1))/saldoInicial*100:0;
+  var promedioCrecimiento=mesesOrdenados.length>1?(ganancia/(mesesOrdenados.length-1))/saldoInicio*100:0;
   
   html+='<div style="display:flex;flex-direction:column;gap:8px">';
   mesesOrdenados.forEach(function(mesKey,idx){
-    var m=meses[mesKey];
-    var cambio=idx<mesesOrdenados.length-1?m.saldo-meses[mesesOrdenados[idx+1]].saldo:0;
-    var pct=saldoInicial>0?(cambio/saldoInicial)*100:0;
+    var m=mesesEnPeriodo[mesKey];
+    var cambio=idx<mesesOrdenados.length-1?m.saldo-mesesEnPeriodo[mesesOrdenados[idx+1]].saldo:0;
+    var pct=saldoInicio>0?(cambio/saldoInicio)*100:0;
     var esGanancia=cambio>=0;
     var mesNombre=new Date(mesKey+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long',year:'numeric'});
     var esUltimo=idx===mesesOrdenados.length-1;
