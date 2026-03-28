@@ -770,6 +770,40 @@ function cicloAnterior(tdc){
   cierraM--; if(cierraM<0){cierraM=11;cierraY--;}
   return MESES[cierraM]+'-'+cierraY;
 }
+
+// ═══ NUEVO: Calcular fecha de pago (fecha límite) basada en la fecha de gasto ═══
+function fechaPagoPorGasto(fechaGastoStr, tdc){
+  if(!fechaGastoStr)return null;
+  var cfg=DB.config.cortesTDC[tdc];
+  if(!cfg)return null;
+  var diaCorte=parseInt(cfg.corte);
+  var diasPago=parseInt(cfg.diasPago)||20;
+  
+  // Limpiar fecha
+  var fechaLimpia=String(fechaGastoStr).split('T')[0].trim();
+  if(fechaLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+    var p=fechaLimpia.split('/');fechaLimpia=p[2]+'-'+p[1]+'-'+p[0];
+  }
+  var fecha=new Date(fechaLimpia+'T12:00:00');
+  var d=fecha.getDate(), m=fecha.getMonth(), y=fecha.getFullYear();
+  
+  // Determinar en qué mes cierra el ciclo de este gasto
+  var cierraM, cierraY;
+  if(d<=diaCorte){ cierraM=m; cierraY=y; }
+  else{ cierraM=m+1; cierraY=y; if(cierraM>11){cierraM=0;cierraY++;} }
+  
+  // La fecha de pago es: (día de corte + días de pago) del mes siguiente al que cierra
+  var pagaM=cierraM+1, pagaY=cierraY;
+  if(pagaM>11){pagaM=0;pagaY++;}
+  
+  // Crear la fecha de pago
+  var fechaPago=new Date(pagaY, pagaM, diaCorte+diasPago);
+  // Formatear como YYYY-MM-DD
+  var dd=String(fechaPago.getDate()).padStart(2,'0');
+  var mm=String(fechaPago.getMonth()+1).padStart(2,'0');
+  var yyyy=fechaPago.getFullYear();
+  return yyyy+'-'+mm+'-'+dd;
+}
 // Migrar gastos existentes: agregar campo 'ciclo' si no lo tienen
 function migrarCiclos(){
   // Siempre recalcula el ciclo desde la fecha real — no confiar en valor guardado
@@ -1789,14 +1823,20 @@ function guardarSaldoInversion(nombre,key,val,prev,notas){
 }
 function eliminarInversion(id){DB.inversiones=DB.inversiones.filter(function(i){return i.id!==id;});save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);}
 
-// ═══ NUEVO: Calcular mes de estado de cuenta según fecha de pago ═══
+// ═══ NUEVO: Calcular mes de estado de cuenta según fecha de pago (usa ciclos, no meses) ═══
 function calcularMesEstadoPorFecha(fechaPago, tdc){
-  // Retorna el mes del estado de cuenta que corresponde a esta fecha de pago
-  // Usando la información del corte de la tarjeta
+  // Retorna el CICLO (no mes) del estado de cuenta que corresponde a esta fecha de pago
+  if(!fechaPago||!tdc)return null;
+  
+  // La fecha de pago corresponde al ciclo anterior
+  // Ej: Si pagas el 09-abr, corresponde al ciclo que cierra en marzo
   var cfg=DB.config.cortesTDC[tdc];
-  if(!cfg||!cfg.corte){return mesDeHoy();} // Fallback
+  if(!cfg)return null;
   
   var diaCorte=parseInt(cfg.corte);
+  var diasPago=parseInt(cfg.diasPago)||20;
+  
+  // Limpiar fecha
   var fechaLimpia=String(fechaPago).split('T')[0].trim();
   if(fechaLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
     var p=fechaLimpia.split('/');fechaLimpia=p[2]+'-'+p[1]+'-'+p[0];
@@ -1804,34 +1844,36 @@ function calcularMesEstadoPorFecha(fechaPago, tdc){
   var fecha=new Date(fechaLimpia+'T12:00:00');
   var d=fecha.getDate(), m=fecha.getMonth(), y=fecha.getFullYear();
   
-  // Lógica: Si pagas en fecha X, ¿a qué ciclo pertenece?
-  // Si pagas después del corte, aplica al ciclo anterior
-  // Si pagas antes/igual, aplica al ciclo que cierra ese mes
-  var cierraM, cierraY;
-  if(d<=diaCorte){ 
-    // Pago antes/igual al corte: es para el ciclo que cierra ESTE mes
-    cierraM=m; cierraY=y; 
-  } else { 
-    // Pago después del corte: es para el ciclo anterior (que ya cerró)
-    cierraM=m; cierraY=y;
-    if(cierraM<0){cierraM=11;cierraY--;}
+  // Si pagamos antes o en el mes del corte, es para el ciclo anterior
+  // Si pagamos después, es para el mismo mes del corte
+  var cicloM=m, cicloY=y;
+  
+  // Retroceder un mes si la fecha está muy cerca del siguiente corte
+  if(d>(diaCorte+diasPago)){
+    // Estamos en el siguiente período
+    cicloM++; if(cicloM>11){cicloM=0;cicloY++;}
+  } else {
+    // Retrocedemos para encontrar el ciclo correcto
+    cicloM--; if(cicloM<0){cicloM=11;cicloY--;}
   }
-  var nombreMes=MESES[cierraM];
-  return nombreMes;
+  
+  return MESES[cicloM]+'-'+cicloY;
 }
 
 function agregarPagoTDC(){
   const fecha=document.getElementById('t-fecha').value,tdc=document.getElementById('t-tdc').value,monto=parseFloat(document.getElementById('t-monto').value),notas=document.getElementById('t-notas').value;
   if(!fecha||!tdc||!monto){toast('Completa todos los campos','err');return;}
-  // ═══ NUEVO: Calcular mes automáticamente según fecha y tarjeta ═══
-  const mes=calcularMesEstadoPorFecha(fecha, tdc);
-  const consumo=DB.gastos.filter(g=>g.tdc===tdc&&g.mes===mes).reduce((s,g)=>s+g.monto,0);
+  // ═══ NUEVO: Calcular ciclo automáticamente según fecha y tarjeta ═══
+  const ciclo=cicloDeGasto(fecha, tdc);
+  const mes=ciclo?ciclo.split('-')[0]:null;
+  // Consumo del ciclo (filtrando por ciclo, no por mes)
+  const consumo=ciclo?DB.gastos.filter(g=>g.tdc===tdc&&g.ciclo===ciclo).reduce((s,g)=>s+g.monto,0):0;
   const estado=monto>=consumo?'Pagada total':'Pago parcial';
-  DB.pagosTDC.unshift({id:Date.now(),fecha,tdc,mes,consumo,monto,dif:monto-consumo,estado,notas});save();
-  pushSheets('PagosTDC',[fecha,tdc,mes,consumo,monto,monto-consumo,estado,notas]);
+  DB.pagosTDC.unshift({id:Date.now(),fecha,tdc,mes,ciclo,consumo,monto,dif:monto-consumo,estado,notas});save();
+  pushSheets('PagosTDC',[fecha,tdc,mes,ciclo,consumo,monto,monto-consumo,estado,notas]);
   document.getElementById('t-fecha').value=today();['t-monto','t-notas'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('t-tdc').value='';
-  renderTDC();toast('Pago registrado ✓ ('+mes+')');
+  renderTDC();toast('Pago registrado ✓ ('+ciclo+')');
 }
 function eliminarPagoTDC(id){DB.pagosTDC=DB.pagosTDC.filter(function(p){return p.id!==id;});save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);}
 function editarPagoTDC(id){
@@ -1840,13 +1882,15 @@ function editarPagoTDC(id){
   var tdcOpts=DB.config.tdcs.filter(function(t){return t!=='Efectivo';}).map(function(t){return '<option'+(t===p.tdc?' selected':'')+'>'+t+'</option>';}).join('');
   var row=document.getElementById('trow-'+id);
   if(!row)return;
+  // Recalcular ciclo para mostrar
+  var cicloCalculado=cicloDeGasto(p.fecha, p.tdc)||p.ciclo||'—';
   row.innerHTML='<td colspan="8" style="padding:10px 8px;background:var(--amberl)">'+
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="et-fecha-'+id+'" value="'+p.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TARJETA</div><select id="et-tdc-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tdcOpts+'</select></div>'+
       '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO PAGADO</div><input type="number" id="et-monto-'+id+'" value="'+p.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
     '</div>'+
-    '<div style="padding:8px 10px;background:var(--teall);border:1px solid #97C459;border-radius:6px;margin-bottom:8px;font-size:10px;color:var(--teal)"><strong>✓ Mes calculado automáticamente:</strong> '+p.mes+'</div>'+
+    '<div style="padding:8px 10px;background:var(--teall);border:1px solid #97C459;border-radius:6px;margin-bottom:8px;font-size:10px;color:var(--teal)"><strong>✓ Ciclo calculado automáticamente:</strong> '+cicloCalculado+'</div>'+
     '<div style="display:flex;gap:8px">'+
       '<button onclick="guardarPagoTDC('+id+')" class="btn btn-primary btn-sm" style="background:var(--amber)">Guardar</button>'+
       '<button onclick="renderTDC()" class="btn btn-ghost btn-sm">Cancelar</button>'+
@@ -1860,11 +1904,12 @@ function guardarPagoTDC(id){
   var tdc=document.getElementById('et-tdc-'+id).value;
   var monto=parseFloat(document.getElementById('et-monto-'+id).value);
   if(!fecha||!monto){toast('Completa los campos requeridos','err');return;}
-  // ═══ NUEVO: Calcular mes automáticamente ═══
-  var mes=calcularMesEstadoPorFecha(fecha, tdc);
-  var consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.mes===mes;}).reduce(function(s,g){return s+g.monto;},0);
+  // ═══ NUEVO: Calcular ciclo automáticamente ═══
+  var ciclo=cicloDeGasto(fecha, tdc);
+  var mes=ciclo?ciclo.split('-')[0]:null;
+  var consumo=ciclo?DB.gastos.filter(function(g){return g.tdc===tdc&&g.ciclo===ciclo;}).reduce(function(s,g){return s+g.monto;},0):0;
   var estado=monto>=consumo?'Pagada total':'Pago parcial';
-  p.fecha=fecha;p.tdc=tdc;p.mes=mes;p.monto=monto;p.consumo=consumo;p.dif=monto-consumo;p.estado=estado;
+  p.fecha=fecha;p.tdc=tdc;p.mes=mes;p.ciclo=ciclo;p.monto=monto;p.consumo=consumo;p.dif=monto-consumo;p.estado=estado;
   save();syncSheetDelete('PagosTDC',DB.pagosTDC);renderTDC();toast('Pago actualizado ✓');
 }
 function limpiarFiltrosTDC(){
@@ -2303,9 +2348,9 @@ function renderDashboard(){
       return g.tdc===tdc&&g.ciclo===cicloAnt;
     }).reduce(function(s,g){return s+g.monto;},0);
 
-    // Pagos registrados para el ciclo anterior
+    // Pagos registrados para el ciclo anterior (ahora usa ciclo, no mes)
     var pagadoCicloAnt=DB.pagosTDC.filter(function(p){
-      return p.tdc===tdc&&p.mes===cicloAnt.split('-')[0];
+      return p.tdc===tdc&&p.ciclo===cicloAnt;
     }).reduce(function(s,p){return s+p.monto;},0);
 
     // Lo que falta pagar del ciclo cerrado
