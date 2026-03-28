@@ -2372,25 +2372,9 @@ function renderDashboard(){
         '</div>';
     }
 
-    // ═══ NUEVO: Bloque de compras MSI ═══
+    // ═══ Bloque MSI removido del Dashboard ═══
+    // Solo se muestra el badge "1 MSI" en la esquina
     var msiBlockHtml='';
-    if(msiDetalles.length>0){
-      msiBlockHtml='<div style="background:var(--purpl);border:1px solid var(--purpm);border-radius:8px;padding:10px;margin-top:5px">';
-      msiBlockHtml+='<div style="font-size:10px;font-weight:600;color:var(--purple);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Compras a '+msiDetalles[0].totalMeses+' meses</div>';
-      msiDetalles.forEach(function(m){
-        msiBlockHtml+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--purpm);font-size:11px">';
-        msiBlockHtml+='<div>';
-        msiBlockHtml+='<div style="font-weight:500;color:var(--text)">'+m.desc+'</div>';
-        msiBlockHtml+='<div style="color:var(--text3);margin-top:1px">'+m.cuotasPagadas+' de '+m.totalMeses+' cuotas</div>';
-        msiBlockHtml+='</div>';
-        msiBlockHtml+='<div style="text-align:right;font-family:monospace;color:var(--text)">';
-        msiBlockHtml+='<div style="font-weight:600;color:var(--purple)">'+fmt(m.saldoPendiente)+'</div>';
-        msiBlockHtml+='<div style="color:var(--text3);font-size:10px">cuota: '+fmt(m.cuotaMensual)+'</div>';
-        msiBlockHtml+='</div>';
-        msiBlockHtml+='</div>';
-      });
-      msiBlockHtml+='</div>';
-    }
 
     // Crédito disponible — incluir saldo MSI
     var totalUsado=(pendienteHoy>0?consumoCicloAnt:0)+consumoCicloAct+saldoMSITotal;
