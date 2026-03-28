@@ -564,7 +564,9 @@ let DB={
     cuentas:['Openbank','Nu Cajita','DiDi Cuenta','Revolut'],
     presupuesto:{Comida:5000,Transporte:3000,Salud:1500,Entretenimiento:1000,'Ropa y cuidado personal':1000,'Deudas / creditos / TDC':4000,'Ahorro / inversion':3000,Otros:500},
     cortesTDC:{Nu:{corte:5,diasPago:20},'BBVA Azul':{corte:10,diasPago:20},'Banamex Joy':{corte:20,diasPago:20}},
-    limitesTDC:{Nu:15000,'BBVA Azul':47400,'Banamex Joy':42500}
+    limitesTDC:{Nu:15000,'BBVA Azul':47400,'Banamex Joy':42500},
+    // ═══ NUEVO: Adeudos pendientes de ciclos anteriores (registrar manualmente) ═══
+    adeudosPendientes:{'Banamex Joy':2365.16,'BBVA Azul':0,'Nu':0}
   }
 };
 let connected=false;
@@ -2365,16 +2367,8 @@ function renderDashboard(){
       return p.tdc===tdc&&p.ciclo===cicloAnt;
     }).reduce(function(s,p){return s+p.monto;},0);
 
-    // ═══ NUEVO: Calcular adeudo anterior (saldo pendiente del ciclo aún más anterior) ═══
-    // Esto es lo que quedó sin pagar del ciclo antes del anterior
-    var cicloAnteAnt=cicloAnteriorAlAnterior(tdc);
-    var consumoCicloAnteAnt=DB.gastos.filter(function(g){
-      return g.tdc===tdc&&g.ciclo===cicloAnteAnt;
-    }).reduce(function(s,g){return s+g.monto;},0);
-    var pagadoCicloAnteAnt=DB.pagosTDC.filter(function(p){
-      return p.tdc===tdc&&p.ciclo===cicloAnteAnt;
-    }).reduce(function(s,p){return s+p.monto;},0);
-    var adeudoAnterior=Math.max(0,consumoCicloAnteAnt-pagadoCicloAnteAnt);
+    // ═══ Adeudo anterior (guardado en config) ═══
+    var adeudoAnterior=(DB.config.adeudosPendientes&&DB.config.adeudosPendientes[tdc])||0;
 
     // Lo que falta pagar del ciclo cerrado (incluye adeudo anterior)
     var pendienteHoy=Math.max(0,adeudoAnterior+consumoCicloAnt-pagadoCicloAnt);
