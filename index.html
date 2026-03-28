@@ -289,10 +289,6 @@ tr:hover td{background:var(--surface2)}
   </div>
 
   <div class="card">
-    <div class="card-title">Deuda pendiente</div>
-    <div id="dash-salud"></div>
-  </div>
-  <div class="card">
     <div class="card-title">Patrimonio histórico <span>saldo de inversiones por mes</span></div>
     <div style="position:relative;height:110px;width:100%"><canvas id="pat-chart"></canvas></div>
     <div id="pat-labels" style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:4px"></div>
@@ -401,7 +397,7 @@ tr:hover td{background:var(--surface2)}
   <div id="acc-cards"></div>
 
 
-  <div class="card"><div class="card-title">Historial de actualizaciones</div><div id="inv-historial-wrap"></div></div>
+  <div class="card"><div class="card-title">Crecimiento de inversiones</div><div id="inv-historial-wrap"></div></div>
 </div>
 
 <!-- ═══ TDC ═══ -->
@@ -1558,51 +1554,68 @@ function renderInvHistorial(dias){
     wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:13px">Sin registros aún</div>';
     return;
   }
-  // Pills selector
-  var pills=[7,15,30,60,90].map(function(d){
-    return '<button onclick="renderInvHistorial('+d+')" style="padding:4px 12px;border-radius:20px;border:0.5px solid var(--border2);background:'+(d===dias?'var(--purple)':'transparent')+';color:'+(d===dias?'#fff':'var(--text3)')+';font-size:11px;cursor:pointer">'+d+' días</button>';
-  }).join('');
-  var html='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">'+pills+'</div>';
-  // Filtrar registros del periodo seleccionado
-  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-dias);
-  var recientes=DB.inversiones.filter(function(i){
-    var f=i.periodo?new Date(String(i.periodo).split('T')[0]+'T12:00:00'):null;
-    return f&&f>=cutoff;
+  
+  // Agrupar por mes y calcular saldo
+  var meses={};
+  DB.inversiones.forEach(function(i){
+    if(!i.periodo)return;
+    var fechaStr=String(i.periodo).split('T')[0];
+    var fecha=new Date(fechaStr+'T12:00:00');
+    var mesKey=fecha.getFullYear()+'-'+(fecha.getMonth()+1).toString().padStart(2,'0');
+    if(!meses[mesKey]){
+      meses[mesKey]={fecha:fecha,saldo:0,movimientos:0};
+    }
+    meses[mesKey].saldo=i.actual||0;
+    meses[mesKey].movimientos++;
   });
-  if(!recientes.length){
-    html+='<div style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin actualizaciones en los últimos '+dias+' días</div>';
-    wrap.innerHTML=html;return;
+  
+  // Ordenar meses
+  var mesesOrdenados=Object.keys(meses).sort().reverse();
+  if(!mesesOrdenados.length){
+    wrap.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px">Sin datos</div>';
+    return;
   }
-  // Timeline
-  html+='<div style="display:flex;flex-direction:column;gap:0">';
-  recientes.forEach(function(i,idx){
-    var pos=i.dif>=0;
-    var per=i.periodo?String(i.periodo).split('T')[0]:'-';
-    var isLast=idx===recientes.length-1;
-    var color=pos?'var(--teal)':'var(--coral)';
-    html+=
-      '<div style="display:flex;gap:12px;align-items:flex-start">'+
-        '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:12px">'+
-          '<div style="width:10px;height:10px;border-radius:50%;background:'+color+';margin-top:4px;flex-shrink:0"></div>'+
-          (!isLast?'<div style="width:1px;background:var(--border);flex:1;min-height:28px;margin:3px 0"></div>':'')+
-        '</div>'+
-        '<div style="padding-bottom:'+(isLast?'4':'14')+'px;flex:1;display:flex;justify-content:space-between;align-items:flex-start">'+
-          '<div>'+
-            '<div style="font-size:12px;font-weight:500">'+per+'</div>'+
-            '<div style="font-size:11px;color:var(--text3)">'+i.cuenta+' · '+(i.notas||'Actualización')+'</div>'+
-          '</div>'+
-          '<div style="text-align:right;display:flex;gap:6px;align-items:center">'+
-            '<div>'+
-              '<div style="font-size:12px;font-weight:500;font-family:monospace">'+fmt(i.actual)+'</div>'+
-              '<div style="font-size:11px;font-weight:500;color:'+color+';">'+(pos?'+':'')+fmt(i.dif)+'</div>'+
-            '</div>'+
-            '<button onclick="editarInversion('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px">✏️</button>'+
-            '<button onclick="eliminarInversion('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px">×</button>'+
-          '</div>'+
-        '</div>'+
-      '</div>';
+  
+  // Calcular totales
+  var saldoActual=meses[mesesOrdenados[0]].saldo;
+  var saldoInicial=meses[mesesOrdenados[mesesOrdenados.length-1]].saldo;
+  var ganancia=saldoActual-saldoInicial;
+  var pctCrecimiento=saldoInicial>0?(ganancia/saldoInicial)*100:0;
+  
+  // Encontrar meta (suma de límites o usar saldo*2)
+  var meta=saldoActual*1.5;
+  var progreso=Math.min((saldoActual/meta)*100,100);
+  
+  var html='<div style="padding:16px;background:var(--purpl);border-radius:8px;margin-bottom:16px">';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">';
+  html+='<div><div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Saldo Actual</div><div style="font-size:20px;font-weight:600;color:var(--purple);font-family:monospace">'+fmtK(saldoActual)+'</div></div>';
+  html+='<div><div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Ganancia Total</div><div style="font-size:20px;font-weight:600;color:var(--teal);font-family:monospace">'+(ganancia>=0?'+':'')+fmtK(ganancia)+' ('+Math.round(pctCrecimiento*10)/10+'%)</div></div>';
+  html+='</div>';
+  html+='<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:'+Math.round(progreso)+'%;background:var(--purple);border-radius:3px;transition:width .4s"></div></div>';
+  html+='<div style="font-size:10px;color:var(--text3)">Meta: '+fmtK(meta)+' ('+Math.round(progreso)+'% completado)</div>';
+  html+='</div>';
+  
+  // Timeline de meses
+  html+='<div style="display:flex;flex-direction:column;gap:1px">';
+  mesesOrdenados.forEach(function(mesKey,idx){
+    var m=meses[mesKey];
+    var cambio=idx<mesesOrdenados.length-1?m.saldo-meses[mesesOrdenados[idx+1]].saldo:0;
+    var pct=saldoInicial>0?(cambio/saldoInicial)*100:0;
+    var esGanancia=cambio>=0;
+    var mesNombre=new Date(mesKey+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+    
+    html+='<div style="padding:12px;background:var(--surface2);border-radius:6px;display:flex;justify-content:space-between;align-items:center">';
+    html+='<div>';
+    html+='<div style="font-size:12px;font-weight:500;text-transform:capitalize">'+mesNombre+'</div>';
+    html+='<div style="font-size:11px;color:var(--text3)">Saldo: '+fmtK(m.saldo)+'</div>';
+    html+='</div>';
+    html+='<div style="text-align:right">';
+    html+='<div style="font-size:12px;font-weight:500;color:'+(esGanancia?'var(--teal)':'var(--coral)')+'">'+(esGanancia?'✅ +':'')+fmtK(cambio)+' ('+(esGanancia?'+':'')+Math.round(pct*10)/10+'%)</div>';
+    html+='</div>';
+    html+='</div>';
   });
   html+='</div>';
+  
   wrap.innerHTML=html;
 }
 
@@ -2303,45 +2316,7 @@ function renderDashboard(){
 
 
 
-  // Deuda Pendiente por Tarjeta
-  const deudaPorTDC={};
-  DB.config.tdcs.filter(t=>t!=='Efectivo').forEach(tdc=>{
-    const cicloAnt=cicloAnterior(tdc);
-    const consumo=DB.gastos.filter(g=>g.tdc===tdc&&g.ciclo===cicloAnt).reduce((s,g)=>s+g.monto,0);
-    const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.ciclo===cicloAnt).reduce((s,p)=>s+p.monto,0);
-    const deuda=Math.max(0,consumo-pagado);
-    if(deuda>0 || consumo>0) deudaPorTDC[tdc]={consumo,pagado,deuda};
-  });
   
-  const totalDeuda=Object.values(deudaPorTDC).reduce((s,d)=>s+d.deuda,0);
-  const limiteTotal=Object.values(DB.config.limitesTDC||{}).reduce((s,l)=>s+l,0)||50000;
-  const pctDeuda=limiteTotal>0?Math.min(totalDeuda/limiteTotal,1):0;
-  const estadoDeuda=totalDeuda===0?'✅ Sin deuda':pctDeuda<0.05?'✅ Bajo riesgo':pctDeuda<0.2?'⚠️ Moderado':'🔴 Alto riesgo';
-  const colorDeuda=totalDeuda===0?'var(--teal)':pctDeuda<0.05?'var(--teal)':pctDeuda<0.2?'var(--amber)':'var(--coral)';
-  
-  let deudaHTML='<div style="padding:16px">';
-  deudaHTML+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">';
-  deudaHTML+='<div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Deuda Total</div><div style="font-size:24px;font-weight:600;color:'+colorDeuda+';font-family:monospace">'+fmtK(totalDeuda)+'</div></div>';
-  deudaHTML+='<div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">% Límite</div><div style="font-size:24px;font-weight:600;color:'+colorDeuda+';font-family:monospace">'+Math.round(pctDeuda*100)+'%</div></div>';
-  deudaHTML+='</div>';
-  deudaHTML+='<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:'+Math.round(pctDeuda*100)+'%;background:'+colorDeuda+';border-radius:3px;transition:width .4s"></div></div>';
-  deudaHTML+='<div style="font-size:11px;color:var(--text3);margin-bottom:12px">Estado: '+estadoDeuda+'</div>';
-  
-  if(Object.keys(deudaPorTDC).length>0){
-    deudaHTML+='<div style="border-top:0.5px solid var(--border);padding-top:12px"><div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:8px;text-transform:uppercase">Por tarjeta:</div>';
-    Object.entries(deudaPorTDC).forEach(([tdc,{consumo,pagado,deuda}])=>{
-      const pct=consumo>0?(deuda/consumo)*100:0;
-      deudaHTML+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">';
-      deudaHTML+='<span>'+tdc+'</span>';
-      deudaHTML+='<span style="font-weight:500">'+fmtK(deuda)+'</span>';
-      deudaHTML+='</div>';
-    });
-    deudaHTML+='</div>';
-  }
-  
-  deudaHTML+='</div>';
-  document.getElementById('dash-salud').innerHTML=deudaHTML;
-
   // Gráfica patrimonio
   setTimeout(renderPatrimonioChart,50);
 }
