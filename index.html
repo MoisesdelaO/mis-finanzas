@@ -917,8 +917,8 @@ function renderAlertasTDC(){
     const fp=fechaPagoReal(cfg.corte, cfg.diasPago);
     const diasParaPagar=fp.diasFaltan;
     const cicloAct2=cicloActual(tdc);
-    const consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&(g.ciclo===cicloAct2||(!g.ciclo&&g.mes===mesActual));}).reduce((s,g)=>s+g.monto,0);
-    const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.mes===mesActual).reduce((s,p)=>s+p.monto,0);
+    const consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.ciclo===cicloAct2;}).reduce((s,g)=>s+g.monto,0);
+    const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.ciclo===cicloAct2).reduce((s,p)=>s+p.monto,0);
     if(pagado>=consumo)return; // Si ya está pagada, no mostrar alerta
     if(consumo===0)return;
     if(diasParaPagar<=3&&diasParaPagar>=0){
@@ -1009,14 +1009,36 @@ function renderGastos(){
   }).join('');
   // Pagination controls
   if(pag){
-    var totalPags=Math.ceil(total/PER_PAGE)||1; var ini=_gPage*PER_PAGE+1, fin=Math.min((_gPage+1)*PER_PAGE,total);
+    var totalPags=Math.ceil(total/PER_PAGE)||1; 
+    var ini=_gPage*PER_PAGE+1; 
+    var fin=Math.min((_gPage+1)*PER_PAGE,total);
+    var btnAnt='<button onclick="paginarGastos(-1)" '+((_gPage===0)?'disabled=true':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">← Ant</button>';
+    var btnSig='<button onclick="paginarGastos(1)" '+((_gPage>=totalPags-1)?'disabled=true':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>';
     pag.innerHTML=
       '<span>'+ini+'-'+fin+' de '+total+'</span>'+
-      '<div style="display:flex;gap:6px">'+
-        '<button onclick="_gPage=Math.max(0,_gPage-1);renderGastos()" '+((_gPage===0)?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">← Ant</button>'+
-        '<button onclick="_gPage=Math.min(totalPags-1,_gPage+1);renderGastos()" '+((_gPage>=totalPags-1)?'disabled':'')+' style="padding:4px 10px;border:0.5px solid var(--border2);border-radius:6px;background:transparent;cursor:pointer;font-size:12px;color:var(--text2)">Sig →</button>'+
-      '</div>';
+      '<div style="display:flex;gap:6px">'+btnAnt+btnSig+'</div>';
   }
+  
+  // Populate gastos filter selects - IMPORTANTE: Se ejecuta siempre
+  var gfCat=document.getElementById('gf-cat');
+  var gfTdc=document.getElementById('gf-tdc');
+  if(gfCat){
+    var catVal=gfCat.value;
+    gfCat.innerHTML='<option value="">Todas las categorías</option>'+
+      DB.config.categorias.map(function(c){return '<option value="'+c+'"'+(c===catVal?' selected':'')+'>'+c+'</option>';}).join('');
+  }
+  if(gfTdc){
+    var tdcVal=gfTdc.value;
+    gfTdc.innerHTML='<option value="">Todas las tarjetas</option>'+
+      DB.config.tdcs.map(function(t){return '<option value="'+t+'"'+(t===tdcVal?' selected':'')+'>'+t+'</option>';}).join('');
+  }
+}
+
+// Nueva función para paginar
+function paginarGastos(dir){
+  var totalPags=Math.ceil(DB.gastos.length/PER_PAGE)||1;
+  _gPage=Math.max(0,Math.min(_gPage+dir,totalPags-1));
+  renderGastos();
 }
 function editarGasto(id){
   var g=DB.gastos.find(function(x){return x.id===id;});
@@ -2154,7 +2176,7 @@ function renderDashboard(){
 
     // Pagos registrados para el ciclo anterior
     var pagadoCicloAnt=DB.pagosTDC.filter(function(p){
-      return p.tdc===tdc&&p.mes===cicloAnt.split('-')[0];
+      return p.tdc===tdc&&p.ciclo===cicloAnt;
     }).reduce(function(s,p){return s+p.monto;},0);
 
     // Lo que falta pagar del ciclo cerrado
