@@ -289,7 +289,7 @@ tr:hover td{background:var(--surface2)}
   </div>
 
   <div class="card">
-    <div class="card-title">Salud financiera</div>
+    <div class="card-title">Deuda pendiente</div>
     <div id="dash-salud"></div>
   </div>
   <div class="card">
@@ -429,7 +429,7 @@ tr:hover td{background:var(--surface2)}
         <button onclick="limpiarFiltrosTDC()" style="padding:5px 10px;border:0.5px solid var(--border2);border-radius:6px;font-size:11px;background:transparent;cursor:pointer;color:var(--text3)">✕ Limpiar</button>
       </div>
     </div>
-    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Ciclo</th><th style="text-align:right">Consumo</th><th style="text-align:right">Pagado</th><th>Estado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Ciclo</th><th style="text-align:right">Pagado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
 </div>
 
 <!-- ═══ METAS ═══ -->
@@ -1860,7 +1860,7 @@ function renderTDC(){
   const tbody=document.getElementById('tdc-tbody');
   var desde=document.getElementById('tf-desde')?document.getElementById('tf-desde').value:'';
   var hasta=document.getElementById('tf-hasta')?document.getElementById('tf-hasta').value:'';
-  if(!DB.pagosTDC.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Sin pagos</td></tr>';return;}
+  if(!DB.pagosTDC.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Sin pagos</td></tr>';return;}
   var pagosFiltrados=DB.pagosTDC.filter(function(p){
     if(desde&&p.fecha<desde)return false;
     if(hasta&&p.fecha>hasta)return false;
@@ -1871,9 +1871,7 @@ function renderTDC(){
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(p.fecha)+'</td>'+
       '<td>'+p.tdc+'</td>'+
       '<td>'+p.ciclo+'</td>'+
-      '<td style="text-align:right;font-family:monospace">'+fmt(p.consumo)+'</td>'+
       '<td style="text-align:right;font-family:monospace;font-weight:500">'+fmt(p.monto)+'</td>'+
-      '<td><span class="tag '+(p.estado==='Pagada total'?'tag-green':'tag-amber')+'">'+p.estado+'</span></td>'+
       '<td><button onclick="editarPagoTDC('+p.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
       '<td><button onclick="eliminarPagoTDC('+p.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
@@ -2305,14 +2303,44 @@ function renderDashboard(){
 
 
 
-  // Salud
-  const pG=ing>0?gas/ing:0,pA=ing>0?(ing-gas)/ing:0;
-  const msiTotal=DB.gastos.filter(g=>g.msi==='Si').reduce((s,g)=>s+g.monto,0);
-  document.getElementById('dash-salud').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
-    <div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">% Gastado</div><div style="font-size:22px;font-weight:600;color:${pG>0.8?'var(--coral)':'var(--text)'};font-family:monospace">${Math.round(pG*100)}%</div><div class="bar-wrap" style="margin-top:5px"><div class="bar-fill" style="width:${Math.round(pG*100)}%;background:${pG>0.8?'var(--coral)':'var(--amber)'}"></div></div></div>
-    <div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">% Conservado</div><div style="font-size:22px;font-weight:600;color:var(--teal);font-family:monospace">${Math.round(pA*100)}%</div><div class="bar-wrap" style="margin-top:5px"><div class="bar-fill" style="width:${Math.round(pA*100)}%;background:var(--teal)"></div></div></div>
-    <div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Total MSI</div><div style="font-size:22px;font-weight:600;color:var(--purple);font-family:monospace">${fmtK(msiTotal)}</div><div style="font-size:11px;color:var(--text3);margin-top:5px">${DB.gastos.filter(g=>g.msi==='Si').length} compras a meses</div></div>
-  </div>`;
+  // Deuda Pendiente por Tarjeta
+  const deudaPorTDC={};
+  DB.config.tdcs.filter(t=>t!=='Efectivo').forEach(tdc=>{
+    const cicloAnt=cicloAnterior(tdc);
+    const consumo=DB.gastos.filter(g=>g.tdc===tdc&&g.ciclo===cicloAnt).reduce((s,g)=>s+g.monto,0);
+    const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.ciclo===cicloAnt).reduce((s,p)=>s+p.monto,0);
+    const deuda=Math.max(0,consumo-pagado);
+    if(deuda>0 || consumo>0) deudaPorTDC[tdc]={consumo,pagado,deuda};
+  });
+  
+  const totalDeuda=Object.values(deudaPorTDC).reduce((s,d)=>s+d.deuda,0);
+  const limiteTotal=Object.values(DB.config.limitesTDC||{}).reduce((s,l)=>s+l,0)||50000;
+  const pctDeuda=limiteTotal>0?Math.min(totalDeuda/limiteTotal,1):0;
+  const estadoDeuda=totalDeuda===0?'✅ Sin deuda':pctDeuda<0.05?'✅ Bajo riesgo':pctDeuda<0.2?'⚠️ Moderado':'🔴 Alto riesgo';
+  const colorDeuda=totalDeuda===0?'var(--teal)':pctDeuda<0.05?'var(--teal)':pctDeuda<0.2?'var(--amber)':'var(--coral)';
+  
+  let deudaHTML='<div style="padding:16px">';
+  deudaHTML+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">';
+  deudaHTML+='<div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Deuda Total</div><div style="font-size:24px;font-weight:600;color:'+colorDeuda+';font-family:monospace">'+fmtK(totalDeuda)+'</div></div>';
+  deudaHTML+='<div><div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">% Límite</div><div style="font-size:24px;font-weight:600;color:'+colorDeuda+';font-family:monospace">'+Math.round(pctDeuda*100)+'%</div></div>';
+  deudaHTML+='</div>';
+  deudaHTML+='<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:'+Math.round(pctDeuda*100)+'%;background:'+colorDeuda+';border-radius:3px;transition:width .4s"></div></div>';
+  deudaHTML+='<div style="font-size:11px;color:var(--text3);margin-bottom:12px">Estado: '+estadoDeuda+'</div>';
+  
+  if(Object.keys(deudaPorTDC).length>0){
+    deudaHTML+='<div style="border-top:0.5px solid var(--border);padding-top:12px"><div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:8px;text-transform:uppercase">Por tarjeta:</div>';
+    Object.entries(deudaPorTDC).forEach(([tdc,{consumo,pagado,deuda}])=>{
+      const pct=consumo>0?(deuda/consumo)*100:0;
+      deudaHTML+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">';
+      deudaHTML+='<span>'+tdc+'</span>';
+      deudaHTML+='<span style="font-weight:500">'+fmtK(deuda)+'</span>';
+      deudaHTML+='</div>';
+    });
+    deudaHTML+='</div>';
+  }
+  
+  deudaHTML+='</div>';
+  document.getElementById('dash-salud').innerHTML=deudaHTML;
 
   // Gráfica patrimonio
   setTimeout(renderPatrimonioChart,50);
