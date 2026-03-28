@@ -1692,7 +1692,8 @@ function renderInvHistorial(){
   }
   
   // Calcular saldo inicial del período
-  var saldoInicio=meses[mesesEnPeriodo[0]].saldo;
+  // Si hay múltiples meses, usar el más antiguo; si solo hay uno, usarlo como inicio
+  var saldoInicio=mesesEnPeriodo.length>1?meses[mesesEnPeriodo[mesesEnPeriodo.length-1]].saldo:meses[mesesEnPeriodo[0]].saldo;
   var ganancia=saldoActual-saldoInicio;
   var pctCrecimiento=saldoInicio>0?(ganancia/saldoInicio)*100:0;
   
@@ -1725,43 +1726,6 @@ function renderInvHistorial(){
   // Meta
   html+='<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:'+Math.round(progreso)+'%;background:var(--purple);border-radius:3px;transition:width .4s"></div></div>';
   html+='<div style="font-size:10px;color:var(--text3)">Meta: '+fmtK(meta)+' ('+Math.round(progreso)+'% completado)</div>';
-  html+='</div>';
-  
-  // Desglose mes a mes
-  html+='<div style="margin-top:16px">';
-  html+='<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:10px;text-transform:uppercase">Desglose mes a mes:</div>';
-  
-  // Calcular promedio
-  var promedioCrecimiento=mesesEnPeriodo.length>1?(ganancia/(mesesEnPeriodo.length-1))/saldoInicio*100:0;
-  
-  html+='<div style="display:flex;flex-direction:column;gap:8px">';
-  mesesEnPeriodo.reverse().forEach(function(mesKey,idx){
-    var m=meses[mesKey];
-    var proxMesIdx=idx+1;
-    var cambio=proxMesIdx<mesesEnPeriodo.length?m.saldo-meses[mesesEnPeriodo[proxMesIdx]].saldo:0;
-    var pct=saldoInicio>0?(cambio/saldoInicio)*100:0;
-    var esGanancia=cambio>=0;
-    var mesNombre=new Date(mesKey+'-01T12:00:00').toLocaleDateString('es-MX',{month:'long',year:'numeric'});
-    var esUltimo=proxMesIdx>=mesesEnPeriodo.length;
-    
-    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--surface2);border-radius:6px">';
-    html+='<div>';
-    html+='<div style="font-size:12px;font-weight:500;text-capitalize">'+mesNombre+'</div>';
-    html+='<div style="font-size:11px;color:var(--text3)">'+fmtK(m.saldo)+(esUltimo?' (Inicio)':'')+'</div>';
-    html+='</div>';
-    if(!esUltimo){
-      html+='<div style="text-align:right">';
-      html+='<div style="font-size:12px;font-weight:500;color:'+(esGanancia?'var(--teal)':'var(--coral)')+'">'+(esGanancia?'⬆️ +':'')+fmtK(cambio)+'</div>';
-      html+='<div style="font-size:10px;color:'+(esGanancia?'var(--teal)':'var(--coral)')+'">'+(esGanancia?'+':'')+Math.round(pct*10)/10+'%</div>';
-      html+='</div>';
-    }
-    html+='</div>';
-  });
-  html+='</div>';
-  
-  html+='<div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:6px;text-align:center;border-left:3px solid var(--teal)">';
-  html+='<div style="font-size:10px;color:var(--text3);margin-bottom:2px">Promedio de crecimiento por mes:</div>';
-  html+='<div style="font-size:14px;font-weight:600;color:var(--teal)">'+Math.round(promedioCrecimiento*10)/10+'%</div>';
   html+='</div>';
   
   html+='</div>';
