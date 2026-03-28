@@ -2200,6 +2200,20 @@ function renderDashboard(){
     var consumoCicloAnt=DB.gastos.filter(function(g){
       return g.tdc===tdc&&g.ciclo===cicloAnt;
     }).reduce(function(s,g){return s+g.monto;},0);
+    
+    // Agregar cuotas MSI del ciclo anterior
+    var mesiAnterior=cicloAnt.split('-')[0];
+    var anioCicloAnt=parseInt(cicloAnt.split('-')[1]);
+    var cuotasMSIAnt=DB.gastos.filter(function(g){
+      if(g.tdc!==tdc||g.msi!=='Si'||!g.meses||g.meses<=0) return false;
+      var fechaGasto=new Date(g.fecha+'T12:00:00');
+      var mesGasto=fechaGasto.getMonth()+1;
+      var anioGasto=fechaGasto.getFullYear();
+      // Contar meses desde la compra hasta el ciclo anterior
+      var mesesDesdeCompra=((anioCicloAnt-anioGasto)*12)+(MESES.indexOf(mesiAnterior)-mesGasto+1);
+      return mesesDesdeCompra>=0&&mesesDesdeCompra<g.meses;
+    }).reduce(function(s,g){return s+(g.monto/g.meses);},0);
+    consumoCicloAnt+=cuotasMSIAnt;
 
     // Pagos registrados para el ciclo anterior
     var pagadoCicloAnt=DB.pagosTDC.filter(function(p){
@@ -2213,6 +2227,20 @@ function renderDashboard(){
     var consumoCicloAct=DB.gastos.filter(function(g){
       return g.tdc===tdc&&g.ciclo===cicloAct;
     }).reduce(function(s,g){return s+g.monto;},0);
+    
+    // Agregar cuotas MSI del ciclo actual
+    var mesActual=cicloAct.split('-')[0];
+    var anioCicloAct=parseInt(cicloAct.split('-')[1]);
+    var cuotasMSIAct=DB.gastos.filter(function(g){
+      if(g.tdc!==tdc||g.msi!=='Si'||!g.meses||g.meses<=0) return false;
+      var fechaGasto=new Date(g.fecha+'T12:00:00');
+      var mesGasto=fechaGasto.getMonth()+1;
+      var anioGasto=fechaGasto.getFullYear();
+      // Contar meses desde la compra hasta el ciclo actual
+      var mesesDesdeCompra=((anioCicloAct-anioGasto)*12)+(MESES.indexOf(mesActual)-mesGasto+1);
+      return mesesDesdeCompra>=0&&mesesDesdeCompra<g.meses;
+    }).reduce(function(s,g){return s+(g.monto/g.meses);},0);
+    consumoCicloAct+=cuotasMSIAct;
 
     // MSI activos
     var msiN=DB.gastos.filter(function(g){return g.tdc===tdc&&g.msi==='Si';}).length;
@@ -2266,7 +2294,7 @@ function renderDashboard(){
         '</div>';
     }
 
-    // Crédito disponible — si el ciclo cerrado ya está pagado, no cuenta contra el límite
+    // Crédito disponible — sumar AMBOS ciclos (anterior + actual)
     var totalUsado=consumoCicloAnt+consumoCicloAct;
     var limite=(DB.config.limitesTDC&&DB.config.limitesTDC[tdc])||0;
     var disponible=limite>0?Math.max(0,limite-totalUsado):0;
