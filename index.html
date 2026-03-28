@@ -916,9 +916,9 @@ function renderAlertasTDC(){
     if(!cfg||!cfg.corte)return;
     const fp=fechaPagoReal(cfg.corte, cfg.diasPago);
     const diasParaPagar=fp.diasFaltan;
-    const cicloAct2=cicloActual(tdc);
-    const consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.ciclo===cicloAct2;}).reduce((s,g)=>s+g.monto,0);
-    const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.ciclo===cicloAct2).reduce((s,p)=>s+p.monto,0);
+    const cicloAnt=cicloAnterior(tdc); // CAMBIO: usar cicloAnterior (el que vence, no el actual)
+    const consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.ciclo===cicloAnt;}).reduce((s,g)=>s+g.monto,0);
+    const pagado=DB.pagosTDC.filter(p=>p.tdc===tdc&&p.ciclo===cicloAnt).reduce((s,p)=>s+p.monto,0);
     if(pagado>=consumo)return; // Si ya está pagada, no mostrar alerta
     if(consumo===0)return;
     if(diasParaPagar<=3&&diasParaPagar>=0){
