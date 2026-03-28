@@ -1645,9 +1645,9 @@ function renderInvHistorial(){
     return;
   }
   
-  // Obtener saldo ACTUAL (suma de todas las cuentas hoy)
+  // Obtener saldo ACTUAL (suma de todas las cuentas con proyección, como en dashboard)
   var saldoActual=Object.values(DB.cuentasInv).reduce(function(s,c){
-    return s+(c.saldo||0);
+    return s+saldoProyectado(c);
   },0);
   
   var mesActualNombre=new Date().toLocaleDateString('es-MX',{month:'long',year:'numeric'});
