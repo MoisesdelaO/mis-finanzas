@@ -761,6 +761,47 @@ function cicloDeGasto(fechaStr, tdc){
   return nombreMes+'-'+cierraY;
 }
 // Retorna el ciclo actual de una TDC (el que cierra en el próximo corte)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTO-CORRECCIÓN DE DATOS (Se ejecuta automáticamente)
+// ═══════════════════════════════════════════════════════════════════════════
+function autoCorregirDatos(){
+  console.log('🔄 Auto-corrigiendo datos...');
+  
+  // Arreglar pagos TDC
+  if(DB && DB.pagosTDC){
+    DB.pagosTDC.forEach(pago => {
+      if(!pago.ciclo && pago.fecha){
+        const [año, mes, día] = pago.fecha.split('-');
+        const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                       'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        const mesNum = parseInt(mes) - 1;
+        pago.ciclo = meses[mesNum] + '-' + año;
+        console.log('✅ Pago corregido:', pago.ciclo);
+      }
+    });
+  }
+  
+  // Arreglar gastos
+  if(DB && DB.gastos){
+    DB.gastos.forEach(gasto => {
+      if(!gasto.ciclo && gasto.fecha){
+        const [año, mes, día] = gasto.fecha.split('-');
+        const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                       'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        const mesNum = parseInt(mes) - 1;
+        gasto.ciclo = meses[mesNum] + '-' + año;
+      }
+    });
+  }
+  
+  save();
+  console.log('✅ Datos corregidos automáticamente');
+}
+
+// Ejecutar auto-corrección al cargar
+window.addEventListener('load', autoCorregirDatos);
+
 function cicloActual(tdc){
   var hoy=new Date();
   return cicloDeGasto(hoy.toISOString().split('T')[0], tdc);
