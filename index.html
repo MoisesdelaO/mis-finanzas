@@ -720,8 +720,16 @@ function fechaPagoReal(corte, diasPago){
   var msHoy=new Date(anio, hoy.getMonth(), hoy.getDate()).getTime();
   var msPago=new Date(fechaPago.getFullYear(), fechaPago.getMonth(), fechaPago.getDate()).getTime();
   var diasFaltan=Math.round((msPago-msHoy)/(24*60*60*1000));
+  
+  // Formatear fechaVencimiento como YYYY-MM-DD
+  var ddVenc=String(fechaPago.getDate()).padStart(2,'0');
+  var mmVenc=String(fechaPago.getMonth()+1).padStart(2,'0');
+  var yyyyVenc=fechaPago.getFullYear();
+  var fechaVencimiento=yyyyVenc+'-'+mmVenc+'-'+ddVenc;
+  
   return {diaPago:diaPago, mesPago:mesPago, diasFaltan:diasFaltan,
     esMismoMes: fechaPago.getMonth()===mes,
+    fechaVencimiento: fechaVencimiento,
     label: diasFaltan===0 ? '¡Vence hoy!' :
            diasFaltan<0  ? 'Vencida hace '+Math.abs(diasFaltan)+' días' :
            'Pago en '+diasFaltan+' días ('+diaPago+' '+mesPago+')'
@@ -817,6 +825,24 @@ function fechaPagoPorGasto(fechaGastoStr, tdc){
   var mm=String(fechaPago.getMonth()+1).padStart(2,'0');
   var yyyy=fechaPago.getFullYear();
   return yyyy+'-'+mm+'-'+dd;
+}
+
+// ═══ NUEVO: Verificar si un pago se hizo a tiempo (antes de la fecha límite) ═══
+function pagoPuntual(fechaPago, fechaVencimiento){
+  if(!fechaPago || !fechaVencimiento) return false;
+  
+  // Limpiar fechas
+  var fpLimpia=String(fechaPago).split('T')[0].trim();
+  if(fpLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+    var p=fpLimpia.split('/');fpLimpia=p[2]+'-'+p[1]+'-'+p[0];
+  }
+  
+  var fvLimpia=String(fechaVencimiento).split('T')[0].trim();
+  
+  var fp=new Date(fpLimpia+'T23:59:59');
+  var fv=new Date(fvLimpia+'T23:59:59');
+  
+  return fp<=fv;
 }
 // Migrar gastos existentes: agregar campo 'ciclo' si no lo tienen
 function migrarCiclos(){
@@ -2406,18 +2432,43 @@ function renderDashboard(){
     var fechaHtml=fechaInfo?('<div style="font-size:11px;color:'+urgColor+';margin-top:2px;font-weight:500">'+fechaInfo.label+'</div>'):'';
 
     // Bloque "Pagar ahora" — ciclo cerrado
-    // Ocultar si ya está pagado y la fecha de vencimiento ya pasó
+    // Mostrar SOLO si hay consumo, hay saldo pendiente, y NO se pagó a tiempo
     var yaVencio=fechaInfo&&fechaInfo.diasFaltan<0;
     var pagarAhoraHtml='';
-    if(consumoCicloAnt>0&&!(pendienteHoy===0&&yaVencio)){
-      var colAhora=pendienteHoy>0?(fechaInfo&&fechaInfo.diasFaltan<=3?'var(--coral)':'var(--amber)'):'var(--teal)';
+    
+    // Verificar si el pago se hizo a tiempo
+    var pagoPuntualCiclo=false;
+    if(pagadoCicloAnt>0&&fechaInfo){
+      // Obtener el primer pago registrado del ciclo
+      var primerPagoCiclo=DB.pagosTDC.find(function(p){
+        return p.tdc===tdc&&p.ciclo===cicloAnt;
+      });
+      if(primerPagoCiclo){
+        pagoPuntualCiclo=pagoPuntual(primerPagoCiclo.fecha, fechaInfo.fechaVencimiento);
+      }
+    }
+    
+    // Mostrar alerta SOLO si:
+    // 1. Hay consumo Y hay saldo pendiente Y no se pagó a tiempo (o no hay pago)
+    // 2. O si no hay pago registrado y falta pagar
+    if(consumoCicloAnt>0&&pendienteHoy>0&&!pagoPuntualCiclo){
+      var colAhora=(fechaInfo&&fechaInfo.diasFaltan<=3?'var(--coral)':'var(--amber)');
       pagarAhoraHtml=
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 10px;background:'+(pendienteHoy>0?'var(--amberl)':'var(--greenl)')+';border-radius:8px;border:1px solid '+(pendienteHoy>0?'#EF9F27':'#97C459')+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 10px;background:var(--amberl);border-radius:8px;border:1px solid #EF9F27">'+
           '<div>'+
             '<div style="font-size:10px;font-weight:600;color:'+colAhora+'">Pagar antes del '+fechaInfo.diaPago+' '+fechaInfo.mesPago+'</div>'+
             (pagadoCicloAnt>0?'<div style="font-size:10px;color:var(--text3);margin-top:1px">Abonado: '+fmtK(pagadoCicloAnt)+'</div>':'')+
           '</div>'+
-          '<span style="font-size:15px;font-weight:600;font-family:monospace;color:'+colAhora+'">'+(pendienteHoy>0?fmtK(pendienteHoy):'Pagado ✓')+'</span>'+
+          '<span style="font-size:15px;font-weight:600;font-family:monospace;color:'+colAhora+'">'+fmtK(pendienteHoy)+'</span>'+
+        '</div>';
+    } else if(consumoCicloAnt>0&&pendienteHoy===0){
+      // Mostrar "Pagado ✓" si está completamente pagado
+      pagarAhoraHtml=
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 10px;background:var(--greenl);border-radius:8px;border:1px solid #97C459">'+
+          '<div>'+
+            '<div style="font-size:10px;font-weight:600;color:var(--teal)">Ciclo cerrado</div>'+
+          '</div>'+
+          '<span style="font-size:15px;font-weight:600;font-family:monospace;color:var(--teal)">Pagado ✓</span>'+
         '</div>';
     }
 
