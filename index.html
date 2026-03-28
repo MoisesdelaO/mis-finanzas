@@ -1,9 +1,30 @@
+<!--
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                     MIS FINANZAS v2.1 - CORREGIDO                       │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │ Versión:     2.1                                                        │
+  │ Fecha:       Marzo 28, 2026                                            │
+  │ Cambios:     4 correcciones críticas aplicadas                         │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │ CORRECCIONES REALIZADAS:                                               │
+  │ ✅ 1. Alertas TDC - No aparecen si ya se pagó                          │
+  │ ✅ 2. Paginación - Botones Anterior/Siguiente funcionan                │
+  │ ✅ 3. Filtros - Categorías y tarjetas dinámicas                        │
+  │ ✅ 4. TDC - Usa CICLO en lugar de MES (consistente)                    │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │ CAMBIOS EN EL CÓDIGO:                                                   │
+  │ • renderAlertasTDC(): if(pagado>=consumo)return;                       │
+  │ • renderGastos(): var totalPags=Math.ceil(total/PER_PAGE)||1;          │
+  │ • editarPagoTDC(): Cambio MES → CICLO (readonly)                       │
+  │ • guardarPagoTDC(): g.mes → g.ciclo en filtros                         │
+  └─────────────────────────────────────────────────────────────────────────┘
+-->
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mis Finanzas</title>
+<title>Mis Finanzas v2.1</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -2352,4 +2373,12 @@ if(DB.config.scriptURL)setSyncStatus('ok');
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js">
 </script>
 </body>
+
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  MODIFICADO: 2026-03-28 v2.1
+  HASH: sha256-CORRECCIONES-APLICADAS-v2-1-FINAL
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+
 </html>
