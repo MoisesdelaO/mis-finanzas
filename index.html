@@ -960,29 +960,83 @@ function calcularSaldoPendiente(tdc){
 
 // Migrar gastos existentes: agregar campo 'ciclo' si no lo tienen
 function migrarCiclos(){
-  // Recalcula el ciclo desde la fecha real
+  // Versión ROBUSTA - Recalcula ciclos correctamente
+  var cambiados=0, errores=0;
+  
   DB.gastos.forEach(function(g){
-    var fechaLimpia=g.fecha?String(g.fecha).split('T')[0].trim():null;
-    if(fechaLimpia&&fechaLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
-      var p=fechaLimpia.split('/');
-      fechaLimpia=p[2]+'-'+p[1]+'-'+p[0];
+    try {
+      if(!g.fecha) return;
+      
+      // Normalizar fecha a formato YYYY-MM-DD
+      var fechaStr=String(g.fecha).trim();
+      var fechaLimpia=null;
+      
+      // Intenta diferentes formatos de fecha
+      if(fechaStr.match(/^\d{4}-\d{2}-\d{2}/)){
+        // Ya está en YYYY-MM-DD
+        fechaLimpia=fechaStr.substring(0,10);
+      } else if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+        // Formato DD/MM/YYYY
+        var p=fechaStr.split('/');
+        fechaLimpia=p[2]+'-'+p[1]+'-'+p[0];
+      } else if(fechaStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)){
+        // Formato D/M/YYYY o DD/M/YYYY
+        var p=fechaStr.split('/');
+        fechaLimpia=p[2]+'-'+(p[1].length===1?'0':'')+p[1]+'-'+(p[0].length===1?'0':'')+p[0];
+      }
+      
+      if(!fechaLimpia){
+        console.warn('❌ No se pudo parsear fecha:', g.fecha);
+        errores++;
+        return;
+      }
+      
+      // Validar que la fecha sea válida
+      var fechaObj=new Date(fechaLimpia+'T12:00:00');
+      if(isNaN(fechaObj.getTime())){
+        console.warn('❌ Fecha inválida después de parsear:', fechaLimpia);
+        errores++;
+        return;
+      }
+      
+      // Recalcular ciclo
+      var cicloNuevo=null;
+      
+      if(g.tdc && g.tdc!=='Efectivo' && DB.config.cortesTDC[g.tdc]){
+        // Usar ciclo por fecha de corte
+        cicloNuevo=cicloDeGastoCorrecto(fechaLimpia, g.tdc);
+      } else if(g.mes && g.mes.length>0){
+        // Usar mes+año
+        var anio=fechaObj.getFullYear();
+        cicloNuevo=g.mes+'-'+anio;
+      } else {
+        // Fallback
+        var m=fechaObj.getMonth();
+        var nombreMes=MESES[m];
+        var anio=fechaObj.getFullYear();
+        cicloNuevo=nombreMes+'-'+anio;
+      }
+      
+      // Si cambió, actualizar
+      if(cicloNuevo && cicloNuevo!==g.ciclo){
+        console.log('  Gasto: '+g.desc+' | Fecha: '+fechaLimpia+' | TDC: '+g.tdc+' | Ciclo anterior: '+g.ciclo+' → Ciclo nuevo: '+cicloNuevo);
+        g.ciclo=cicloNuevo;
+        g.fecha=fechaLimpia;
+        cambiados++;
+      }
+      
+    } catch(e) {
+      console.error('Error migrando gasto:', g, e);
+      errores++;
     }
-    
-    // Usar el cálculo correcto de ciclos
-    if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]&&fechaLimpia){
-      g.ciclo=cicloDeGastoCorrecto(fechaLimpia, g.tdc);
-    } else if(fechaLimpia){
-      var anioGasto=new Date(fechaLimpia+'T12:00:00').getFullYear();
-      g.ciclo=g.mes+'-'+anioGasto;
-    } else {
-      g.ciclo=g.mes+'-'+new Date().getFullYear();
-    }
-    
-    if(fechaLimpia)g.fecha=fechaLimpia;
   });
   
-  save();
-  console.log('✅ Ciclos recalculados correctamente');
+  if(cambiados>0 || errores>0){
+    console.log('✅ Migración de ciclos: '+cambiados+' cambiados, '+errores+' errores');
+    save();
+  } else {
+    console.log('✅ Ciclos ya estaban correctos');
+  }
 }
 
 // ══════════════════════════════════════════════════════════
