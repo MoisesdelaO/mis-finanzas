@@ -2578,21 +2578,25 @@ function renderDashboard(){
     var consumoCicloAnt=0;
     
     // Gastos regulares del ciclo anterior
+    // IMPORTANTE: Calcular ciclo sobre la marcha, no depender de g.ciclo
     consumoCicloAnt+=DB.gastos.filter(function(g){
-      return g.tdc===tdc && g.ciclo===cicloAnt && g.msi!=='Si';
+      var cicloReal=g.ciclo||(g.tdc&&g.tdc!=='Efectivo'?cicloDeGastoCorrecto(g.fecha,g.tdc):null);
+      return g.tdc===tdc && cicloReal===cicloAnt && g.msi!=='Si';
     }).reduce(function(s,g){return s+g.monto;},0);
     
     // Cuotas MSI del ciclo anterior
     consumoCicloAnt+=DB.gastos.filter(function(g){
-      return g.tdc===tdc && g.ciclo===cicloAnt && g.msi==='Si';
+      var cicloReal=g.ciclo||(g.tdc&&g.tdc!=='Efectivo'?cicloDeGastoCorrecto(g.fecha,g.tdc):null);
+      return g.tdc===tdc && cicloReal===cicloAnt && g.msi==='Si';
     }).reduce(function(s,g){
       var cuotas=g.meses ? parseInt(g.meses) : 1;
       return s + (cuotas>0 ? (g.monto/cuotas) : g.monto);
     },0);
     
     // Pagos ya hechos en ciclo anterior
+    // Nota: Los pagos ya tienen ciclo asignado bien, pero por si acaso...
     var pagadoCicloAnt=DB.pagosTDC.filter(function(p){
-      return p.tdc===tdc && p.ciclo===cicloAnt;
+      return p.tdc===tdc && (p.ciclo===cicloAnt);
     }).reduce(function(s,p){return s+p.monto;},0);
     
     // Pendiente
@@ -2602,7 +2606,8 @@ function renderDashboard(){
     // CICLO ACTUAL (próxima fecha de pago)
     // ==========================================
     var consumoCicloAct=DB.gastos.filter(function(g){
-      return g.tdc===tdc && g.ciclo===cicloAct;
+      var cicloReal=g.ciclo||(g.tdc&&g.tdc!=='Efectivo'?cicloDeGastoCorrecto(g.fecha,g.tdc):null);
+      return g.tdc===tdc && cicloReal===cicloAct;
     }).reduce(function(s,g){return s+g.monto;},0);
     
     // Estado
