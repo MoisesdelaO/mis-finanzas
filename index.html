@@ -2801,6 +2801,49 @@ if(DB.config.scriptURL)setSyncStatus('ok');
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js">
 </script>
+<div id="debug-panel" style="position:fixed;bottom:80px;right:20px;background:#1a1a1a;color:#0f0;border:2px solid #0f0;border-radius:8px;padding:15px;max-width:500px;max-height:400px;overflow-y:auto;font-family:monospace;font-size:11px;z-index:99999;box-shadow:0 0 20px rgba(0,255,0,0.3);display:none"><div style="text-align:right;margin-bottom:10px"><button onclick="document.getElementById('debug-panel').style.display='none'" style="background:#0f0;color:#000;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-weight:bold">✕</button></div><div id="debug-content" style="white-space:pre-wrap;word-break:break-all"></div></div><button id="debug-btn" onclick="mostrarDebugPanel()" style="position:fixed;bottom:20px;right:20px;background:#0f0;color:#000;border:none;padding:10px 15px;border-radius:4px;cursor:pointer;font-weight:bold;z-index:99998">🐛 DEBUG</button><script>
+function mostrarDebugPanel(){
+  var content=document.getElementById('debug-content');
+  var debug='=== DEBUG PANEL ===\n\n📊 DATOS:\n';
+  debug+='Gastos: '+(DB.gastos?DB.gastos.length:0)+'\n';
+  debug+='Ingresos: '+(DB.ingresos?DB.ingresos.length:0)+'\n';
+  debug+='\n🔧 CONFIG:\n';
+  debug+='TDCs: '+JSON.stringify(DB.config.tdcs)+'\n';
+  debug+='Cortes Nu: '+JSON.stringify(DB.config.cortesTDC['Nu'])+'\n';
+  debug+='Cortes BBVA: '+JSON.stringify(DB.config.cortesTDC['BBVA Azul'])+'\n';
+  debug+='\n🎯 CICLOS NU:\n';
+  var cicloAntNu=obtenerCicloAnterior('Nu');
+  var cicloActNu=cicloDeGastoCorrecto(new Date().toISOString().split('T')[0],'Nu');
+  debug+='Anterior: '+cicloAntNu+'\n';
+  debug+='Actual: '+cicloActNu+'\n';
+  debug+='\n📈 GASTOS NU:\n';
+  DB.gastos.filter(g=>g.tdc==='Nu').slice(0,3).forEach(g=>{
+    var cicloReal=g.ciclo||(g.tdc&&g.tdc!=='Efectivo'?cicloDeGastoCorrecto(g.fecha,g.tdc):null);
+    debug+=g.fecha+' | '+g.desc.substring(0,10)+' | $'+g.monto+' | Guardado: '+g.ciclo+' Real: '+cicloReal+'\n';
+  });
+  debug+='\n💰 CONSUMO NU:\n';
+  var consumoAnt=DB.gastos.filter(g=>{
+    var cicloReal=g.ciclo||(g.tdc&&g.tdc!=='Efectivo'?cicloDeGastoCorrecto(g.fecha,g.tdc):null);
+    return g.tdc==='Nu'&&cicloReal===cicloAntNu;
+  }).reduce((s,g)=>s+g.monto,0);
+  debug+='Consumo '+cicloAntNu+': $'+consumoAnt.toFixed(2)+'\n';
+  debug+='\n🔧 CICLOS BBVA:\n';
+  var cicloAntBBVA=obtenerCicloAnterior('BBVA Azul');
+  var cicloActBBVA=cicloDeGastoCorrecto(new Date().toISOString().split('T')[0],'BBVA Azul');
+  debug+='Anterior: '+cicloAntBBVA+'\n';
+  debug+='Actual: '+cicloActBBVA+'\n';
+  debug+='\n💰 CONSUMO BBVA:\n';
+  var consumoBBVA=DB.gastos.filter(g=>{
+    var cicloReal=g.ciclo||(g.tdc&&g.tdc!=='Efectivo'?cicloDeGastoCorrecto(g.fecha,g.tdc):null);
+    return g.tdc==='BBVA Azul'&&cicloReal===cicloAntBBVA;
+  }).reduce((s,g)=>s+g.monto,0);
+  debug+='Consumo '+cicloAntBBVA+': $'+consumoBBVA.toFixed(2)+'\n';
+  debug+='\n=== FIN ===\n';
+  content.textContent=debug;
+  document.getElementById('debug-panel').style.display='block';
+}
+</script>
+
 </body>
 
 <!--
