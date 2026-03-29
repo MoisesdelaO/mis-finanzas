@@ -1139,7 +1139,7 @@ function agregarGasto(){
   const msi=document.getElementById('g-msi').value,meses=msi==='Si'?document.getElementById('g-meses').value:'',notas=document.getElementById('g-notas').value;
   const m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   const mes=m.charAt(0).toUpperCase()+m.slice(1);
-  const ciclo=cicloDeGasto(fecha,tdc)||mes+'-'+new Date(fecha+'T12:00:00').getFullYear();
+  const ciclo=(tdc&&tdc!=='Efectivo')?cicloDeGastoCorrecto(fecha,tdc):(mes+'-'+new Date(fecha+'T12:00:00').getFullYear());
   DB.gastos.unshift({id:Date.now(),fecha,desc,cat,monto,tdc,msi,meses,notas,mes,ciclo});
   if(!save()){toast('❌ Error al guardar','err');DB.gastos.shift();return;}
   pushSheets('Gastos',[fecha,desc,cat,monto,tdc,mes,msi,meses,notas]);
@@ -1289,7 +1289,7 @@ function guardarGasto(id){
   if(!fecha||!monto||!desc){toast('Completa los campos requeridos','err');return;}
   var m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   var mes=m.charAt(0).toUpperCase()+m.slice(1);
-  var cicloEdit=cicloDeGasto(fecha,tdc)||mes+'-'+new Date(fecha+'T12:00:00').getFullYear();
+  var cicloEdit=(tdc&&tdc!=='Efectivo')?cicloDeGastoCorrecto(fecha,tdc):(mes+'-'+new Date(fecha+'T12:00:00').getFullYear());
   g.fecha=fecha;g.monto=monto;g.cat=cat;g.tdc=tdc;g.desc=desc;g.msi=msi;g.meses=meses;g.mes=mes;g.ciclo=cicloEdit;
   save();syncSheetDelete('Gastos',DB.gastos);renderGastos();toast('Gasto actualizado ✓');
 }
@@ -2465,10 +2465,10 @@ function renderDashboard(){
   const mes=document.getElementById('mes-selector').value;
   const ing=DB.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0);
   // Para métricas generales usamos ciclo: gastos cuyo ciclo cierra en el mes seleccionado
-  // Para tarjetas con corte: usar cicloDeGasto; para efectivo: usar mes calendario
+  // Para tarjetas con corte: usar cicloDeGastoCorrecto; para efectivo: usar mes calendario
   const gas=DB.gastos.filter(function(g){
     if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){
-      var c=g.ciclo||(cicloDeGasto(g.fecha,g.tdc));
+      var c=g.ciclo||(cicloDeGastoCorrecto(g.fecha,g.tdc));
       return c===mes+'-'+new Date().getFullYear();
     }
     return g.mes===mes;
@@ -2493,7 +2493,7 @@ function renderDashboard(){
   const cicloSel=mes+'-'+anioSel;
   const catT={};DB.gastos.filter(function(g){
     if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){
-      var c=g.ciclo||(cicloDeGasto(g.fecha,g.tdc));
+      var c=g.ciclo||(cicloDeGastoCorrecto(g.fecha,g.tdc));
       return c===cicloSel;
     }
     return g.mes===mes;
