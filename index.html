@@ -903,10 +903,12 @@ function cicloDeGastoCorrecto(fechaStr, tdc){
   var m=fecha.getMonth();
   var y=fecha.getFullYear();
   
-  // Si el día es <= diaCorte, el ciclo CIERRA este mes
-  // Si el día es > diaCorte, el ciclo CIERRA el mes siguiente
+  // LÓGICA CORRECTA DE CICLOS:
+  // Si día < diaCorte: el ciclo CIERRA este mes
+  // Si día >= diaCorte: el ciclo CIERRA el mes siguiente
+  // Ejemplo Nu (diaCorte=12): 11 MAR cierra en MAR (ciclo FEB), 12 MAR cierra en APR (ciclo MAR)
   var cierraM, cierraY;
-  if(d<=diaCorte){
+  if(d < diaCorte){
     cierraM=m;
     cierraY=y;
   } else {
@@ -919,7 +921,6 @@ function cicloDeGastoCorrecto(fechaStr, tdc){
   }
   
   // EL CICLO SE NOMBRA POR EL MES ANTERIOR AL QUE CIERRA
-  // (no por el mes donde cierra)
   var nombreMesCiclo=cierraM-1;
   if(nombreMesCiclo<0){
     nombreMesCiclo=11;
