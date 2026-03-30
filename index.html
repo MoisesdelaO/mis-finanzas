@@ -2403,17 +2403,13 @@ function updateCorteAndRefresh(tdc,field,val){updateCorte(tdc,field,val);renderC
 function calcularFechaPagoDisplay(diaCortev,diasPagoVal){
   if(!diaCortev||!diasPagoVal)return'--';
   var hoy=new Date();
-  var ano=hoy.getFullYear();
+  var anio=hoy.getFullYear();
   var mes=hoy.getMonth();
   var diaCorte=parseInt(diaCortev);
   var diasPago=parseInt(diasPagoVal);
-  // Crear fecha del corte en el mes actual
-  var fechaCorte=new Date(ano,mes,diaCorte);
-  // Si el corte ya pasó en este mes, usar el próximo mes
-  if(fechaCorte<hoy){
-    fechaCorte=new Date(ano,mes+1,diaCorte);
-  }
-  // Agregar los días para el pago (JavaScript maneja automáticamente desbordamiento de meses y años)
+  // Usar la misma lógica que fechaPagoReal(): corte del mes actual + días
+  // JavaScript maneja automáticamente desbordamiento de meses, bisiestos, todo
+  var fechaCorte=new Date(anio,mes,diaCorte);
   var fechaPago=new Date(fechaCorte.getTime()+diasPago*24*60*60*1000);
   var dia=String(fechaPago.getDate()).padStart(2,'0');
   var mesNum=String(fechaPago.getMonth()+1).padStart(2,'0');
