@@ -2617,45 +2617,77 @@ function renderDashboard(){
     if(!cicloAnt || !cicloAct) return '';
     
     // ==========================================
-    // CICLO ANTERIOR (a pagar ahora)
+    // LÓGICA SIMPLE: Suma todo hasta fecha de corte, resta pagos
     // ==========================================
+    var hoy=new Date();
+    var diaCorteActual=parseInt(cfg.corte);
+    var fechaCorteHoy=new Date(hoy.getFullYear(), hoy.getMonth(), diaCorteActual);
+    
+    // Si ya pasamos el corte este mes, la fecha de corte es este mes
+    // Si no, la fecha de corte fue el mes pasado
+    if(hoy.getDate() < diaCorteActual){
+      fechaCorteHoy=new Date(hoy.getFullYear(), hoy.getMonth()-1, diaCorteActual);
+    }
+    
+    // Sumar TODOS los gastos hasta la fecha de corte
     var consumoCicloAnt=0;
+    DB.gastos.forEach(function(g){
+      if(g.tdc===tdc){
+        var fechaGasto=new Date(g.fecha+'T12:00:00');
+        if(fechaGasto<=fechaCorteHoy){
+          if(g.msi==='Si'){
+            // Si es MSI, sumar solo la cuota de este mes
+            var cuotas=g.meses ? parseInt(g.meses) : 1;
+            var fechaCompra=new Date(g.fecha+'T12:00:00');
+            var mesesTranscurridos=Math.floor((fechaCorteHoy-fechaCompra)/(1000*60*60*24*30));
+            if(mesesTranscurridos>=0 && mesesTranscurridos<cuotas){
+              consumoCicloAnt+=g.monto/cuotas;
+            }
+          } else {
+            consumoCicloAnt+=g.monto;
+          }
+        }
+      }
+    });
     
-    // Gastos regulares del ciclo anterior
-    // IMPORTANTE: Calcular ciclo sobre la marcha, no depender de g.ciclo
-    consumoCicloAnt+=DB.gastos.filter(function(g){
-      var cicloReal=g.ciclo||(g.tdc&&g.tdc!=='Efectivo'?cicloDeGastoCorrecto(g.fecha,g.tdc):null);
-      return g.tdc===tdc && cicloReal===cicloAnt && g.msi!=='Si';
-    }).reduce(function(s,g){return s+g.monto;},0);
+    // Restar pagos ya hechos hasta la fecha de corte
+    var pagadoCicloAnt=0;
+    DB.pagosTDC.forEach(function(p){
+      if(p.tdc===tdc){
+        var fechaPago=new Date(p.fecha+'T12:00:00');
+        if(fechaPago<=fechaCorteHoy){
+          pagadoCicloAnt+=p.monto;
+        }
+      }
+    });
     
-    // Cuotas MSI del ciclo anterior
-    consumoCicloAnt+=DB.gastos.filter(function(g){
-      var cicloReal=g.ciclo||(g.tdc&&g.tdc!=='Efectivo'?cicloDeGastoCorrecto(g.fecha,g.tdc):null);
-      return g.tdc===tdc && cicloReal===cicloAnt && g.msi==='Si';
-    }).reduce(function(s,g){
-      var cuotas=g.meses ? parseInt(g.meses) : 1;
-      return s + (cuotas>0 ? (g.monto/cuotas) : g.monto);
-    },0);
-    
-    // Pagos ya hechos en ciclo anterior
-    // Nota: Los pagos ya tienen ciclo asignado bien, pero por si acaso...
-    var pagadoCicloAnt=DB.pagosTDC.filter(function(p){
-      return p.tdc===tdc && (p.ciclo===cicloAnt);
-    }).reduce(function(s,p){return s+p.monto;},0);
-    
-    // ═══ Adeudo anterior (guardado en config) ═══
-    var adeudoAnterior=(DB.config.adeudosPendientes&&DB.config.adeudosPendientes[tdc])||0;
-    
-    // Pendiente (incluye adeudo anterior + consumo actual - pagos)
-    var pendienteHoy=Math.max(0, adeudoAnterior + consumoCicloAnt - pagadoCicloAnt);
+    // Pendiente = gastos - pagos
+    var pendienteHoy=Math.max(0, consumoCicloAnt - pagadoCicloAnt);
     
     // ==========================================
     // CICLO ACTUAL (próxima fecha de pago)
     // ==========================================
-    var consumoCicloAct=DB.gastos.filter(function(g){
-      var cicloReal=g.ciclo||(g.tdc&&g.tdc!=='Efectivo'?cicloDeGastoCorrecto(g.fecha,g.tdc):null);
-      return g.tdc===tdc && cicloReal===cicloAct;
-    }).reduce(function(s,g){return s+g.monto;},0);
+    // Sumar gastos DESPUÉS de la fecha de corte actual
+    var consumoCicloAct=0;
+    var fechaCorteProximo=new Date(fechaCorteHoy.getTime()+(30*24*60*60*1000)); // Próximo corte en ~30 días
+    
+    DB.gastos.forEach(function(g){
+      if(g.tdc===tdc){
+        var fechaGasto=new Date(g.fecha+'T12:00:00');
+        if(fechaGasto>fechaCorteHoy){
+          if(g.msi==='Si'){
+            var cuotas=g.meses ? parseInt(g.meses) : 1;
+            var fechaCompra=new Date(g.fecha+'T12:00:00');
+            var mesesTranscurridos=Math.floor((hoy-fechaCompra)/(1000*60*60*24*30));
+            if(mesesTranscurridos>=0 && mesesTranscurridos<cuotas){
+              consumoCicloAct+=g.monto/cuotas;
+            }
+          } else {
+            consumoCicloAct+=g.monto;
+          }
+        }
+      }
+    });
     
     // Estado
     var estado=consumoCicloAnt===0?'Sin consumo':pendienteHoy===0?'Pagada':pagadoCicloAnt>0?'Parcial':'Pendiente';
