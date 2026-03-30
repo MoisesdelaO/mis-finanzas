@@ -890,7 +890,15 @@ function cicloDeGastoCorrecto(fechaStr, tdc){
     }
   }
   
-  var nombreMes=MESES[cierraM];
+  // EL CICLO SE NOMBRA POR EL MES ANTERIOR AL QUE CIERRA
+  // (no por el mes donde cierra)
+  var nombreMesCiclo=cierraM-1;
+  if(nombreMesCiclo<0){
+    nombreMesCiclo=11;
+    cierraY--;
+  }
+  
+  var nombreMes=MESES[nombreMesCiclo];
   return nombreMes+'-'+cierraY;
 }
 
@@ -919,14 +927,22 @@ function obtenerCicloAnterior(tdc){
     }
   }
   
-  // Retroceder un mes para obtener el ANTERIOR
+  // El ciclo anterior cierra un mes ANTES
   cierraM--;
   if(cierraM<0){
     cierraM=11;
     cierraY--;
   }
   
-  return MESES[cierraM]+'-'+cierraY;
+  // EL CICLO SE NOMBRA POR EL MES ANTERIOR AL QUE CIERRA
+  var nombreMesCiclo=cierraM-1;
+  var yearParaNombre=cierraY;
+  if(nombreMesCiclo<0){
+    nombreMesCiclo=11;
+    yearParaNombre--;
+  }
+  
+  return MESES[nombreMesCiclo]+'-'+yearParaNombre;
 }
 
 // Calcula el saldo pendiente correcto para una tarjeta
