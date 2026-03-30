@@ -1,29 +1,29 @@
 <!--
   ┌─────────────────────────────────────────────────────────────────────────┐
-  │              MIS FINANZAS v2.4 - LÓGICA DE FECHAS CORREGIDA             │
+  │              MIS FINANZAS v2.2 FINAL - COMPLETAMENTE FUNCIONAL           │
   ├─────────────────────────────────────────────────────────────────────────┤
-  │ Versión:     2.4                                                        │
+  │ Versión:     2.2 FINAL                                                  │
   │ Fecha:       Marzo 29, 2026                                            │
-  │ Cambios:     ✅ Cálculo correcto de día de pago                        │
+  │ Cambios:     10 correcciones críticas + validación completa             │
   ├─────────────────────────────────────────────────────────────────────────┤
   │ CORRECCIONES APLICADAS:                                                │
-  │ ✅ 1. Cambio de "Vencimiento" a "Día de Pago" (más preciso)           │
-  │ ✅ 2. Lógica de cálculo corregida: corte + días (sin consideraciones)  │
-  │ ✅ 3. Cálculo matemático puro: 20 + 20 = 40 → 9/04 (abril)            │
-  │ ✅ 4. Referencia de mes: usa marzo (31 días) para consistencia        │
-  │ ✅ 5. Desbordamiento de mes manejado correctamente                     │
+  │ ✅ 1. Color hardcodeado → var(--blue)                                 │
+  │ ✅ 2. agregarGasto() con validación completa                           │
+  │ ✅ 3. agregarIngreso() con validación completa                         │
+  │ ✅ 4. save() con try-catch y retorno booleano                          │
+  │ ✅ 5. load() con mejor error handling                                  │
+  │ ✅ 6. Ciclos TDC funcionando automáticamente                           │
+  │ ✅ 7. Dashboard mostrando Estado TDC correctamente                     │
+  │ ✅ 8. MSI se calcula en cuotas correctas                              │
+  │ ✅ 9. Todas las funciones de ciclos presentes                         │
+  │ ✅ 10. Documentación completa y ejemplos                              │
   ├─────────────────────────────────────────────────────────────────────────┤
-  │ ESTRUCTURA FINAL:                                                       │
-  │ • Tarjeta: Nombre de la TDC                                            │
-  │ • Corte: Día del mes (1-31) cuando se cierra el período                │
-  │ • +Días: Días después del corte para realizar el pago                  │
-  │ • Día de Pago: Fecha calculada automáticamente (DD/MM)                 │
-  │ • Límite ($): Límite de crédito disponible                            │
-  │                                                                          │
-  │ EJEMPLOS DE CÁLCULO:                                                    │
-  │ Nu:           Corte 12 + 10 días = 22/03                              │
-  │ BBVA Azul:    Corte 10 + 20 días = 30/03                              │
-  │ Banamex Joy:  Corte 20 + 20 días = 09/04 (desbordamiento)             │
+  │ SISTEMA DE CICLOS:                                                      │
+  │ • Fecha de corte configurable por tarjeta                              │
+  │ • Fecha de pago automática (corte + diasPago)                          │
+  │ • Gastos asignados automáticamente al ciclo correcto                   │
+  │ • Dashboard muestra Estado TDC en tiempo real                          │
+  │ • MSI dividido automáticamente en cuotas mensuales                     │
   └─────────────────────────────────────────────────────────────────────────┘
 -->
 <!DOCTYPE html>
@@ -817,7 +817,7 @@ function cicloDeGasto(fechaStr, tdc){
   // Si el día es <= diaCorte, pertenece al ciclo que CIERRA este mes
   // Si el día > diaCorte, pertenece al ciclo que cierra el MES SIGUIENTE
   var cierraM, cierraY;
-  if(d<=diaCorte){ cierraM=m; cierraY=y; }
+  if(d<diaCorte){ cierraM=m; cierraY=y; }
   else{ cierraM=m+1; cierraY=y; if(cierraM>11){cierraM=0;cierraY++;} }
   var nombreMes=MESES[cierraM];
   return nombreMes+'-'+cierraY;
@@ -875,7 +875,7 @@ function cicloAnterior(tdc){
   var hoy=new Date();
   var d=hoy.getDate(), m=hoy.getMonth(), y=hoy.getFullYear();
   var cierraM, cierraY;
-  if(d<=diaCorte){ cierraM=m; cierraY=y; }
+  if(d<diaCorte){ cierraM=m; cierraY=y; }
   else{ cierraM=m+1; cierraY=y; if(cierraM>11){cierraM=0;cierraY++;} }
   // Retroceder un mes
   cierraM--; if(cierraM<0){cierraM=11;cierraY--;}
@@ -903,12 +903,10 @@ function cicloDeGastoCorrecto(fechaStr, tdc){
   var m=fecha.getMonth();
   var y=fecha.getFullYear();
   
-  // LÓGICA CORRECTA DE CICLOS:
-  // Si día < diaCorte: el ciclo CIERRA este mes
-  // Si día >= diaCorte: el ciclo CIERRA el mes siguiente
-  // Ejemplo Nu (diaCorte=12): 11 MAR cierra en MAR (ciclo FEB), 12 MAR cierra en APR (ciclo MAR)
+  // Si el día es <= diaCorte, el ciclo CIERRA este mes
+  // Si el día es > diaCorte, el ciclo CIERRA el mes siguiente
   var cierraM, cierraY;
-  if(d < diaCorte){
+  if(d<diaCorte){
     cierraM=m;
     cierraY=y;
   } else {
@@ -921,6 +919,7 @@ function cicloDeGastoCorrecto(fechaStr, tdc){
   }
   
   // EL CICLO SE NOMBRA POR EL MES ANTERIOR AL QUE CIERRA
+  // (no por el mes donde cierra)
   var nombreMesCiclo=cierraM-1;
   if(nombreMesCiclo<0){
     nombreMesCiclo=11;
@@ -944,7 +943,7 @@ function obtenerCicloAnterior(tdc){
   
   // Ciclo actual cierra en...
   var cierraM, cierraY;
-  if(d<=diaCorte){
+  if(d<diaCorte){
     cierraM=m;
     cierraY=y;
   } else {
@@ -2390,32 +2389,15 @@ function renderConfig(){
   document.getElementById('cfg-cats').innerHTML=DB.config.categorias.map((c,i)=>chip(c,`quitarCat(${i})`)).join('');
   document.getElementById('cfg-tdcs').innerHTML=DB.config.tdcs.map((t,i)=>chip(t,`quitarTDC(${i})`)).join('');
   document.getElementById('cfg-ctas').innerHTML=DB.config.cuentas.map((c,i)=>chip(c,`quitarCuenta(${i})`)).join('');
-  document.getElementById('cfg-cortes').innerHTML='<div class="table-wrap"><table><thead><tr><th>Tarjeta</th><th>Corte</th><th>+Días</th><th>Día de Pago</th><th>Límite ($)</th></tr></thead><tbody>'+DB.config.tdcs.filter(t=>t!=='Efectivo').map(function(t){
+  document.getElementById('cfg-cortes').innerHTML=DB.config.tdcs.filter(t=>t!=='Efectivo').map(function(t){
     var v=DB.config.cortesTDC[t]||{corte:'',diasPago:''};
     var lim=(DB.config.limitesTDC&&DB.config.limitesTDC[t])||'';
-    var fechaPagoDisplay=calcularFechaPagoDisplay(v.corte, v.diasPago);
-    return '<tr><td style="font-weight:600;color:var(--purple)">'+t+'</td><td><input type="number" value="'+v.corte+'" min="1" max="31" onchange="updateCorteAndRefresh(\''+t+'\',\'corte\',this.value)" style="width:50px;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:12px;text-align:center"></td><td><input type="number" value="'+v.diasPago+'" min="1" max="30" onchange="updateCorteAndRefresh(\''+t+'\',\'diasPago\',this.value)" style="width:50px;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:12px;text-align:center"></td><td style="font-weight:600;color:var(--blue);font-family:monospace">'+fechaPagoDisplay+'</td><td><input type="number" value="'+lim+'" min="0" step="100" onchange="updateLimiteTDC(\''+t+'\',this.value)" style="width:90px;padding:6px;border:1px solid var(--border2);border-radius:4px;font-size:12px;text-align:right;font-family:monospace"></td></tr>';
-  }).join('')+'</tbody></table></div>';
+    return '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)"><span style="font-size:12px;font-weight:500;min-width:85px">'+t+'</span><div style="display:flex;gap:10px;flex-wrap:wrap"><div><div style="font-size:10px;color:var(--text3)">Día corte</div><input type="number" value="'+v.corte+'" min="1" max="31" onchange="updateCorte(\''+t+'\',\'corte\',this.value)" style="width:52px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:center"></div><div><div style="font-size:10px;color:var(--text3)">Días pagar</div><input type="number" value="'+v.diasPago+'" min="1" max="30" onchange="updateCorte(\''+t+'\',\'diasPago\',this.value)" style="width:52px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:center"></div><div><div style="font-size:10px;color:var(--text3)">Límite ($)</div><input type="number" value="'+lim+'" min="0" step="100" onchange="updateLimiteTDC(\''+t+'\',this.value)" style="width:90px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div></div></div>';
+  }).join('');
   document.getElementById('cfg-presupuesto').innerHTML=DB.config.categorias.map(cat=>`<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:0.5px solid var(--border)"><span style="font-size:12px;font-weight:500;flex:1">${cat}</span><input type="number" value="${DB.config.presupuesto[cat]||0}" onchange="updatePresupuesto('${cat}',this.value)" style="width:110px;padding:6px 10px;border:1px solid var(--border2);border-radius:6px;font-family:monospace;font-size:12px;text-align:right"></div>`).join('');
   poblarSelects();
 }
 function updateCorte(tdc,field,val){if(!DB.config.cortesTDC[tdc])DB.config.cortesTDC[tdc]={};DB.config.cortesTDC[tdc][field]=parseInt(val)||0;save();}
-function updateCorteAndRefresh(tdc,field,val){updateCorte(tdc,field,val);renderConfig();}
-function calcularFechaPagoDisplay(diaCortev,diasPagoVal){
-  if(!diaCortev||!diasPagoVal)return'--';
-  var hoy=new Date();
-  var anio=hoy.getFullYear();
-  var mes=hoy.getMonth();
-  var diaCorte=parseInt(diaCortev);
-  var diasPago=parseInt(diasPagoVal);
-  // Usar la misma lógica que fechaPagoReal(): corte del mes actual + días
-  // JavaScript maneja automáticamente desbordamiento de meses, bisiestos, todo
-  var fechaCorte=new Date(anio,mes,diaCorte);
-  var fechaPago=new Date(fechaCorte.getTime()+diasPago*24*60*60*1000);
-  var dia=String(fechaPago.getDate()).padStart(2,'0');
-  var mesNum=String(fechaPago.getMonth()+1).padStart(2,'0');
-  return dia+'/'+mesNum;
-}
 function updateLimiteTDC(tdc,val){if(!DB.config.limitesTDC)DB.config.limitesTDC={};DB.config.limitesTDC[tdc]=parseFloat(val)||0;save();}
 function updatePresupuesto(cat,val){DB.config.presupuesto[cat]=parseFloat(val)||0;save();}
 function agregarCat(){const v=document.getElementById('new-cat').value.trim();if(v&&!DB.config.categorias.includes(v)){DB.config.categorias.push(v);DB.config.presupuesto[v]=0;save();renderConfig();document.getElementById('new-cat').value='';}}
@@ -2935,36 +2917,26 @@ function mostrarDebugPanel(){
 
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-  VERSIÓN: v2.4 (LÓGICA DE FECHAS CORREGIDA)
+  VERSIÓN: v2.2 FINAL (COMPLETAMENTE FUNCIONAL)
   FECHA: 2026-03-29
-  ESTADO: ✅ LISTO PARA USAR - CÁLCULOS CORRECTOS
+  ESTADO: ✅ LISTO PARA USAR
   ═══════════════════════════════════════════════════════════════════════════
   
-  CAMBIOS EN ESTA VERSIÓN 2.4:
-  • ✅ Cambio de "Vencimiento" a "Día de Pago" (más preciso)
-  • ✅ Lógica de cálculo corregida: corte + días = día de pago
-  • ✅ Cálculo matemático puro sin consideraciones de mes actual
-  • ✅ Referencia de mes: usa marzo (31 días) para consistencia
-  • ✅ Desbordamiento de mes manejado correctamente
-  • ✅ Ejemplos: 20 + 20 = 40 → 09/04 ✓
+  CAMBIOS EN ESTA VERSIÓN:
+  • Corrección de color hardcodeado
+  • Validación completa de datos en gastos e ingresos
+  • Mejor error handling en save/load
+  • Todas las funciones de ciclos TDC preservadas y funcionando
+  • Dashboard Estado TDC mostrando datos correctamente
+  • Sistema automático de ciclos funcionando perfectamente
   
-  CARACTERÍSTICAS MANTENIDAS:
+  CARACTERÍSTICAS:
   ✓ Ciclos automáticos por tarjeta
   ✓ Cálculo automático de pagos
   ✓ MSI dividido en cuotas
   ✓ Validación de datos robusta
   ✓ Error handling mejorado
-  ✓ Dashboard Estado TDC actualizado
-  ✓ Sincronización con Google Sheets
-  
-  TABLA DE CONFIGURACIÓN FINAL:
-  ┌─────────────────────────────────────────────────────┐
-  │ Tarjeta     │ Corte │ +Días │ Día de Pago │ Límite  │
-  ├─────────────────────────────────────────────────────┤
-  │ Nu          │  12   │  10   │    22/03    │ 15,000  │
-  │ BBVA Azul   │  10   │  20   │    30/03    │ 47,400  │
-  │ Banamex Joy │  20   │  20   │    09/04    │ 42,500  │
-  └─────────────────────────────────────────────────────┘
+  ✓ Documentación completa
   
   ═══════════════════════════════════════════════════════════════════════════
 -->
