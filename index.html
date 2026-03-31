@@ -31,7 +31,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mis Finanzas v2.1</title>
+<title>Mis Finanzas v2.2</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -665,9 +665,20 @@ function load(){
 
 // ── SHEETS SYNC: full bidirectional ──
 async function pullFromSheets(){
-  if(!DB.config.scriptURL)return false;
+  // ✅ Si no hay scriptURL válida, salir silenciosamente
+  if(!DB.config.scriptURL || DB.config.scriptURL.trim()==='' || DB.config.scriptURL==='undefined'){
+    return false;
+  }
+  
   try{
-    var res=await fetch(DB.config.scriptURL+'?action=getAll');
+    // ✅ Agregar timeout de 5 segundos para no quedarse esperando
+    var controller=new AbortController();
+    var timeoutId=setTimeout(function(){controller.abort();},5000);
+    
+    var res=await fetch(DB.config.scriptURL+'?action=getAll',{signal:controller.signal});
+    clearTimeout(timeoutId);
+    
+    if(!res.ok)return false;
     var data=await res.json();
     if(data.error)return false;
     // Update transactional data
@@ -704,7 +715,10 @@ async function pullFromSheets(){
     }
     save();
     return true;
-  }catch(e){return false;}
+  }catch(e){
+    // ✅ Silenciosamente fallar si hay problema de conexión
+    return false;
+  }
 }
 
 async function pushCuentasInv(){
@@ -715,6 +729,31 @@ async function pushCuentasInv(){
       body:JSON.stringify({action:'syncCuentasInv',cuentas:DB.cuentasInv})
     });
   }catch(e){}
+}
+
+// ══════════════════════════════════════════════════════════
+// ✅ FUNCIÓN MEJORADA: Calcular meses transcurridos correctamente
+// (No usa 30 días fijos, respeta días reales de cada mes)
+// ══════════════════════════════════════════════════════════
+function calcularMesesTranscurridos(fechaInicio, fechaHoy){
+  if(!fechaInicio || !fechaHoy) return 0;
+  
+  var inicio = new Date(fechaInicio+'T12:00:00');
+  var hoy = new Date(fechaHoy+'T12:00:00');
+  
+  if(isNaN(inicio.getTime()) || isNaN(hoy.getTime())) return 0;
+  
+  var años = hoy.getFullYear() - inicio.getFullYear();
+  var meses = hoy.getMonth() - inicio.getMonth();
+  var dias = hoy.getDate() - inicio.getDate();
+  
+  if(dias < 0) meses--;
+  if(meses < 0){
+    años--;
+    meses += 12;
+  }
+  
+  return años * 12 + meses;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2639,7 +2678,7 @@ function renderDashboard(){
             // Si es MSI, sumar solo la cuota de este mes
             var cuotas=g.meses ? parseInt(g.meses) : 1;
             var fechaCompra=new Date(g.fecha+'T12:00:00');
-            var mesesTranscurridos=Math.floor((fechaCorteHoy-fechaCompra)/(1000*60*60*24*30));
+            var mesesTranscurridos=calcularMesesTranscurridos(g.fecha, fechaCorteHoy.toISOString().split('T')[0]);
             if(mesesTranscurridos>=0 && mesesTranscurridos<cuotas){
               consumoCicloAnt+=g.monto/cuotas;
             }
@@ -2678,7 +2717,7 @@ function renderDashboard(){
           if(g.msi==='Si'){
             var cuotas=g.meses ? parseInt(g.meses) : 1;
             var fechaCompra=new Date(g.fecha+'T12:00:00');
-            var mesesTranscurridos=Math.floor((hoy-fechaCompra)/(1000*60*60*24*30));
+            var mesesTranscurridos=calcularMesesTranscurridos(g.fecha, hoy.toISOString().split('T')[0]);
             if(mesesTranscurridos>=0 && mesesTranscurridos<cuotas){
               consumoCicloAct+=g.monto/cuotas;
             }
