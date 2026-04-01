@@ -429,11 +429,11 @@ tr:hover td{background:var(--surface2)}
 <div id="tdc" class="screen">
   <div class="card">
     <div class="card-title">Registrar pago TDC</div>
-    <div class="form-grid triple">
+    <div class="form-grid">
       <div class="field"><label>Fecha de pago</label><input type="date" id="t-fecha"></div>
-      <div class="field"><label>Tarjeta</label><select id="t-tdc"><option value="">— Selecciona —</option></select></div>
-      <div class="field"><label>Mes que cubre</label><select id="t-mes"></select></div>
+      <div class="field"><label>Tarjeta</label><select id="t-tdc" onchange="mostrarPendienteTDC()"><option value="">— Selecciona —</option></select></div>
     </div>
+    <div id="tdc-pago-info" style="margin-top:10px"></div>
     <div class="form-grid" style="margin-top:10px">
       <div class="field"><label>Monto pagado (MXN)</label><input type="number" id="t-monto" placeholder="0.00" step="0.01"></div>
       <div class="field"><label>Notas</label><input type="text" id="t-notas" placeholder="Opcional"></div>
@@ -777,6 +777,50 @@ function pct(n){return Math.round((n||0)*100)+'%';}
 function rdtoDia(s,t){return s*(Math.pow(1+t/100,1/365)-1);}
 function rdtoDias(s,t,d){return s*(Math.pow(1+t/100,d/365)-1);}
 function today(){return new Date().toISOString().split('T')[0];}
+
+// ═══ Ocultar/mostrar patrimonio (privacidad) ═══
+var _patHidden=false;
+function togglePatrimonio(){
+  _patHidden=!_patHidden;
+  var valEl=document.getElementById('pat-value');
+  var subEl=document.getElementById('pat-sub');
+  var btn=document.getElementById('pat-toggle-btn');
+  if(valEl){
+    if(_patHidden){
+      valEl.dataset.real=valEl.textContent;
+      valEl.textContent='$•••••••';
+    } else {
+      valEl.textContent=valEl.dataset.real||valEl.textContent;
+    }
+  }
+  if(subEl){
+    if(_patHidden){
+      subEl.dataset.real=subEl.innerHTML;
+      subEl.innerHTML='<button onclick="togglePatrimonio()" id="pat-toggle-btn" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);padding:0 4px" title="Mostrar">👁‍🗨</button>';
+    } else {
+      subEl.innerHTML=subEl.dataset.real||subEl.innerHTML;
+    }
+  }
+  // También ocultar el patrimonio en inversiones
+  var invTotalVal=document.getElementById('inv-total-val');
+  if(invTotalVal){
+    if(_patHidden){
+      invTotalVal.dataset.real=invTotalVal.textContent;
+      invTotalVal.textContent='$•••••••';
+    } else {
+      invTotalVal.textContent=invTotalVal.dataset.real||invTotalVal.textContent;
+    }
+  }
+  var invRdto=document.getElementById('inv-rdto-hoy');
+  if(invRdto){
+    if(_patHidden){
+      invRdto.dataset.real=invRdto.textContent;
+      invRdto.textContent='+$•••';
+    } else {
+      invRdto.textContent=invRdto.dataset.real||invRdto.textContent;
+    }
+  }
+}
 function mesDeHoy(){const m=new Date().toLocaleString('es-MX',{month:'long'});return m.charAt(0).toUpperCase()+m.slice(1);}
 function diaDeHoy(){return new Date().getDate();}
 function diasEnMes(){return new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();}
@@ -2223,19 +2267,91 @@ function eliminarInversion(id){DB.inversiones=DB.inversiones.filter(function(i){
 // ══════════════════════════════════════════════════════════
 // PAGOS TDC
 // ══════════════════════════════════════════════════════════
+// Mostrar info del pendiente cuando se selecciona tarjeta
+function mostrarPendienteTDC(){
+  var tdc=document.getElementById('t-tdc').value;
+  var info=document.getElementById('tdc-pago-info');
+  if(!info) return;
+  if(!tdc){info.innerHTML='';return;}
+  
+  var cicloAnt=obtenerCicloAnterior(tdc);
+  var pendiente=calcularSaldoPendiente(tdc);
+  var cfg=DB.config.cortesTDC[tdc];
+  var fechaInfo=cfg?fechaPagoReal(cfg.corte, cfg.diasPago):null;
+  
+  if(pendiente>0){
+    info.innerHTML=
+      '<div style="background:var(--amberl);border:1px solid #EF9F27;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">'+
+        '<div>'+
+          '<div style="font-size:11px;font-weight:600;color:var(--amber)">Pago para no generar intereses</div>'+
+          '<div style="font-size:10px;color:var(--text3);margin-top:2px">Ciclo: '+cicloAnt+(fechaInfo?' · Vence: '+fechaInfo.diaPago+' '+fechaInfo.mesPago:'')+'</div>'+
+        '</div>'+
+        '<div style="text-align:right">'+
+          '<div style="font-size:16px;font-weight:600;font-family:monospace;color:var(--amber)">'+fmtK(pendiente)+'</div>'+
+          '<button onclick="document.getElementById(\'t-monto\').value='+pendiente.toFixed(2)+'" style="font-size:10px;background:none;border:1px solid var(--amber);color:var(--amber);border-radius:4px;padding:2px 8px;cursor:pointer;margin-top:3px">Usar monto</button>'+
+        '</div>'+
+      '</div>';
+    // Auto-fill the amount
+    document.getElementById('t-monto').value=pendiente.toFixed(2);
+  } else {
+    info.innerHTML=
+      '<div style="background:var(--greenl);border:1px solid #97C459;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green)">'+
+        '✓ '+tdc+' — Ciclo '+cicloAnt+' ya está pagado'+
+      '</div>';
+  }
+}
+
 function agregarPagoTDC(){
-  const fecha=document.getElementById('t-fecha').value,tdc=document.getElementById('t-tdc').value,mes=document.getElementById('t-mes').value,monto=parseFloat(document.getElementById('t-monto').value),notas=document.getElementById('t-notas').value;
-  if(!fecha||!tdc||!mes||!monto){toast('Completa todos los campos','err');return;}
-  // Calcular el ciclo que cubre este pago basado en la TDC y el mes seleccionado
+  const fecha=document.getElementById('t-fecha').value;
+  const tdc=document.getElementById('t-tdc').value;
+  const monto=parseFloat(document.getElementById('t-monto').value);
+  const notas=document.getElementById('t-notas').value;
+  if(!fecha||!tdc||!monto){toast('Completa fecha, tarjeta y monto','err');return;}
+  
+  // Auto-detectar ciclo basado en la TDC
   var ciclo=obtenerCicloAnterior(tdc);
-  if(!ciclo) ciclo=mes+'-'+new Date().getFullYear();
-  // Consumo del ciclo (no del mes calendario)
-  const consumo=DB.gastos.filter(function(g){return g.tdc===tdc&&g.ciclo===ciclo;}).reduce((s,g)=>s+g.monto,0);
-  const estado=monto>=consumo?'Pagada total':'Pago parcial';
-  DB.pagosTDC.unshift({id:Date.now(),fecha,tdc,mes,ciclo:ciclo,consumo,monto,dif:monto-consumo,estado,notas});save();
-  pushSheets('PagosTDC',[fecha,tdc,mes,consumo,monto,monto-consumo,estado,notas]);
-  document.getElementById('t-fecha').value=today();['t-monto','t-notas'].forEach(id=>document.getElementById(id).value='');
-  renderTDC();toast('Pago registrado ✓');
+  if(!ciclo){
+    var m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
+    var mes=m.charAt(0).toUpperCase()+m.slice(1);
+    ciclo=mes+'-'+new Date(fecha+'T12:00:00').getFullYear();
+  }
+  
+  // Calcular consumo del ciclo para determinar estado
+  var consumo=0;
+  DB.gastos.forEach(function(g){
+    if(g.tdc!==tdc) return;
+    var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha, tdc);
+    if(cicloG!==ciclo) return;
+    if(g.msi==='Si'){
+      var cuotas=g.meses ? parseInt(g.meses) : 1;
+      consumo += g.monto / cuotas;
+    } else {
+      consumo += g.monto;
+    }
+  });
+  // Agregar adeudos
+  var adeudo=(DB.config.adeudosPendientes && DB.config.adeudosPendientes[tdc]) || 0;
+  consumo += adeudo;
+  
+  // Pagos previos de este ciclo
+  var pagadoPrev=DB.pagosTDC.filter(function(p){return p.tdc===tdc&&p.ciclo===ciclo;}).reduce(function(s,p){return s+p.monto;},0);
+  var totalPagado=pagadoPrev+monto;
+  var estado=totalPagado>=consumo?'Pagada total':'Pago parcial';
+  
+  // Extraer mes del ciclo para compatibilidad
+  var mesCiclo=ciclo.split('-')[0];
+  
+  DB.pagosTDC.unshift({id:Date.now(),fecha:fecha,tdc:tdc,mes:mesCiclo,ciclo:ciclo,consumo:consumo,monto:monto,dif:monto-consumo,estado:estado,notas:notas});
+  save();
+  pushSheets('PagosTDC',[fecha,tdc,mesCiclo,consumo,monto,monto-consumo,estado,notas]);
+  document.getElementById('t-fecha').value=today();
+  document.getElementById('t-monto').value='';
+  document.getElementById('t-notas').value='';
+  document.getElementById('t-tdc').value='';
+  document.getElementById('tdc-pago-info').innerHTML='';
+  renderTDC();
+  renderDashboard();
+  toast('Pago de '+tdc+' registrado ✓ ('+ciclo+')');
 }
 function eliminarPagoTDC(id){DB.pagosTDC=DB.pagosTDC.filter(function(p){return p.id!==id;});save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);}
 function editarPagoTDC(id){
@@ -2473,12 +2589,6 @@ function poblarSelects(){
   ['g-cat','r-cat'].forEach(id=>{const s=document.getElementById(id);if(s)s.innerHTML='<option value="">— Categoría —</option>'+DB.config.categorias.map(c=>`<option>${c}</option>`).join('');});
   ['g-tdc','r-tdc'].forEach(id=>{const s=document.getElementById(id);if(s)s.innerHTML='<option value="">— Tarjeta —</option>'+DB.config.tdcs.map(t=>`<option>${t}</option>`).join('');});
   const tt=document.getElementById('t-tdc');if(tt)tt.innerHTML='<option value="">— Tarjeta —</option>'+DB.config.tdcs.filter(t=>t!=='Efectivo').map(t=>`<option>${t}</option>`).join('');
-  // Mes dinámico para pagos TDC
-  const tm=document.getElementById('t-mes');
-  if(tm){
-    var mesAct=mesDeHoy();
-    tm.innerHTML=MESES.map(function(m){return '<option'+(m===mesAct?' selected':'')+'>'+m+'</option>';}).join('');
-  }
 }
 function resetearSaldos(){
   if(!confirm('¿Resetear saldos a $0? Los tramos de tasa se conservan.')) return;
@@ -2529,15 +2639,50 @@ function renderPatrimonioChart(){
   if(canvas._patChart){canvas._patChart.destroy();canvas._patChart=null;}
   var MSHORT=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var mesActualIdx=new Date().getMonth();
-  var vals=MESES.map(function(mes){
-    var byMes=DB.inversiones.filter(function(i){return i.periodo&&i.periodo.includes(mes.slice(0,3));});
-    if(!byMes.length)return null;
-    var porCuenta={};
-    byMes.forEach(function(r){if(!porCuenta[r.cuenta]||r.id>porCuenta[r.cuenta].id)porCuenta[r.cuenta]=r;});
-    return Object.values(porCuenta).reduce(function(s,r){return s+r.actual;},0);
+  var anioActual=new Date().getFullYear();
+  
+  // Construir patrimonio por mes usando los registros de inversiones
+  // Agrupar por mes: para cada mes, sumar el saldo más reciente de cada cuenta
+  var vals=MESES.map(function(mes, idx){
+    // Buscar registros de inversiones para este mes
+    var saldoPorCuenta={};
+    DB.inversiones.forEach(function(inv){
+      if(!inv.periodo) return;
+      var perStr=String(inv.periodo).split('T')[0];
+      var perDate=new Date(perStr+'T12:00:00');
+      // Si el período es un string como "Marzo 2026", parsearlo
+      if(isNaN(perDate.getTime())){
+        // Intentar formato "NombreMes año"
+        var partes=inv.periodo.split(' ');
+        if(partes.length>=2){
+          var mIdx=MESES.indexOf(partes[0]);
+          var yr=parseInt(partes[partes.length-1]);
+          if(mIdx>=0 && yr) perDate=new Date(yr, mIdx, 15);
+        }
+      }
+      if(isNaN(perDate.getTime())) return;
+      if(perDate.getMonth()===idx && perDate.getFullYear()===anioActual){
+        // Guardar el más reciente por cuenta
+        if(!saldoPorCuenta[inv.cuenta] || inv.id>saldoPorCuenta[inv.cuenta].id){
+          saldoPorCuenta[inv.cuenta]=inv;
+        }
+      }
+    });
+    var cuentasConDatos=Object.keys(saldoPorCuenta);
+    if(cuentasConDatos.length===0) return null;
+    return cuentasConDatos.reduce(function(s, c){ return s+(saldoPorCuenta[c].actual||0); }, 0);
   });
-  var totalActual=Object.values(DB.cuentasInv).reduce(function(s,c){return s+c.saldo;},0);
-  if(totalActual>0)vals[mesActualIdx]=totalActual;
+  
+  // Para el mes actual, usar el saldo proyectado real
+  var totalActual=Object.values(DB.cuentasInv).reduce(function(s,c){return s+saldoProyectado(c);},0);
+  if(totalActual>0) vals[mesActualIdx]=totalActual;
+  
+  // Guardar snapshot automático del mes actual si no existe
+  // (para que quede registrado cuando pase el mes)
+  if(totalActual>0 && !DB._patrimonioSnapshots){
+    DB._patrimonioSnapshots={};
+  }
+  
   var withData=vals.filter(function(v){return v!==null;});
   var labelsDiv=document.getElementById('pat-labels');
   if(!withData.length){
@@ -2643,7 +2788,7 @@ function renderDashboard(){
     {label:'Ingresos',value:fmtK(ing),sub:mes,color:'var(--teal)'},
     {label:'Gastos',value:fmtK(gas),sub:ing>0?Math.round(gas/ing*100)+'% del ingreso':'—',color:'var(--coral)'},
     {label:'Balance',value:fmtK(bal),sub:bal>=0?'Positivo ✓':'Déficit',color:bal>=0?'var(--teal)':'var(--coral)'},
-    {label:'Patrimonio',value:fmtK(pat),sub:'+'+fmt(rdHoy)+' hoy',color:'var(--blue)'},
+    {label:'Patrimonio',value:'<span id="pat-value">'+fmtK(pat)+'</span>',sub:'<span id="pat-sub">+'+fmt(rdHoy)+' hoy</span> <button onclick="togglePatrimonio()" id="pat-toggle-btn" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);padding:0 4px" title="Mostrar/ocultar">👁</button>',color:'var(--blue)'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.label}</div><div class="metric-value" style="color:${m.color}">${m.value}</div><div class="metric-sub">${m.sub}</div></div>`).join('');
 
   // Alertas TDC
@@ -2666,9 +2811,16 @@ function renderDashboard(){
     const color=over?'var(--coral)':colors[i%colors.length];
     return `<div class="progress-row"><span class="progress-label">${cat}</span><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(p*100)}%;background:${color}"></div></div><span class="progress-amounts">${fmtK(total)}${lim?'/'+fmtK(lim):''}</span></div>`;}).join(''):'<div style="text-align:center;color:var(--text3);padding:20px;font-size:13px">Sin gastos este mes</div>';
 
-  // TDC — RENDERIZADO CORREGIDO v3.0
-  // Usa ciclos (nombres de periodo) en vez de sumar todos los gastos históricos.
-  // "Pago para no generar intereses" = gastos del ciclo anterior (ya cerrado).
+  // TDC — RENDERIZADO INDEPENDIENTE DEL SELECTOR DE MES
+  // Siempre muestra datos actuales en tiempo real, sin filtro de mes.
+  renderEstadoTDC();
+
+  // Gráfica patrimonio
+  setTimeout(renderPatrimonioChart,50);
+}
+
+// ═══ ESTADO TDC — FUNCIÓN INDEPENDIENTE ═══
+function renderEstadoTDC(){
   document.getElementById('dash-tdc').innerHTML=DB.config.tdcs.filter(function(t){return t!=='Efectivo';}).map(function(tdc){
     var cfg=DB.config.cortesTDC[tdc];
     if(!cfg || !cfg.corte) return '';
@@ -2728,6 +2880,7 @@ function renderDashboard(){
     
     // ==========================================
     // CICLO ACTUAL (acumulándose, se pagará el próximo mes)
+    // Incluye gastos normales + cuotas MSI vigentes de ciclos anteriores
     // ==========================================
     var consumoCicloAct=0;
     DB.gastos.forEach(function(g){
@@ -2743,14 +2896,62 @@ function renderDashboard(){
       }
     });
     
+    // MSI de ciclos anteriores que aún tienen cuotas vigentes para el ciclo actual
+    DB.gastos.forEach(function(g){
+      if(g.tdc!==tdc || g.msi!=='Si') return;
+      var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha, tdc);
+      // Solo de ciclos pasados (no del actual ni del anterior que ya contamos)
+      if(cicloG===cicloAct || cicloG===cicloAnt) return;
+      
+      var cuotas=g.meses ? parseInt(g.meses) : 1;
+      // Calcular cuántos meses han pasado desde la compra
+      // Si aún hay cuotas pendientes, se suma al ciclo actual
+      var mesesDesdeCompra=calcularMesesTranscurridos(g.fecha, hoy.toISOString().split('T')[0]);
+      // La cuota del ciclo actual es mesesDesdeCompra+1 (la siguiente)
+      if(mesesDesdeCompra>=0 && (mesesDesdeCompra+1)<cuotas){
+        consumoCicloAct += g.monto / cuotas;
+      }
+    });
+    
     // Estado
     var estado=totalAPagar===0?'Sin consumo':pendienteHoy===0?'Pagada':pagadoCicloAnt>0?'Parcial':'Pendiente';
     var cls=estado==='Pagada'?'tag-green':estado==='Sin consumo'?'tag-blue':'tag-amber';
     
     // Fecha de pago
     var fechaInfo=fechaPagoReal(cfg.corte, cfg.diasPago);
-    var urgColor=fechaInfo.diasFaltan<=3?'var(--coral)':fechaInfo.diasFaltan<=7?'var(--amber)':'var(--teal)';
-    var fechaHtml='<div style="font-size:11px;color:'+urgColor+';margin-top:2px;font-weight:500">'+fechaInfo.label+'</div>';
+    
+    // Si está pagada: NO mostrar "Vencida hace X días"
+    // Si está pagada: mostrar "Pagado ✓" solo los primeros 3 días después del último pago
+    var fechaHtml='';
+    if(estado==='Pagada'){
+      // Encontrar el último pago de este ciclo
+      var ultimoPago=null;
+      DB.pagosTDC.forEach(function(p){
+        if(p.tdc===tdc && p.ciclo===cicloAnt){
+          if(!ultimoPago || p.fecha>ultimoPago.fecha) ultimoPago=p;
+        }
+      });
+      if(ultimoPago){
+        var fechaUltPago=new Date(ultimoPago.fecha+'T12:00:00');
+        var hoyNorm=new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        var pagoNorm=new Date(fechaUltPago.getFullYear(), fechaUltPago.getMonth(), fechaUltPago.getDate());
+        var diasDesdePago=Math.round((hoyNorm-pagoNorm)/(24*60*60*1000));
+        
+        if(diasDesdePago<=3){
+          // Mostrar "Pagado ✓" solo los primeros 3 días
+          estado='Pagada';
+          cls='tag-green';
+        } else {
+          // Después de 3 días, mostrar como "Sin pendientes" discretamente
+          estado='Al corriente';
+          cls='tag-blue';
+        }
+      }
+    } else if(estado!=='Sin consumo'){
+      // Solo mostrar fecha de vencimiento si NO está pagada
+      var urgColor=fechaInfo.diasFaltan<=3?'var(--coral)':fechaInfo.diasFaltan<=7?'var(--amber)':'var(--teal)';
+      fechaHtml='<div style="font-size:11px;color:'+urgColor+';margin-top:2px;font-weight:500">'+fechaInfo.label+'</div>';
+    }
     
     // Info del ciclo: mostrar rango de fechas del corte
     var cicloInfoHtml='<div style="font-size:10px;color:var(--text3);margin-top:1px">Ciclo '+cicloAnt+' · Corte día '+cfg.corte+'</div>';
@@ -2786,14 +2987,17 @@ function renderDashboard(){
           '<span style="font-size:15px;font-weight:600;font-family:monospace;color:'+colAhora+'">'+fmtK(pendienteHoy)+'</span>'+
         '</div>';
     } else if(totalAPagar>0&&pendienteHoy===0){
-      // Mostrar "Pagado ✓" si está completamente pagado
-      pagarAhoraHtml=
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 10px;background:var(--greenl);border-radius:8px;border:1px solid #97C459">'+
-          '<div>'+
-            '<div style="font-size:10px;font-weight:600;color:var(--teal)">Ciclo cerrado</div>'+
-          '</div>'+
-          '<span style="font-size:15px;font-weight:600;font-family:monospace;color:var(--teal)">Pagado ✓</span>'+
-        '</div>';
+      // Mostrar "Pagado ✓" solo si estado sigue siendo 'Pagada' (dentro de los 3 días)
+      if(estado==='Pagada'){
+        pagarAhoraHtml=
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 10px;background:var(--greenl);border-radius:8px;border:1px solid #97C459">'+
+            '<div>'+
+              '<div style="font-size:10px;font-weight:600;color:var(--teal)">Ciclo cerrado</div>'+
+            '</div>'+
+            '<span style="font-size:15px;font-weight:600;font-family:monospace;color:var(--teal)">Pagado ✓</span>'+
+          '</div>';
+      }
+      // Si es 'Al corriente' (>3 días), no mostrar nada - solo el siguiente corte
     }
     
     // Siguiente corte
@@ -2840,12 +3044,6 @@ function renderDashboard(){
       creditHtml+
     '</div>';
   }).join('');
-
-
-
-  
-  // Gráfica patrimonio
-  setTimeout(renderPatrimonioChart,50);
 }
 
 function calcPreset(lim,t1,t2){
