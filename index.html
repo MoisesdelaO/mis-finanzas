@@ -1025,49 +1025,87 @@ function obtenerCicloAnterior(tdc){
 }
 
 // Calcula el saldo pendiente correcto para una tarjeta
+// Fórmula bancaria: Adeudo anterior + Cargos regulares + Cuota MSI - Pagos del periodo
 function calcularSaldoPendiente(tdc){
   var cicloAnt=obtenerCicloAnterior(tdc);
   if(!cicloAnt) return 0;
   
-  var consumo=0;
-  var hoy=new Date();
+  var cfg=DB.config.cortesTDC[tdc];
+  if(!cfg || !cfg.corte) return 0;
+  var diaCorte=parseInt(cfg.corte);
   
-  // Gastos del ciclo anterior (normales + cuota MSI)
+  // Calcular la fecha exacta del último corte (inicio del periodo de pago)
+  var hoy=new Date();
+  var fechaCorte;
+  if(hoy.getDate() > diaCorte){
+    fechaCorte=new Date(hoy.getFullYear(), hoy.getMonth(), diaCorte);
+  } else {
+    fechaCorte=new Date(hoy.getFullYear(), hoy.getMonth()-1, diaCorte);
+  }
+  // Fecha del corte anterior (inicio del periodo que cerró)
+  var fechaCorteAntAnt=new Date(fechaCorte.getFullYear(), fechaCorte.getMonth()-1, diaCorte);
+  
+  var consumo=0;
+  
+  // 1. Gastos REGULARES del ciclo anterior
   DB.gastos.forEach(function(g){
     if(g.tdc!==tdc) return;
+    if(g.msi==='Si') return; // MSI se manejan aparte
     var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha, tdc);
     if(cicloG!==cicloAnt) return;
-    
-    if(g.msi==='Si'){
-      var cuotas=g.meses ? parseInt(g.meses) : 1;
-      consumo += g.monto / cuotas;
-    } else {
-      consumo += g.monto;
-    }
+    consumo += g.monto;
   });
   
-  // MSI de ciclos más antiguos que aún generan cuotas
-  var cicloAct=cicloDeGastoCorrecto(hoy.toISOString().split('T')[0], tdc);
+  // 2. Cuotas MSI de TODAS las compras MSI que tengan cuota en este ciclo
+  // La lógica bancaria: cada mes de corte se cobra una cuota.
+  // Para saber si una compra MSI tiene cuota en este ciclo,
+  // contamos cuántos cortes han pasado desde la compra.
   DB.gastos.forEach(function(g){
     if(g.tdc!==tdc || g.msi!=='Si') return;
-    var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha, tdc);
-    if(cicloG===cicloAnt || cicloG===cicloAct) return;
-    
     var cuotas=g.meses ? parseInt(g.meses) : 1;
-    var mesesDesde=calcularMesesTranscurridos(g.fecha, hoy.toISOString().split('T')[0]);
-    if(mesesDesde>=0 && mesesDesde<cuotas){
+    if(cuotas<=0) return;
+    
+    var fechaCompra=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
+    if(isNaN(fechaCompra.getTime())) return;
+    
+    // ¿Cuántos ciclos de corte han pasado desde la compra hasta el último corte?
+    // Usamos meses calendario entre la fecha de compra y la fecha de corte
+    var mesesDesdeCompra=
+      (fechaCorte.getFullYear()-fechaCompra.getFullYear())*12 +
+      (fechaCorte.getMonth()-fechaCompra.getMonth());
+    
+    // Si la compra fue después del día de corte de su mes, el primer cobro es el siguiente corte
+    if(fechaCompra.getDate()>diaCorte) mesesDesdeCompra--;
+    
+    // La cuota que corresponde a este corte es la cuota #(mesesDesdeCompra+1)
+    // (la primera cuota se cobra en el primer corte después de la compra)
+    var numCuota=mesesDesdeCompra; // 0-indexed: cuota 0 es la primera
+    
+    if(numCuota>=0 && numCuota<cuotas){
       consumo += g.monto / cuotas;
     }
   });
   
-  // Adeudos
+  // 3. Adeudos pendientes de periodos más antiguos
   var adeudo=(DB.config.adeudosPendientes && DB.config.adeudosPendientes[tdc]) || 0;
   consumo += adeudo;
   
-  // Restar pagos ya hechos para este ciclo
-  var pagado=DB.pagosTDC.filter(function(p){
-    return p.tdc===tdc && p.ciclo===cicloAnt;
-  }).reduce(function(s,p){return s+p.monto;},0);
+  // 4. Restar pagos del ciclo anterior
+  // Los pagos pueden tener ciclo asignado O no.
+  // Si no tienen ciclo, buscar por fecha: pagos entre el corte anterior y el corte actual
+  var pagado=0;
+  DB.pagosTDC.forEach(function(p){
+    if(p.tdc!==tdc) return;
+    if(p.ciclo===cicloAnt){
+      pagado += p.monto;
+    } else if(!p.ciclo){
+      // Sin ciclo: verificar si la fecha cae en el periodo de pago
+      var fp=new Date(String(p.fecha).split('T')[0]+'T12:00:00');
+      if(!isNaN(fp.getTime()) && fp>=fechaCorteAntAnt && fp<=fechaCorte){
+        pagado += p.monto;
+      }
+    }
+  });
   
   return Math.max(0, consumo - pagado);
 }
@@ -2825,92 +2863,87 @@ function renderEstadoTDC(){
     var cfg=DB.config.cortesTDC[tdc];
     if(!cfg || !cfg.corte) return '';
     
-    var cicloAnt=obtenerCicloAnterior(tdc);   // Ciclo cerrado (a pagar)
+    var diaCorte=parseInt(cfg.corte);
+    var cicloAnt=obtenerCicloAnterior(tdc);
     var hoy=new Date();
-    var cicloAct=cicloDeGastoCorrecto(hoy.toISOString().split('T')[0], tdc);  // Ciclo abierto
+    var cicloAct=cicloDeGastoCorrecto(hoy.toISOString().split('T')[0], tdc);
     
     if(!cicloAnt || !cicloAct) return '';
     
+    // Fecha del último corte y el anterior
+    var fechaCorte;
+    if(hoy.getDate()>diaCorte){
+      fechaCorte=new Date(hoy.getFullYear(), hoy.getMonth(), diaCorte);
+    } else {
+      fechaCorte=new Date(hoy.getFullYear(), hoy.getMonth()-1, diaCorte);
+    }
+    var fechaCorteAntAnt=new Date(fechaCorte.getFullYear(), fechaCorte.getMonth()-1, diaCorte);
+    var fechaProxCorte=new Date(fechaCorte.getFullYear(), fechaCorte.getMonth()+1, diaCorte);
+    
     // ==========================================
-    // CICLO ANTERIOR (el que ya cerró y se debe pagar)
+    // CICLO ANTERIOR — Fórmula bancaria
     // ==========================================
-    // Gastos normales del ciclo anterior
-    var consumoCicloAnt=0;
+    // 1. Regulares
+    var consumoRegulares=0;
     DB.gastos.forEach(function(g){
-      if(g.tdc!==tdc) return;
+      if(g.tdc!==tdc || g.msi==='Si') return;
       var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha, tdc);
       if(cicloG!==cicloAnt) return;
-      
-      if(g.msi==='Si'){
-        // MSI: solo la cuota mensual
-        var cuotas=g.meses ? parseInt(g.meses) : 1;
-        consumoCicloAnt += g.monto / cuotas;
-      } else {
-        consumoCicloAnt += g.monto;
-      }
+      consumoRegulares += g.monto;
     });
     
-    // MSI de ciclos ANTERIORES que aún tienen cuotas pendientes en este ciclo
+    // 2. MSI: cuotas que caen en este corte (para TODAS las compras MSI)
+    var consumoMSI=0;
     DB.gastos.forEach(function(g){
       if(g.tdc!==tdc || g.msi!=='Si') return;
-      var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha, tdc);
-      if(cicloG===cicloAnt || cicloG===cicloAct) return; // ya contados o futuros
-      
       var cuotas=g.meses ? parseInt(g.meses) : 1;
-      var mesesDesdeCompra=calcularMesesTranscurridos(g.fecha, hoy.toISOString().split('T')[0]);
-      if(mesesDesdeCompra>=0 && mesesDesdeCompra<cuotas){
-        consumoCicloAnt += g.monto / cuotas;
-      }
+      if(cuotas<=0) return;
+      var fc=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
+      if(isNaN(fc.getTime())) return;
+      var md=(fechaCorte.getFullYear()-fc.getFullYear())*12+(fechaCorte.getMonth()-fc.getMonth());
+      if(fc.getDate()>diaCorte) md--;
+      if(md>=0 && md<cuotas) consumoMSI += g.monto/cuotas;
     });
     
-    // Sumar adeudos pendientes de ciclos más antiguos (configurados manualmente)
+    var consumoCicloAnt=consumoRegulares+consumoMSI;
+    
+    // 3. Adeudo anterior
     var adeudo=(DB.config.adeudosPendientes && DB.config.adeudosPendientes[tdc]) || 0;
     
-    // Pagos realizados para el ciclo anterior
+    // 4. Pagos (con fallback por fecha)
     var pagadoCicloAnt=0;
     DB.pagosTDC.forEach(function(p){
-      if(p.tdc===tdc && p.ciclo===cicloAnt){
-        pagadoCicloAnt += p.monto;
+      if(p.tdc!==tdc) return;
+      if(p.ciclo===cicloAnt){ pagadoCicloAnt+=p.monto; }
+      else if(!p.ciclo){
+        var fp=new Date(String(p.fecha).split('T')[0]+'T12:00:00');
+        if(!isNaN(fp.getTime())&&fp>=fechaCorteAntAnt&&fp<=fechaCorte) pagadoCicloAnt+=p.monto;
       }
     });
     
-    // Pendiente = consumo del ciclo + adeudo histórico - pagos
-    var totalAPagar=consumoCicloAnt + adeudo;
-    var pendienteHoy=Math.max(0, totalAPagar - pagadoCicloAnt);
+    var totalAPagar=consumoCicloAnt+adeudo;
+    var pendienteHoy=Math.max(0, totalAPagar-pagadoCicloAnt);
     
     // ==========================================
-    // CICLO ACTUAL (acumulándose, se pagará el próximo mes)
-    // Incluye gastos normales + cuotas MSI vigentes de ciclos anteriores
+    // CICLO ACTUAL (próximo corte)
     // ==========================================
     var consumoCicloAct=0;
     DB.gastos.forEach(function(g){
-      if(g.tdc!==tdc) return;
+      if(g.tdc!==tdc || g.msi==='Si') return;
       var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha, tdc);
       if(cicloG!==cicloAct) return;
-      
-      if(g.msi==='Si'){
-        var cuotas=g.meses ? parseInt(g.meses) : 1;
-        consumoCicloAct += g.monto / cuotas;
-      } else {
-        consumoCicloAct += g.monto;
-      }
+      consumoCicloAct += g.monto;
     });
-    
-    // MSI de ciclos anteriores que aún tienen cuotas vigentes para el ciclo actual
+    // MSI con cuota en el próximo corte
     DB.gastos.forEach(function(g){
       if(g.tdc!==tdc || g.msi!=='Si') return;
-      var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha, tdc);
-      // Solo de ciclos pasados (no del actual ni del anterior que ya contamos)
-      if(cicloG===cicloAct || cicloG===cicloAnt) return;
-      
       var cuotas=g.meses ? parseInt(g.meses) : 1;
-      // Calcular cuántos meses han pasado desde la compra
-      // Si aún hay cuotas pendientes, se suma al ciclo actual
-      var mesesDesdeCompra=calcularMesesTranscurridos(g.fecha, hoy.toISOString().split('T')[0]);
-      // La cuota del ciclo actual es mesesDesdeCompra+1 (la siguiente)
-      if(mesesDesdeCompra>=0 && (mesesDesdeCompra+1)<cuotas){
-        consumoCicloAct += g.monto / cuotas;
-      }
+      if(cuotas<=0) return;
+      var fc=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
+      if(isNaN(fc.getTime())) return;
+      var md=(fechaProxCorte.getFullYear()-fc.getFullYear())*12+(fechaProxCorte.getMonth()-fc.getMonth());
+      if(fc.getDate()>diaCorte) md--;
+      if(md>=0 && md<cuotas) consumoCicloAct += g.monto/cuotas;
     });
     
     // Estado
