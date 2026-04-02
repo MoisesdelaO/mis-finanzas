@@ -2992,23 +2992,18 @@ function renderEstadoTDC(){
     // Bloque pago
     var pagarAhoraHtml='';
     
-    // Verificar si el pago se hizo a tiempo
-    var pagoPuntualCiclo=false;
-    if(pagadoCicloAnt>0&&fechaInfo){
-      var primerPagoCiclo=DB.pagosTDC.find(function(p){
-        return p.tdc===tdc&&p.ciclo===cicloAnt;
-      });
-      if(primerPagoCiclo){
-        pagoPuntualCiclo=pagoPuntual(primerPagoCiclo.fecha, fechaInfo.fechaVencimiento);
-      }
-    }
-    
-    // Mostrar alerta SOLO si hay consumo, hay saldo pendiente y NO se pagó a tiempo
-    if(totalAPagar>0&&pendienteHoy>0&&!pagoPuntualCiclo){
-      var colAhora=(fechaInfo.diasFaltan<=3?'var(--coral)':'var(--amber)');
+    // Mostrar bloque de pago pendiente SIEMPRE que haya saldo por pagar
+    if(totalAPagar>0&&pendienteHoy>0){
+      // Color: rojo si vencido o cerca, amber si hay tiempo
+      var vencida=fechaInfo.diasFaltan<0;
+      var colAhora=vencida?'var(--coral)':fechaInfo.diasFaltan<=3?'var(--coral)':'var(--amber)';
       var desglose='';
-      if(adeudo>0){
-        desglose='<div style="font-size:10px;color:var(--text3);margin-top:1px">Consumo: '+fmtK(consumoCicloAnt)+(adeudo>0?' + Adeudo: '+fmtK(adeudo):'')+'</div>';
+      if(consumoMSI>0 || adeudo>0){
+        var parts=[];
+        if(consumoRegulares>0) parts.push('Cargos: '+fmtK(consumoRegulares));
+        if(consumoMSI>0) parts.push('MSI: '+fmtK(consumoMSI));
+        if(adeudo>0) parts.push('Adeudo ant: '+fmtK(adeudo));
+        desglose='<div style="font-size:10px;color:var(--text3);margin-top:1px">'+parts.join(' + ')+'</div>';
       }
       pagarAhoraHtml=
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 10px;background:var(--amberl);border-radius:8px;border:1px solid #EF9F27">'+
