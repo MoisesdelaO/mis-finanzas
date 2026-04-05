@@ -1476,17 +1476,27 @@ function renderGastos(){
   if(_gPage>=totalPags)_gPage=Math.max(0,totalPags-1);
   var page=sorted.slice(_gPage*PER_PAGE,(_gPage+1)*PER_PAGE);
   
-  // Calcular total de gastos filtrados
-  var totalGastos=filtered.reduce(function(s,g){return s+parseFloat(g.monto)||0;},0);
+  // Calcular total de gastos filtrados (cuota para MSI)
+  var totalGastos=filtered.reduce(function(s,g){
+    if(g.msi==='Si' && g.meses && parseInt(g.meses)>0){
+      return s + (g.monto / parseInt(g.meses));
+    }
+    return s+(parseFloat(g.monto)||0);
+  },0);
   
   tbody.innerHTML=page.map(function(g){
+    var montoDisplay=fmt(g.monto);
+    if(g.msi==='Si' && g.meses && parseInt(g.meses)>0){
+      var cuota=g.monto/parseInt(g.meses);
+      montoDisplay='<div>'+fmt(cuota)+'<span style="font-size:9px;color:var(--text3)">/mes</span></div><div style="font-size:10px;color:var(--text3)">Total: '+fmt(g.monto)+'</div>';
+    }
     return '<tr id="grow-'+g.id+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(g.fecha)+'</td>'+
       '<td>'+g.desc+'</td>'+
       '<td><span class="tag tag-purple">'+g.cat+'</span></td>'+
       '<td>'+g.tdc+'</td>'+
       '<td>'+(g.msi==='Si'?'<span class="msi-badge">'+g.meses+'m</span>':'—')+'</td>'+
-      '<td style="text-align:right;font-family:monospace;font-weight:500">'+fmt(g.monto)+'</td>'+
+      '<td style="text-align:right;font-family:monospace;font-weight:500">'+montoDisplay+'</td>'+
       '<td><button onclick="editarGasto('+g.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
       '<td><button onclick="eliminarGasto('+g.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
@@ -2641,7 +2651,13 @@ function renderAnual(){
       var fechaStr=String(g.fecha||'').split('T')[0].split(' ')[0];
       var yr=parseInt(fechaStr.substring(0,4));
       return yr===anioActual;
-    }).reduce((s,g)=>s+g.monto,0):0;
+    }).reduce(function(s,g){
+      // MSI: solo la cuota mensual
+      if(g.msi==='Si' && g.meses && parseInt(g.meses)>0){
+        return s + (g.monto / parseInt(g.meses));
+      }
+      return s+g.monto;
+    },0):0;
     const bal=ing-gas;
     const ahorro=ing>0?Math.round((bal/ing)*100):0;
     
@@ -2896,8 +2912,15 @@ function renderDashboard(){
   const mes=document.getElementById('mes-selector').value;
   const anioSel=new Date().getFullYear();
   
-  // Métricas: usar MES CALENDARIO (no ciclo de corte)
-  // El "resumen del mes" debe reflejar cuánto gastaste/ingresaste ese mes real
+  // Helper: monto real mensual (cuota para MSI, completo para normales)
+  function montoReal(g){
+    if(g.msi==='Si' && g.meses && parseInt(g.meses)>0){
+      return g.monto / parseInt(g.meses);
+    }
+    return g.monto;
+  }
+  
+  // Métricas: usar MES CALENDARIO con cuotas MSI
   const ing=DB.ingresos.filter(function(i){
     if(i.mes!==mes) return false;
     var yr=parseInt(String(i.fecha||'').split('T')[0].split(' ')[0].substring(0,4));
@@ -2908,7 +2931,7 @@ function renderDashboard(){
     if(g.mes!==mes) return false;
     var yr=parseInt(String(g.fecha||'').split('T')[0].split(' ')[0].substring(0,4));
     return yr===anioSel;
-  }).reduce((s,g)=>s+g.monto,0);
+  }).reduce(function(s,g){return s+montoReal(g);},0);
   
   const bal=ing-gas;
   const pat=Object.values(DB.cuentasInv).reduce(function(s,c){return s+saldoProyectado(c);},0);
@@ -2925,12 +2948,12 @@ function renderDashboard(){
   // Alertas TDC
   renderAlertasTDC();
 
-  // Categorías: también por mes calendario
+  // Categorías: también por mes calendario con cuotas MSI
   const catT={};DB.gastos.filter(function(g){
     if(g.mes!==mes) return false;
     var yr=parseInt(String(g.fecha||'').split('T')[0].split(' ')[0].substring(0,4));
     return yr===anioSel;
-  }).forEach(g=>{catT[g.cat]=(catT[g.cat]||0)+g.monto;});
+  }).forEach(function(g){catT[g.cat]=(catT[g.cat]||0)+montoReal(g);});
   // Agregar todas las categorías del presupuesto aunque tengan $0
   DB.config.categorias.forEach(function(cat){
     if(!catT[cat]) catT[cat]=0;
@@ -3135,7 +3158,38 @@ function renderEstadoTDC(){
     }
     
     // Crédito disponible
-    var totalUsado=(pendienteHoy>0?totalAPagar:0)+consumoCicloAct;
+    // El banco bloquea el MONTO TOTAL de MSI pendientes, no la cuota mensual
+    // totalUsado = pendiente del ciclo anterior + gastos regulares ciclo actual + saldo TOTAL MSI pendiente
+    var saldoMSIPendiente=0;
+    var msiActivos=0;
+    DB.gastos.forEach(function(g){
+      if(g.tdc!==tdc || g.msi!=='Si') return;
+      var cuotas=g.meses ? parseInt(g.meses) : 1;
+      if(cuotas<=0) return;
+      var fc=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
+      if(isNaN(fc.getTime())) return;
+      // Cuántas cuotas se han pagado hasta ahora
+      var hoyFecha=new Date();
+      var mesesPagados=
+        (hoyFecha.getFullYear()-fc.getFullYear())*12+(hoyFecha.getMonth()-fc.getMonth());
+      if(fc.getDate()>diaCorte) mesesPagados--;
+      var cuotasRestantes=Math.max(0, cuotas-Math.max(0,mesesPagados));
+      if(cuotasRestantes>0){
+        saldoMSIPendiente += (g.monto/cuotas)*cuotasRestantes;
+        msiActivos++;
+      }
+    });
+    
+    // Gastos regulares del ciclo actual (sin MSI, esos ya se cuentan arriba como saldo total)
+    var regularesActSinMSI=0;
+    DB.gastos.forEach(function(g){
+      if(g.tdc!==tdc || g.msi==='Si') return;
+      var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha, tdc);
+      if(cicloG!==cicloAct) return;
+      regularesActSinMSI += g.monto;
+    });
+    
+    var totalUsado=pendienteHoy+regularesActSinMSI+saldoMSIPendiente;
     var limite=DB.config.limitesTDC[tdc]||0;
     var disponible=limite>0?Math.max(0,limite-totalUsado):0;
     var pctUsado=limite>0?Math.min(totalUsado/limite,1):0;
@@ -3152,10 +3206,13 @@ function renderEstadoTDC(){
         '<div style="font-size:10px;color:var(--text3);margin-top:3px">'+Math.round(pctUsado*100)+'% utilizado</div>'+
       '</div>'
     ):'';
+    
+    // Badge MSI activos
+    var msiBadge=msiActivos>0?'<span style="display:inline-flex;align-items:center;gap:3px;background:var(--purpl);color:var(--purple);font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;margin-left:6px">'+msiActivos+' MSI</span>':'';
 
     return '<div style="padding:9px 0;border-bottom:0.5px solid var(--border)">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">'+
-        '<span style="font-size:13px;font-weight:500">'+tdc+'</span>'+
+        '<span style="font-size:13px;font-weight:500">'+tdc+msiBadge+'</span>'+
         '<span class="tag '+cls+'">'+estado+'</span>'+
       '</div>'+
       cicloInfoHtml+
