@@ -2894,16 +2894,22 @@ function renderPatrimonioChart(){
 
 function renderDashboard(){
   const mes=document.getElementById('mes-selector').value;
-  const ing=DB.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0);
-  // Para métricas generales usamos ciclo: gastos cuyo ciclo cierra en el mes seleccionado
-  // Para tarjetas con corte: usar cicloDeGastoCorrecto; para efectivo: usar mes calendario
+  const anioSel=new Date().getFullYear();
+  
+  // Métricas: usar MES CALENDARIO (no ciclo de corte)
+  // El "resumen del mes" debe reflejar cuánto gastaste/ingresaste ese mes real
+  const ing=DB.ingresos.filter(function(i){
+    if(i.mes!==mes) return false;
+    var yr=parseInt(String(i.fecha||'').split('T')[0].split(' ')[0].substring(0,4));
+    return yr===anioSel;
+  }).reduce((s,i)=>s+i.monto,0);
+  
   const gas=DB.gastos.filter(function(g){
-    if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){
-      var c=g.ciclo||(cicloDeGastoCorrecto(g.fecha,g.tdc));
-      return c===mes+'-'+new Date().getFullYear();
-    }
-    return g.mes===mes;
+    if(g.mes!==mes) return false;
+    var yr=parseInt(String(g.fecha||'').split('T')[0].split(' ')[0].substring(0,4));
+    return yr===anioSel;
   }).reduce((s,g)=>s+g.monto,0);
+  
   const bal=ing-gas;
   const pat=Object.values(DB.cuentasInv).reduce(function(s,c){return s+saldoProyectado(c);},0);
   const rdHoy=Object.values(DB.cuentasInv).reduce((s,c)=>s+rdtoDia(c.saldo,c.tasa),0);
@@ -2919,15 +2925,11 @@ function renderDashboard(){
   // Alertas TDC
   renderAlertasTDC();
 
-  // Categorías
-  const anioSel=new Date().getFullYear();
-  const cicloSel=mes+'-'+anioSel;
+  // Categorías: también por mes calendario
   const catT={};DB.gastos.filter(function(g){
-    if(g.tdc&&g.tdc!=='Efectivo'&&DB.config.cortesTDC[g.tdc]){
-      var c=g.ciclo||(cicloDeGastoCorrecto(g.fecha,g.tdc));
-      return c===cicloSel;
-    }
-    return g.mes===mes;
+    if(g.mes!==mes) return false;
+    var yr=parseInt(String(g.fecha||'').split('T')[0].split(' ')[0].substring(0,4));
+    return yr===anioSel;
   }).forEach(g=>{catT[g.cat]=(catT[g.cat]||0)+g.monto;});
   const sorted=Object.entries(catT).sort((a,b)=>b[1]-a[1]);
   const colors=['var(--teal)','var(--blue)','var(--purple)','var(--amber)','var(--coral)'];
