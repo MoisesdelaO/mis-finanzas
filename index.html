@@ -563,6 +563,13 @@ tr:hover td{background:var(--surface2)}
     </div>
   </div>
   <div class="card"><div class="card-title">Presupuesto mensual</div><div id="cfg-presupuesto"></div></div>
+  
+  <div class="card" style="border-color:var(--purpl)">
+    <div class="card-title" style="color:var(--purple)">Sincronizar configuración</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Sube toda la configuración (cortes, límites, presupuestos, categorías) a Google Sheets para que sea igual en todos tus dispositivos.</p>
+    <button class="btn btn-primary" onclick="pushConfigToSheets();toast('Configuración sincronizada a Sheets ✓')">Subir config a Sheets</button>
+  </div>
+  
   <div class="card" style="border-color:var(--redl)">
     <div class="card-title" style="color:var(--red)">Zona de peligro</div>
     <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Estas acciones afectan todos tus dispositivos al sincronizar con Sheets.</p>
@@ -2583,10 +2590,16 @@ function renderAnual(){
     // Filtrar por año actual para no mezclar datos de otros años
     var cicloAnual=mes+'-'+anioActual;
     const ing=esPresenterOPasado?DB.ingresos.filter(function(i){
-      return i.mes===mes && new Date(i.fecha+'T12:00:00').getFullYear()===anioActual;
+      if(i.mes!==mes) return false;
+      var fechaStr=String(i.fecha||'').split('T')[0].split(' ')[0];
+      var yr=parseInt(fechaStr.substring(0,4));
+      return yr===anioActual;
     }).reduce((s,i)=>s+i.monto,0):0;
     const gas=esPresenterOPasado?DB.gastos.filter(function(g){
-      return g.mes===mes && new Date(g.fecha+'T12:00:00').getFullYear()===anioActual;
+      if(g.mes!==mes) return false;
+      var fechaStr=String(g.fecha||'').split('T')[0].split(' ')[0];
+      var yr=parseInt(fechaStr.substring(0,4));
+      return yr===anioActual;
     }).reduce((s,g)=>s+g.monto,0):0;
     const bal=ing-gas;
     const ahorro=ing>0?Math.round((bal/ing)*100):0;
