@@ -1306,10 +1306,25 @@ async function pushSheets(sheet,row){
 }
 async function syncSheetDelete(sheet,rows){
   if(!DB.config.scriptURL)return;
+  // Validar que hay datos para enviar (protección contra borrado accidental masivo)
+  if(!rows || !Array.isArray(rows)){
+    console.error('syncSheetDelete: rows inválido para '+sheet);
+    return;
+  }
   try{
-    await fetch(DB.config.scriptURL,{method:'POST',body:JSON.stringify({action:'syncSheet',sheet:sheet,rows:rows})});
-    connected=true;setSyncStatus('ok');
-  }catch(e){setSyncStatus('err');}
+    var res=await fetch(DB.config.scriptURL,{method:'POST',body:JSON.stringify({action:'syncSheet',sheet:sheet,rows:rows})});
+    if(res.ok){
+      connected=true;setSyncStatus('ok');
+    } else {
+      console.error('syncSheetDelete error HTTP:',res.status);
+      setSyncStatus('err');
+      toast('Error al sincronizar '+sheet+'. Datos locales guardados.','err');
+    }
+  }catch(e){
+    console.error('syncSheetDelete error:',e);
+    setSyncStatus('err');
+    toast('Sin conexión. Cambios guardados localmente.','err');
+  }
 }
 function guardarURL(){var url=document.getElementById('script-url').value.trim();if(!url){toast('Pega tu URL primero','err');return;}DB.config.scriptURL=url;saveLocal();probarConexion();}
 async function probarConexion(){
@@ -1406,7 +1421,13 @@ function agregarGasto(){
   limpiarGasto();renderGastos();toast('✓ Gasto registrado');
 }
 function limpiarGasto(){['g-fecha','g-monto','g-desc','g-notas'].forEach(id=>document.getElementById(id).value='');['g-cat','g-tdc'].forEach(id=>document.getElementById(id).value='');document.getElementById('g-msi').value='';document.getElementById('msi-meses-field').style.display='none';document.getElementById('g-fecha').value=today();}
-function eliminarGasto(id){DB.gastos=DB.gastos.filter(function(g){return g.id!==id;});save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Eliminado');}
+function eliminarGasto(id){
+  if(!confirm('¿Eliminar este gasto?'))return;
+  var antes=DB.gastos.length;
+  DB.gastos=DB.gastos.filter(function(g){return g.id!==id;});
+  if(DB.gastos.length===antes){toast('No se encontró el gasto','err');return;}
+  save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Gasto eliminado');
+}
 var _gSort={col:'fecha',asc:false};
 var _gPage=0;
 var PER_PAGE=15;
@@ -1579,7 +1600,11 @@ function agregarIngreso(){
   document.getElementById('i-fecha').value=today();['i-monto','i-desc'].forEach(id=>document.getElementById(id).value='');
   renderIngresos();toast('✓ Ingreso registrado');
 }
-function eliminarIngreso(id){DB.ingresos=DB.ingresos.filter(function(i){return i.id!==id;});save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);}
+function eliminarIngreso(id){
+  if(!confirm('¿Eliminar este ingreso?'))return;
+  DB.ingresos=DB.ingresos.filter(function(i){return i.id!==id;});
+  save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);toast('Ingreso eliminado');
+}
 var _iSort={col:'fecha',asc:false};
 var _iPage=0;
 function sortIngresos(col){
@@ -2340,7 +2365,11 @@ function guardarSaldoInversion(nombre,key,val,prev,notas){
   var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);pushCuentasInv();
   toast('Saldo de '+nombre+' actualizado ✓');
 }
-function eliminarInversion(id){DB.inversiones=DB.inversiones.filter(function(i){return i.id!==id;});save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);}
+function eliminarInversion(id){
+  if(!confirm('¿Eliminar este registro de inversión?'))return;
+  DB.inversiones=DB.inversiones.filter(function(i){return i.id!==id;});
+  save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);toast('Registro eliminado');
+}
 
 // ══════════════════════════════════════════════════════════
 // PAGOS TDC
@@ -2431,7 +2460,11 @@ function agregarPagoTDC(){
   renderDashboard();
   toast('Pago de '+tdc+' registrado ✓ ('+ciclo+')');
 }
-function eliminarPagoTDC(id){DB.pagosTDC=DB.pagosTDC.filter(function(p){return p.id!==id;});save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);}
+function eliminarPagoTDC(id){
+  if(!confirm('¿Eliminar este pago?'))return;
+  DB.pagosTDC=DB.pagosTDC.filter(function(p){return p.id!==id;});
+  save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);toast('Pago eliminado');
+}
 function editarPagoTDC(id){
   var p=DB.pagosTDC.find(function(x){return x.id===id;});
   if(!p)return;
@@ -2502,7 +2535,11 @@ function agregarMeta(){
   renderMetas();toast('Meta agregada ✓');
 }
 function actualizarMeta(id,val){const m=DB.metas.find(m=>m.id===id);if(m){m.actual=parseFloat(val)||0;save();}}
-function eliminarMeta(id){DB.metas=DB.metas.filter(function(m){return m.id!==id;});save();renderMetas();syncSheetDelete('Metas',DB.metas);}
+function eliminarMeta(id){
+  if(!confirm('¿Eliminar esta meta?'))return;
+  DB.metas=DB.metas.filter(function(m){return m.id!==id;});
+  save();renderMetas();syncSheetDelete('Metas',DB.metas);toast('Meta eliminada');
+}
 function renderMetas(){
   const c=document.getElementById('metas-list');
   if(!DB.metas.length){c.innerHTML='<div class="card" style="text-align:center;color:var(--text3);padding:32px">Sin metas aún</div>';return;}
@@ -2524,7 +2561,11 @@ function agregarRecurrente(){
   ['r-desc','r-monto','r-dia'].forEach(id=>document.getElementById(id).value='');
   renderRecurrentes();toast('Gasto recurrente agregado ✓');
 }
-function eliminarRecurrente(id){DB.recurrentes=DB.recurrentes.filter(function(r){return r.id!==id;});save();renderRecurrentes();syncSheetDelete('Recurrentes',DB.recurrentes);}
+function eliminarRecurrente(id){
+  if(!confirm('¿Eliminar este gasto recurrente?'))return;
+  DB.recurrentes=DB.recurrentes.filter(function(r){return r.id!==id;});
+  save();renderRecurrentes();syncSheetDelete('Recurrentes',DB.recurrentes);toast('Recurrente eliminado');
+}
 function registrarRecurrente(id){
   const r=DB.recurrentes.find(r=>r.id===id);if(!r)return;
   const hoyStr=today();
