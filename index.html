@@ -2931,12 +2931,16 @@ function renderDashboard(){
     var yr=parseInt(String(g.fecha||'').split('T')[0].split(' ')[0].substring(0,4));
     return yr===anioSel;
   }).forEach(g=>{catT[g.cat]=(catT[g.cat]||0)+g.monto;});
+  // Agregar todas las categorías del presupuesto aunque tengan $0
+  DB.config.categorias.forEach(function(cat){
+    if(!catT[cat]) catT[cat]=0;
+  });
   const sorted=Object.entries(catT).sort((a,b)=>b[1]-a[1]);
   const colors=['var(--teal)','var(--blue)','var(--purple)','var(--amber)','var(--coral)'];
-  document.getElementById('dash-cats').innerHTML=sorted.length?sorted.map(([cat,total],i)=>{
+  document.getElementById('dash-cats').innerHTML=sorted.map(([cat,total],i)=>{
     const lim=DB.config.presupuesto[cat]||0,p=lim>0?Math.min(total/lim,1):0,over=lim>0&&total>lim;
-    const color=over?'var(--coral)':colors[i%colors.length];
-    return `<div class="progress-row"><span class="progress-label">${cat}</span><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(p*100)}%;background:${color}"></div></div><span class="progress-amounts">${fmtK(total)}${lim?'/'+fmtK(lim):''}</span></div>`;}).join(''):'<div style="text-align:center;color:var(--text3);padding:20px;font-size:13px">Sin gastos este mes</div>';
+    const color=total===0?'var(--border)':over?'var(--coral)':colors[i%colors.length];
+    return `<div class="progress-row"><span class="progress-label">${cat}</span><div class="bar-wrap"><div class="bar-fill" style="width:${total===0?'0':Math.max(Math.round(p*100),1)}%;background:${color}"></div></div><span class="progress-amounts">${total>0?fmtK(total):'$0'}${lim?'/'+fmtK(lim):''}</span></div>`;}).join('');
 
   // TDC — RENDERIZADO INDEPENDIENTE DEL SELECTOR DE MES
   // Siempre muestra datos actuales en tiempo real, sin filtro de mes.
