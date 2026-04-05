@@ -2633,7 +2633,7 @@ function renderAnual(){
     {label:'Ingresos YTD',value:fmtK(totalIng),sub:'Acumulado del año',color:'var(--teal)'},
     {label:'Gastos YTD',value:fmtK(totalGas),sub:'Acumulado del año',color:'var(--coral)'},
     {label:'Balance YTD',value:fmtK(totalIng-totalGas),sub:totalIng>0?Math.round(((totalIng-totalGas)/totalIng)*100)+'% de ahorro':'—',color:totalIng-totalGas>=0?'var(--teal)':'var(--coral)'},
-    {label:'Patrimonio actual',value:fmtK(Object.values(DB.cuentasInv).reduce((s,c)=>s+c.saldo,0)),sub:'Total en inversiones',color:'var(--blue)'},
+    {label:'Patrimonio actual',value:fmtK(Object.values(DB.cuentasInv).reduce((s,c)=>s+saldoProyectado(c),0)),sub:'Total en inversiones',color:'var(--blue)'},
   ].map(m=>`<div class="metric"><div class="metric-label">${m.label}</div><div class="metric-value" style="color:${m.color}">${m.value}</div><div class="metric-sub">${m.sub}</div></div>`).join('');
 }
 
