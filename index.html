@@ -710,6 +710,17 @@ async function pullFromSheets(){
           DB.cuentasInv[n].tramos=data.cuentasInv[n].tramos;
       });
     }
+    // Update config from Sheets (cortes, límites, presupuesto, etc.)
+    if(data.appConfig&&typeof data.appConfig==='object'){
+      var sc=data.appConfig;
+      if(sc.cortesTDC) DB.config.cortesTDC={...DB.config.cortesTDC,...sc.cortesTDC};
+      if(sc.limitesTDC) DB.config.limitesTDC={...DB.config.limitesTDC,...sc.limitesTDC};
+      if(sc.adeudosPendientes) DB.config.adeudosPendientes={...DB.config.adeudosPendientes,...sc.adeudosPendientes};
+      if(sc.presupuesto) DB.config.presupuesto={...DB.config.presupuesto,...sc.presupuesto};
+      if(sc.categorias&&sc.categorias.length) DB.config.categorias=sc.categorias;
+      if(sc.tdcs&&sc.tdcs.length) DB.config.tdcs=sc.tdcs;
+      if(sc.cuentas&&sc.cuentas.length) DB.config.cuentas=sc.cuentas;
+    }
     save();
     return true;
   }catch(e){
@@ -726,6 +737,28 @@ async function pushCuentasInv(){
       body:JSON.stringify({action:'syncCuentasInv',cuentas:DB.cuentasInv})
     });
   }catch(e){}
+}
+
+// ═══ SYNC CONFIG A SHEETS ═══
+// Sincroniza toda la configuración (cortes, límites, presupuesto, adeudos, categorías, etc.)
+// para que sea igual en todos los dispositivos
+async function pushConfigToSheets(){
+  if(!DB.config.scriptURL)return;
+  try{
+    var configToSync={
+      cortesTDC:DB.config.cortesTDC,
+      limitesTDC:DB.config.limitesTDC,
+      adeudosPendientes:DB.config.adeudosPendientes,
+      presupuesto:DB.config.presupuesto,
+      categorias:DB.config.categorias,
+      tdcs:DB.config.tdcs,
+      cuentas:DB.config.cuentas
+    };
+    await fetch(DB.config.scriptURL,{
+      method:'POST',
+      body:JSON.stringify({action:'syncConfig',config:configToSync})
+    });
+  }catch(e){console.error('Error syncing config:',e);}
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2608,19 +2641,19 @@ function renderConfig(){
   document.getElementById('cfg-presupuesto').innerHTML=DB.config.categorias.map(cat=>`<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:0.5px solid var(--border)"><span style="font-size:12px;font-weight:500;flex:1">${cat}</span><input type="number" value="${DB.config.presupuesto[cat]||0}" onchange="updatePresupuesto('${cat}',this.value)" style="width:110px;padding:6px 10px;border:1px solid var(--border2);border-radius:6px;font-family:monospace;font-size:12px;text-align:right"></div>`).join('');
   poblarSelects();
 }
-function updateCorte(tdc,field,val){if(!DB.config.cortesTDC[tdc])DB.config.cortesTDC[tdc]={};DB.config.cortesTDC[tdc][field]=parseInt(val)||0;save();}
-function updateLimiteTDC(tdc,val){if(!DB.config.limitesTDC)DB.config.limitesTDC={};DB.config.limitesTDC[tdc]=parseFloat(val)||0;save();}
-function updatePresupuesto(cat,val){DB.config.presupuesto[cat]=parseFloat(val)||0;save();}
-function agregarCat(){const v=document.getElementById('new-cat').value.trim();if(v&&!DB.config.categorias.includes(v)){DB.config.categorias.push(v);DB.config.presupuesto[v]=0;save();renderConfig();document.getElementById('new-cat').value='';}}
-function quitarCat(i){DB.config.categorias.splice(i,1);save();renderConfig();}
-function agregarTDC(){const v=document.getElementById('new-tdc').value.trim();if(v&&!DB.config.tdcs.includes(v)){DB.config.tdcs.push(v);save();renderConfig();document.getElementById('new-tdc').value='';}}
-function quitarTDC(i){DB.config.tdcs.splice(i,1);save();renderConfig();}
-function agregarCuenta(){var v=document.getElementById('new-cta').value.trim();if(v&&!DB.config.cuentas.includes(v)){DB.config.cuentas.push(v);if(!DB.cuentasInv[v])DB.cuentasInv[v]={saldo:0,ultimaAct:'',tramos:[{limite:null,tasa:0}]};save();renderConfig();document.getElementById('new-cta').value='';}}
+function updateCorte(tdc,field,val){if(!DB.config.cortesTDC[tdc])DB.config.cortesTDC[tdc]={};DB.config.cortesTDC[tdc][field]=parseInt(val)||0;save();pushConfigToSheets();}
+function updateLimiteTDC(tdc,val){if(!DB.config.limitesTDC)DB.config.limitesTDC={};DB.config.limitesTDC[tdc]=parseFloat(val)||0;save();pushConfigToSheets();}
+function updatePresupuesto(cat,val){DB.config.presupuesto[cat]=parseFloat(val)||0;save();pushConfigToSheets();}
+function agregarCat(){const v=document.getElementById('new-cat').value.trim();if(v&&!DB.config.categorias.includes(v)){DB.config.categorias.push(v);DB.config.presupuesto[v]=0;save();pushConfigToSheets();renderConfig();document.getElementById('new-cat').value='';}}
+function quitarCat(i){DB.config.categorias.splice(i,1);save();pushConfigToSheets();renderConfig();}
+function agregarTDC(){const v=document.getElementById('new-tdc').value.trim();if(v&&!DB.config.tdcs.includes(v)){DB.config.tdcs.push(v);save();pushConfigToSheets();renderConfig();document.getElementById('new-tdc').value='';}}
+function quitarTDC(i){DB.config.tdcs.splice(i,1);save();pushConfigToSheets();renderConfig();}
+function agregarCuenta(){var v=document.getElementById('new-cta').value.trim();if(v&&!DB.config.cuentas.includes(v)){DB.config.cuentas.push(v);if(!DB.cuentasInv[v])DB.cuentasInv[v]={saldo:0,ultimaAct:'',tramos:[{limite:null,tasa:0}]};save();pushConfigToSheets();renderConfig();document.getElementById('new-cta').value='';}}
 function quitarCuenta(i){
   var nombre=DB.config.cuentas[i];
   DB.config.cuentas.splice(i,1);
   if(nombre&&DB.cuentasInv[nombre]) delete DB.cuentasInv[nombre];
-  save();renderConfig();
+  save();pushConfigToSheets();renderConfig();
   if(document.getElementById('acc-cards')) renderInversiones();
 }
 function poblarSelects(){
