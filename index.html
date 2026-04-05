@@ -2894,10 +2894,10 @@ function renderPatrimonioChart(){
         }
       },
       scales:{
-        x:{grid:{display:false},ticks:{font:{size:10,family:'sans-serif'},color:'#a8a59e'},border:{display:false}},
+        x:{grid:{display:false},ticks:{display:false},border:{display:false}},
         y:{min:minVal,max:maxVal,
           grid:{color:'rgba(0,0,0,0.04)',drawTicks:false},
-          ticks:{font:{size:10,family:'monospace'},color:'#a8a59e',callback:function(v){return fmtPat(v);},maxTicksLimit:4,padding:6},
+          ticks:{display:false},
           border:{display:false}
         }
       }
@@ -3102,8 +3102,8 @@ function renderEstadoTDC(){
       fechaHtml='<div style="font-size:11px;color:'+urgColor+';margin-top:2px;font-weight:500">'+fechaInfo.label+'</div>';
     }
     
-    // Info del ciclo: mostrar rango de fechas del corte
-    var cicloInfoHtml='<div style="font-size:10px;color:var(--text3);margin-top:1px">Ciclo '+cicloAnt+' · Corte día '+cfg.corte+'</div>';
+    // Info del corte (sin mostrar nombre de ciclo para no confundir)
+    var cicloInfoHtml='<div style="font-size:10px;color:var(--text3);margin-top:1px">Corte día '+cfg.corte+'</div>';
     
     // Bloque pago
     var pagarAhoraHtml='';
