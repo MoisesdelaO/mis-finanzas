@@ -1416,8 +1416,9 @@ function agregarGasto(){
 function limpiarGasto(){['g-fecha','g-monto','g-desc','g-notas'].forEach(id=>document.getElementById(id).value='');['g-cat','g-tdc'].forEach(id=>document.getElementById(id).value='');document.getElementById('g-msi').value='';document.getElementById('msi-meses-field').style.display='none';document.getElementById('g-fecha').value=today();}
 function eliminarGasto(id){
   if(!confirm('¿Eliminar este gasto?'))return;
+  var idStr=String(id);
   var antes=DB.gastos.length;
-  DB.gastos=DB.gastos.filter(function(g){return g.id!==id;});
+  DB.gastos=DB.gastos.filter(function(g){return String(g.id)!==idStr;});
   if(DB.gastos.length===antes){toast('No se encontró el gasto','err');return;}
   save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Gasto eliminado');
 }
@@ -1535,7 +1536,8 @@ function paginarGastos(dir){
   renderGastos();
 }
 function editarGasto(id){
-  var g=DB.gastos.find(function(x){return x.id===id;});
+  var idStr=String(id);
+  var g=DB.gastos.find(function(x){return String(x.id)===idStr;});
   if(!g)return;
   var cats=DB.config.categorias.map(function(c){return '<option'+(c===g.cat?' selected':'')+'>'+c+'</option>';}).join('');
   var tdcs=DB.config.tdcs.map(function(t){return '<option'+(t===g.tdc?' selected':'')+'>'+t+'</option>';}).join('');
@@ -1561,7 +1563,8 @@ function editarGasto(id){
   '</td>';
 }
 function guardarGasto(id){
-  var g=DB.gastos.find(function(x){return x.id===id;});
+  var idStr=String(id);
+  var g=DB.gastos.find(function(x){return String(x.id)===idStr;});
   if(!g)return;
   var fecha=document.getElementById('eg-fecha-'+id).value;
   var monto=parseFloat(document.getElementById('eg-monto-'+id).value);
@@ -1603,9 +1606,9 @@ function agregarIngreso(){
   document.getElementById('i-fecha').value=today();['i-monto','i-desc'].forEach(id=>document.getElementById(id).value='');
   renderIngresos();toast('✓ Ingreso registrado');
 }
-function eliminarIngreso(id){
+function eliminarIngreso(id){var idStr=String(id);
   if(!confirm('¿Eliminar este ingreso?'))return;
-  DB.ingresos=DB.ingresos.filter(function(i){return i.id!==id;});
+  DB.ingresos=DB.ingresos.filter(function(i){return String(i.id)!==idStr;});
   save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);toast('Ingreso eliminado');
 }
 var _iSort={col:'fecha',asc:false};
@@ -1852,7 +1855,7 @@ function miniChart(nombre,saldo,tasa,key,registros){
 }
 
 function editarInversion(id){
-  var inv=DB.inversiones.find(function(x){return x.id===id;});
+  var idStr=String(id);var inv=DB.inversiones.find(function(x){return String(x.id)===idStr;});
   if(!inv)return;
   var cuentaOpts=DB.config.cuentas.map(function(c){return '<option'+(c===inv.cuenta?' selected':'')+'>'+c+'</option>';}).join('');
   var row=document.getElementById('invrow-'+id);
@@ -1872,7 +1875,7 @@ function editarInversion(id){
   '</td>';
 }
 function guardarInversion(id){
-  var inv=DB.inversiones.find(function(x){return x.id===id;});
+  var idStr=String(id);var inv=DB.inversiones.find(function(x){return String(x.id)===idStr;});
   if(!inv)return;
   var per=document.getElementById('einv-per-'+id).value;
   var cta=document.getElementById('einv-cta-'+id).value;
@@ -2368,9 +2371,9 @@ function guardarSaldoInversion(nombre,key,val,prev,notas){
   var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);pushCuentasInv();
   toast('Saldo de '+nombre+' actualizado ✓');
 }
-function eliminarInversion(id){
+function eliminarInversion(id){var idStr=String(id);
   if(!confirm('¿Eliminar este registro de inversión?'))return;
-  DB.inversiones=DB.inversiones.filter(function(i){return i.id!==id;});
+  DB.inversiones=DB.inversiones.filter(function(i){return String(i.id)!==idStr;});
   save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);toast('Registro eliminado');
 }
 
@@ -2463,13 +2466,13 @@ function agregarPagoTDC(){
   renderDashboard();
   toast('Pago de '+tdc+' registrado ✓ ('+ciclo+')');
 }
-function eliminarPagoTDC(id){
+function eliminarPagoTDC(id){var idStr=String(id);
   if(!confirm('¿Eliminar este pago?'))return;
-  DB.pagosTDC=DB.pagosTDC.filter(function(p){return p.id!==id;});
+  DB.pagosTDC=DB.pagosTDC.filter(function(p){return String(p.id)!==idStr;});
   save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);toast('Pago eliminado');
 }
 function editarPagoTDC(id){
-  var p=DB.pagosTDC.find(function(x){return x.id===id;});
+  var idStr=String(id);var p=DB.pagosTDC.find(function(x){return String(x.id)===idStr;});
   if(!p)return;
   var tdcOpts=DB.config.tdcs.filter(function(t){return t!=='Efectivo';}).map(function(t){return '<option'+(t===p.tdc?' selected':'')+'>'+t+'</option>';}).join('');
   var cicloDisplay=p.ciclo||'Desconocido';
@@ -2489,7 +2492,7 @@ function editarPagoTDC(id){
   '</td>';
 }
 function guardarPagoTDC(id){
-  var p=DB.pagosTDC.find(function(x){return x.id===id;});
+  var idStr=String(id);var p=DB.pagosTDC.find(function(x){return String(x.id)===idStr;});
   if(!p)return;
   var fecha=document.getElementById('et-fecha-'+id).value;
   var tdc=document.getElementById('et-tdc-'+id).value;
@@ -2538,9 +2541,9 @@ function agregarMeta(){
   renderMetas();toast('Meta agregada ✓');
 }
 function actualizarMeta(id,val){const m=DB.metas.find(m=>m.id===id);if(m){m.actual=parseFloat(val)||0;save();}}
-function eliminarMeta(id){
+function eliminarMeta(id){var idStr=String(id);
   if(!confirm('¿Eliminar esta meta?'))return;
-  DB.metas=DB.metas.filter(function(m){return m.id!==id;});
+  DB.metas=DB.metas.filter(function(m){return String(m.id)!==idStr;});
   save();renderMetas();syncSheetDelete('Metas',DB.metas);toast('Meta eliminada');
 }
 function renderMetas(){
@@ -2564,9 +2567,9 @@ function agregarRecurrente(){
   ['r-desc','r-monto','r-dia'].forEach(id=>document.getElementById(id).value='');
   renderRecurrentes();toast('Gasto recurrente agregado ✓');
 }
-function eliminarRecurrente(id){
+function eliminarRecurrente(id){var idStr=String(id);
   if(!confirm('¿Eliminar este gasto recurrente?'))return;
-  DB.recurrentes=DB.recurrentes.filter(function(r){return r.id!==id;});
+  DB.recurrentes=DB.recurrentes.filter(function(r){return String(r.id)!==idStr;});
   save();renderRecurrentes();syncSheetDelete('Recurrentes',DB.recurrentes);toast('Recurrente eliminado');
 }
 function registrarRecurrente(id){
