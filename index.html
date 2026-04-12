@@ -3069,11 +3069,12 @@ function renderEstadoTDC(){
     // Si está pagada: mostrar "Pagado ✓" solo los primeros 3 días después del último pago
     var fechaHtml='';
     if(estado==='Pagada'){
-      // Encontrar el último pago de este ciclo
+      // 🔧 ARREGLO: Buscar el pago MÁS RECIENTE de CUALQUIER ciclo (no solo cicloAnt)
+      // Esto maneja casos donde el ciclo no fue asignado correctamente
       var ultimoPago=null;
       DB.pagosTDC.forEach(function(p){
-        if(p.tdc===tdc && p.ciclo===cicloAnt){
-          if(!ultimoPago || p.fecha>ultimoPago.fecha) ultimoPago=p;
+        if(p.tdc===tdc){
+          if(!ultimoPago || new Date(p.fecha) > new Date(ultimoPago.fecha)) ultimoPago=p;
         }
       });
       if(ultimoPago){
@@ -3082,18 +3083,22 @@ function renderEstadoTDC(){
         var pagoNorm=new Date(fechaUltPago.getFullYear(), fechaUltPago.getMonth(), fechaUltPago.getDate());
         var diasDesdePago=Math.round((hoyNorm-pagoNorm)/(24*60*60*1000));
         
-        if(diasDesdePago<=3){
-          // Mostrar "Pagado ✓" solo los primeros 3 días
+        if(diasDesdePago<=2){
+          // ✅ Mostrar "Pagado ✓" solo los primeros 2 días (verde brillante)
           estado='Pagada';
           cls='tag-green';
+        } else if(diasDesdePago<=3){
+          // Día 3: transición a "Al corriente" (azul)
+          estado='Al corriente';
+          cls='tag-blue';
         } else {
           // Después de 3 días, mostrar como "Sin pendientes" discretamente
           estado='Al corriente';
           cls='tag-blue';
         }
       }
-    } else if(estado!=='Sin consumo'){
-      // Solo mostrar fecha de vencimiento si NO está pagada
+    } else if(pendienteHoy>0 && estado!=='Sin consumo'){
+      // Solo mostrar fecha de vencimiento si HAY saldo pendiente
       var urgColor=fechaInfo.diasFaltan<=3?'var(--coral)':fechaInfo.diasFaltan<=7?'var(--amber)':'var(--teal)';
       fechaHtml='<div style="font-size:11px;color:'+urgColor+';margin-top:2px;font-weight:500">'+fechaInfo.label+'</div>';
     }
