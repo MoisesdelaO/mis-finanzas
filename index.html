@@ -574,6 +574,7 @@ tr:hover td{background:var(--surface2)}
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════
 // ESTADO
@@ -937,25 +938,19 @@ function pagoPuntual(fechaPago, fechaVencimiento){
 // Dado una fecha y TDC, retorna el ciclo al que pertenece ese gasto
 // Ej: "Mar-2026" si el corte es día 10 y la fecha es 15-feb-2026
 // (porque 15-feb cae entre corte 11-feb y corte 10-mar)
+// ═══ cicloDeGasto: alias de cicloDeGastoCorrecto (función unificada v3.0) ═══
 function cicloDeGasto(fechaStr, tdc){
-  if(!fechaStr)return null;
+  // Si la TDC tiene config de corte, usar la función correcta
   var cfg=DB.config.cortesTDC[tdc];
-  var diaCorte=cfg&&cfg.corte?parseInt(cfg.corte):1;
-  // Limpiar fecha: tomar solo la parte YYYY-MM-DD sin importar el formato
+  if(cfg && cfg.corte) return cicloDeGastoCorrecto(fechaStr, tdc);
+  // Fallback para gastos sin TDC o en efectivo
+  if(!fechaStr) return null;
   var fechaLimpia=String(fechaStr).split('T')[0].trim();
-  // Si viene como DD/MM/YYYY convertir
   if(fechaLimpia.match(/^\d{2}\/\d{2}\/\d{4}$/)){
     var p=fechaLimpia.split('/');fechaLimpia=p[2]+'-'+p[1]+'-'+p[0];
   }
   var fecha=new Date(fechaLimpia+'T12:00:00');
-  var d=fecha.getDate(), m=fecha.getMonth(), y=fecha.getFullYear();
-  // Si el día es <= diaCorte, pertenece al ciclo que CIERRA este mes
-  // Si el día >  diaCorte, pertenece al ciclo que cierra el MES SIGUIENTE
-  var cierraM, cierraY;
-  if(d<=diaCorte){ cierraM=m; cierraY=y; }
-  else{ cierraM=m+1; cierraY=y; if(cierraM>11){cierraM=0;cierraY++;} }
-  var nombreMes=MESES[cierraM];
-  return nombreMes+'-'+cierraY;
+  return MESES[fecha.getMonth()]+'-'+fecha.getFullYear();
 }
 // Retorna el ciclo actual de una TDC (el que cierra en el próximo corte)
 
@@ -3341,12 +3336,9 @@ document.getElementById('t-fecha').value=today();
 })();
 poblarSelects();
 renderDashboard();
-if(DB.config.scriptURL)setSyncStatus('ok');
+// Nota: el sync status ya se maneja dentro del pullFromSheets().then()
+// No forzar 'ok' aquí porque el pull puede seguir en curso o haber fallado
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js">
-</script>
-
-
 
 </body>
 
