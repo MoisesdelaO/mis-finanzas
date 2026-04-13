@@ -3112,14 +3112,23 @@ function renderEstadoTDC(){
         if(adeudo>0) parts.push('Adeudo ant: '+fmtK(adeudo));
         desglose='<div style="font-size:10px;color:var(--text3);margin-top:1px">'+parts.join(' + ')+'</div>';
       }
+      // Línea de detalle: Total edo. cuenta → Abonado → Pendiente
+      var detallePagoHtml='<div style="display:flex;gap:12px;margin-top:4px;font-size:10px;font-family:monospace">';
+      detallePagoHtml+='<div style="color:var(--text2)"><span style="font-weight:400">Total: </span><span style="font-weight:600">'+fmtK(totalAPagar)+'</span></div>';
+      if(pagadoCicloAnt>0){
+        detallePagoHtml+='<div style="color:var(--teal)"><span style="font-weight:400">Abonado: </span><span style="font-weight:600">'+fmtK(pagadoCicloAnt)+'</span></div>';
+      }
+      detallePagoHtml+='</div>';
       pagarAhoraHtml=
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 10px;background:var(--amberl);border-radius:8px;border:1px solid #EF9F27">'+
-          '<div>'+
-            '<div style="font-size:10px;font-weight:600;color:'+colAhora+'">Pagar antes del '+fechaInfo.diaPago+' '+fechaInfo.mesPago+'</div>'+
-            desglose+
-            (pagadoCicloAnt>0?'<div style="font-size:10px;color:var(--text3);margin-top:1px">Abonado: '+fmtK(pagadoCicloAnt)+'</div>':'')+
+        '<div style="margin-top:6px;padding:8px 10px;background:var(--amberl);border-radius:8px;border:1px solid #EF9F27">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center">'+
+            '<div>'+
+              '<div style="font-size:10px;font-weight:600;color:'+colAhora+'">Pagar antes del '+fechaInfo.diaPago+' '+fechaInfo.mesPago+'</div>'+
+              desglose+
+            '</div>'+
+            '<span style="font-size:15px;font-weight:600;font-family:monospace;color:'+colAhora+'">'+fmtK(pendienteHoy)+'</span>'+
           '</div>'+
-          '<span style="font-size:15px;font-weight:600;font-family:monospace;color:'+colAhora+'">'+fmtK(pendienteHoy)+'</span>'+
+          detallePagoHtml+
         '</div>';
     } else if(totalAPagar>0&&pendienteHoy===0){
       // Mostrar "Pagado ✓" solo si estado sigue siendo 'Pagada' (dentro de los 3 días)
