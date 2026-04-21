@@ -661,6 +661,8 @@ function load(){
   }
 }
 
+// Helper: normalizar IDs de Sheets (notación científica "1.77E+12")
+function normalizeId(v){if(!v&&v!==0)return Date.now();if(typeof v==='number')return v;var n=parseFloat(v);return isNaN(n)?Date.now():Math.round(n);}
 // ── SHEETS SYNC: full bidirectional ──
 async function pullFromSheets(){
   // ✅ Si no hay scriptURL válida, salir silenciosamente
@@ -691,16 +693,16 @@ async function pullFromSheets(){
       if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){
         var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];
       }
-      return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas};
+      return{id:normalizeId(r.id),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas};
     });
-    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),fecha:r.fecha,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};});
+    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){return{id:normalizeId(r.id),fecha:r.fecha,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};});
     if(data.inversiones)DB.inversiones=data.inversiones.map(function(r){
       var per=r.periodo?String(r.periodo).split('T')[0]:r.periodo;
-      return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
+      return{id:normalizeId(r.id),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
     });
-    if(data.pagosTDC)DB.pagosTDC=data.pagosTDC.map(function(r){return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),fecha:r.fecha,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas};});
-    if(data.metas)DB.metas=data.metas.map(function(r){return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),nombre:r.nombre,objetivo:parseFloat(r.objetivo)||0,fecha:r.fecha,actual:parseFloat(r.actual)||0,notas:r.notas};});
-    if(data.recurrentes)DB.recurrentes=data.recurrentes.map(function(r){return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
+    if(data.pagosTDC)DB.pagosTDC=data.pagosTDC.map(function(r){return{id:normalizeId(r.id),fecha:r.fecha,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas};});
+    if(data.metas)DB.metas=data.metas.map(function(r){return{id:normalizeId(r.id),nombre:r.nombre,objetivo:parseFloat(r.objetivo)||0,fecha:r.fecha,actual:parseFloat(r.actual)||0,notas:r.notas};});
+    if(data.recurrentes)DB.recurrentes=data.recurrentes.map(function(r){return{id:normalizeId(r.id),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
     // Update cuentasInv if available
     if(data.cuentasInv&&Object.keys(data.cuentasInv).length>0){
       Object.keys(data.cuentasInv).forEach(function(n){
@@ -1345,10 +1347,7 @@ async function syncSheetDelete(sheet,rows){
     console.error('syncSheetDelete: rows inválido para '+sheet);
     return;
   }
-  if(rows.length===0){
-    console.warn('syncSheetDelete: BLOQUEADO - array vacío para '+sheet+'. No se envía a Sheets.');
-    return;
-  }
+  if(rows.length===0){console.warn('syncSheetDelete BLOQUEADO: vacío '+sheet);return;}
   try{
     var res=await fetch(DB.config.scriptURL,{method:'POST',body:JSON.stringify({action:'syncSheet',sheet:sheet,rows:rows})});
     if(res.ok){
@@ -1459,15 +1458,17 @@ function agregarGasto(){
   limpiarGasto();renderGastos();toast('✓ Gasto registrado');
 }
 function limpiarGasto(){['g-fecha','g-monto','g-desc','g-notas'].forEach(id=>document.getElementById(id).value='');['g-cat','g-tdc'].forEach(id=>document.getElementById(id).value='');document.getElementById('g-msi').value='';document.getElementById('msi-meses-field').style.display='none';document.getElementById('g-fecha').value=today();}
-function eliminarGasto(id){
+function eliminarGasto(idx){
   if(!confirm('¿Eliminar este gasto?'))return;
-  var idStr=String(id);
-  var antes=DB.gastos.length;
-  DB.gastos=DB.gastos.filter(function(g){return String(g.id)!==idStr;});
-  if(DB.gastos.length===antes){toast('No se encontró el gasto','err');return;}
-  save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Gasto eliminado');
+  if(!_lastGastosRender||idx<0||idx>=_lastGastosRender.length){toast('Error: índice inválido','err');return;}
+  var target=_lastGastosRender[idx];
+  var pos=DB.gastos.indexOf(target);
+  if(pos===-1){toast('No se encontró el gasto en DB','err');return;}
+  DB.gastos.splice(pos,1);
+  save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Gasto eliminado ✓');
 }
 var _gSort={col:'fecha',asc:false};
+var _lastGastosRender=[];
 var _gPage=0;
 var PER_PAGE=15;
 function sortGastos(col){
@@ -1514,7 +1515,7 @@ function renderGastos(){
   var totalPags=Math.ceil(total/PER_PAGE);
   if(_gPage>=totalPags)_gPage=Math.max(0,totalPags-1);
   var page=sorted.slice(_gPage*PER_PAGE,(_gPage+1)*PER_PAGE);
-  
+  _lastGastosRender=page;
   // Calcular total de gastos filtrados (cuota para MSI)
   var totalGastos=filtered.reduce(function(s,g){
     if(g.msi==='Si' && g.meses && parseInt(g.meses)>0){
@@ -1523,21 +1524,21 @@ function renderGastos(){
     return s+(parseFloat(g.monto)||0);
   },0);
   
-  tbody.innerHTML=page.map(function(g){
+  tbody.innerHTML=page.map(function(g,_gi){
     var montoDisplay=fmt(g.monto);
     if(g.msi==='Si' && g.meses && parseInt(g.meses)>0){
       var cuota=g.monto/parseInt(g.meses);
       montoDisplay='<div>'+fmt(cuota)+'<span style="font-size:9px;color:var(--text3)">/mes</span></div><div style="font-size:10px;color:var(--text3)">Total: '+fmt(g.monto)+'</div>';
     }
-    return '<tr id="grow-'+g.id+'">'+
+    return '<tr id="grow-'+_gi+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(g.fecha)+'</td>'+
       '<td>'+g.desc+'</td>'+
       '<td><span class="tag tag-purple">'+g.cat+'</span></td>'+
       '<td>'+g.tdc+'</td>'+
       '<td>'+(g.msi==='Si'?'<span class="msi-badge">'+g.meses+'m</span>':'—')+'</td>'+
       '<td style="text-align:right;font-family:monospace;font-weight:500">'+montoDisplay+'</td>'+
-      '<td><button onclick="editarGasto('+g.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
-      '<td><button onclick="eliminarGasto('+g.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
+      '<td><button onclick="editarGasto('+_gi+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
+      '<td><button onclick="eliminarGasto('+_gi+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
   }).join('');
   
@@ -1580,44 +1581,42 @@ function paginarGastos(dir){
   _gPage=Math.max(0,Math.min(_gPage+dir,totalPags-1));
   renderGastos();
 }
-function editarGasto(id){
-  var idStr=String(id);
-  var g=DB.gastos.find(function(x){return String(x.id)===idStr;});
-  if(!g)return;
+function editarGasto(idx){
+  if(!_lastGastosRender||idx<0||idx>=_lastGastosRender.length)return;
+  var g=_lastGastosRender[idx];
   var cats=DB.config.categorias.map(function(c){return '<option'+(c===g.cat?' selected':'')+'>'+c+'</option>';}).join('');
   var tdcs=DB.config.tdcs.map(function(t){return '<option'+(t===g.tdc?' selected':'')+'>'+t+'</option>';}).join('');
   var msiOpts=['','Si'].map(function(v){return '<option value="'+v+'"'+(v===g.msi?' selected':'')+'>'+(v===''?'Gasto normal':'Sí, a meses')+'</option>';}).join('');
-  var row=document.getElementById('grow-'+id);
+  var row=document.getElementById('grow-'+idx);
   if(!row)return;
   row.innerHTML='<td colspan="8" style="padding:10px 8px;background:var(--purpl)">'+
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="eg-fecha-'+id+'" value="'+g.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO</div><input type="number" id="eg-monto-'+id+'" value="'+g.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">CATEGORÍA</div><select id="eg-cat-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+cats+'</select></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TDC</div><select id="eg-tdc-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tdcs+'</select></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="eg-fecha-'+idx+'" value="'+g.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO</div><input type="number" id="eg-monto-'+idx+'" value="'+g.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">CATEGORÍA</div><select id="eg-cat-'+idx+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+cats+'</select></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TDC</div><select id="eg-tdc-'+idx+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tdcs+'</select></div>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">DESCRIPCIÓN</div><input type="text" id="eg-desc-'+id+'" value="'+g.desc+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MSI</div><select id="eg-msi-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+msiOpts+'</select></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MESES</div><input type="number" id="eg-meses-'+id+'" value="'+(g.meses||'')+'" min="1" max="48" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:center"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">DESCRIPCIÓN</div><input type="text" id="eg-desc-'+idx+'" value="'+g.desc+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MSI</div><select id="eg-msi-'+idx+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+msiOpts+'</select></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MESES</div><input type="number" id="eg-meses-'+idx+'" value="'+(g.meses||'')+'" min="1" max="48" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:center"></div>'+
     '</div>'+
     '<div style="display:flex;gap:8px">'+
-      '<button onclick="guardarGasto('+id+')" class="btn btn-primary btn-sm">Guardar</button>'+
+      '<button onclick="guardarGasto('+idx+')" class="btn btn-primary btn-sm">Guardar</button>'+
       '<button onclick="renderGastos()" class="btn btn-ghost btn-sm">Cancelar</button>'+
     '</div>'+
   '</td>';
 }
-function guardarGasto(id){
-  var idStr=String(id);
-  var g=DB.gastos.find(function(x){return String(x.id)===idStr;});
-  if(!g)return;
-  var fecha=document.getElementById('eg-fecha-'+id).value;
-  var monto=parseFloat(document.getElementById('eg-monto-'+id).value);
-  var cat=document.getElementById('eg-cat-'+id).value;
-  var tdc=document.getElementById('eg-tdc-'+id).value;
-  var desc=document.getElementById('eg-desc-'+id).value.trim();
-  var msi=document.getElementById('eg-msi-'+id).value;
-  var meses=document.getElementById('eg-meses-'+id).value;
+function guardarGasto(idx){
+  if(!_lastGastosRender||idx<0||idx>=_lastGastosRender.length)return;
+  var g=_lastGastosRender[idx];
+  var fecha=document.getElementById('eg-fecha-'+idx).value;
+  var monto=parseFloat(document.getElementById('eg-monto-'+idx).value);
+  var cat=document.getElementById('eg-cat-'+idx).value;
+  var tdc=document.getElementById('eg-tdc-'+idx).value;
+  var desc=document.getElementById('eg-desc-'+idx).value.trim();
+  var msi=document.getElementById('eg-msi-'+idx).value;
+  var meses=document.getElementById('eg-meses-'+idx).value;
   if(!fecha||!monto||!desc){toast('Completa los campos requeridos','err');return;}
   var m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   var mes=m.charAt(0).toUpperCase()+m.slice(1);
@@ -1651,15 +1650,17 @@ function agregarIngreso(){
   document.getElementById('i-fecha').value=today();['i-monto','i-desc'].forEach(id=>document.getElementById(id).value='');
   renderIngresos();toast('✓ Ingreso registrado');
 }
-function eliminarIngreso(id){
+function eliminarIngreso(idx){
   if(!confirm('¿Eliminar este ingreso?'))return;
-  var idStr=String(id);
-  var idx=DB.ingresos.findIndex(function(i){return String(i.id)===idStr;});
-  if(idx===-1){toast('No se encontró el ingreso','err');return;}
-  DB.ingresos.splice(idx,1);
-  save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);toast('Ingreso eliminado');
+  if(!_lastIngresosRender||idx<0||idx>=_lastIngresosRender.length){toast('Error: índice inválido','err');return;}
+  var target=_lastIngresosRender[idx];
+  var pos=DB.ingresos.indexOf(target);
+  if(pos===-1){toast('No se encontró el ingreso en DB','err');return;}
+  DB.ingresos.splice(pos,1);
+  save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);toast('Ingreso eliminado ✓');
 }
 var _iSort={col:'fecha',asc:false};
+var _lastIngresosRender=[];
 var _iPage=0;
 function sortIngresos(col){
   if(_iSort.col===col){_iSort.asc=!_iSort.asc;}else{_iSort.col=col;_iSort.asc=false;}
@@ -1694,18 +1695,18 @@ function renderIngresos(){
   var totalPags=Math.max(1,Math.ceil(total/PER_PAGE));
   if(_iPage>=totalPags)_iPage=Math.max(0,totalPags-1);
   var page=sorted.slice(_iPage*PER_PAGE,(_iPage+1)*PER_PAGE);
-  
+  _lastIngresosRender=page;
   // Calcular total de ingresos filtrados
   var totalIngresos=filtered.reduce(function(s,i){return s+parseFloat(i.monto)||0;},0);
   
-  tbody.innerHTML=page.map(function(i){
-    return '<tr id="irow-'+i.id+'">'+
+  tbody.innerHTML=page.map(function(i,_ii){
+    return '<tr id="irow-'+_ii+'">'+
       '<td style="font-family:monospace;font-size:11px">'+fmtFecha(i.fecha)+'</td>'+
       '<td><span class="tag tag-green">'+i.tipo+'</span></td>'+
       '<td>'+(i.desc||'—')+'</td>'+
       '<td style="text-align:right;font-family:monospace;font-weight:500;color:var(--teal)">'+fmt(i.monto)+'</td>'+
-      '<td><button onclick="editarIngreso('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
-      '<td><button onclick="eliminarIngreso('+i.id+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
+      '<td><button onclick="editarIngreso('+_ii+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 6px" title="Editar">✏️</button></td>'+
+      '<td><button onclick="eliminarIngreso('+_ii+')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">×</button></td>'+
     '</tr>';
   }).join('');
   
@@ -1725,34 +1726,33 @@ function renderIngresos(){
       '</div>';
   }
 }
-function editarIngreso(id){
-  var ing=DB.ingresos.find(function(x){return x.id===id;});
-  if(!ing)return;
-  var tipos=['Sueldo','Bono / aguinaldo / PTU','Rendimiento inversion','Otro ingreso'];
-  var tipoOpts=tipos.map(function(t){return '<option'+(t===ing.tipo?' selected':'')+'>'+t+'</option>';}).join('');
-  var row=document.getElementById('irow-'+id);
+function editarIngreso(idx){
+  if(!_lastIngresosRender||idx<0||idx>=_lastIngresosRender.length)return;
+  var ing=_lastIngresosRender[idx];
+  var tipos=['Nómina','Freelance','Inversión','Venta','Otro'].map(function(t){return '<option'+(t===ing.tipo?' selected':'')+'>'+t+'</option>';}).join('');
+  var row=document.getElementById('irow-'+idx);
   if(!row)return;
   row.innerHTML='<td colspan="6" style="padding:10px 8px;background:var(--teall)">'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr;gap:8px;margin-bottom:8px">'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="ei-fecha-'+id+'" value="'+ing.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO</div><input type="number" id="ei-monto-'+id+'" value="'+ing.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TIPO</div><select id="ei-tipo-'+id+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tipoOpts+'</select></div>'+
-      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">DESCRIPCIÓN</div><input type="text" id="ei-desc-'+id+'" value="'+(ing.desc||'')+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">FECHA</div><input type="date" id="ei-fecha-'+idx+'" value="'+ing.fecha+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">TIPO</div><select id="ei-tipo-'+idx+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px">'+tipos+'</select></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">DESCRIPCIÓN</div><input type="text" id="ei-desc-'+idx+'" value="'+(ing.desc||'')+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px"></div>'+
+      '<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MONTO</div><input type="number" id="ei-monto-'+idx+'" value="'+ing.monto+'" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;text-align:right;font-family:monospace"></div>'+
     '</div>'+
     '<div style="display:flex;gap:8px">'+
-      '<button onclick="guardarIngreso('+id+')" class="btn btn-primary btn-sm" style="background:var(--teal)">Guardar</button>'+
+      '<button onclick="guardarIngreso('+idx+')" class="btn btn-primary btn-sm" style="background:var(--teal)">Guardar</button>'+
       '<button onclick="renderIngresos()" class="btn btn-ghost btn-sm">Cancelar</button>'+
     '</div>'+
   '</td>';
 }
-function guardarIngreso(id){
-  var ing=DB.ingresos.find(function(x){return x.id===id;});
-  if(!ing)return;
-  var fecha=document.getElementById('ei-fecha-'+id).value;
-  var monto=parseFloat(document.getElementById('ei-monto-'+id).value);
-  var tipo=document.getElementById('ei-tipo-'+id).value;
-  var desc=document.getElementById('ei-desc-'+id).value.trim();
-  if(!fecha||!monto){toast('Completa fecha y monto','err');return;}
+function guardarIngreso(idx){
+  if(!_lastIngresosRender||idx<0||idx>=_lastIngresosRender.length)return;
+  var ing=_lastIngresosRender[idx];
+  var fecha=document.getElementById('ei-fecha-'+idx).value;
+  var monto=parseFloat(document.getElementById('ei-monto-'+idx).value);
+  var tipo=document.getElementById('ei-tipo-'+idx).value;
+  var desc=document.getElementById('ei-desc-'+idx).value.trim();
+  if(!fecha||!monto){toast('Completa los campos requeridos','err');return;}
   var m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   var mes=m.charAt(0).toUpperCase()+m.slice(1);
   ing.fecha=fecha;ing.monto=monto;ing.tipo=tipo;ing.desc=desc;ing.mes=mes;
@@ -2422,10 +2422,10 @@ function guardarSaldoInversion(nombre,key,val,prev,notas){
 function eliminarInversion(id){
   if(!confirm('¿Eliminar este registro de inversión?'))return;
   var idStr=String(id);
-  var idx=DB.inversiones.findIndex(function(i){return String(i.id)===idStr;});
-  if(idx===-1){toast('No se encontró el registro','err');return;}
+  var idx=DB.inversiones.findIndex(function(x){return String(x.id)===idStr||String(Math.round(parseFloat(x.id)))===idStr;});
+  if(idx===-1){toast('No se encontró','err');return;}
   DB.inversiones.splice(idx,1);
-  save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);toast('Registro eliminado');
+  save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);toast('Registro eliminado ✓');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2520,10 +2520,10 @@ function agregarPagoTDC(){
 function eliminarPagoTDC(id){
   if(!confirm('¿Eliminar este pago?'))return;
   var idStr=String(id);
-  var idx=DB.pagosTDC.findIndex(function(p){return String(p.id)===idStr;});
-  if(idx===-1){toast('No se encontró el pago','err');return;}
+  var idx=DB.pagosTDC.findIndex(function(x){return String(x.id)===idStr||String(Math.round(parseFloat(x.id)))===idStr;});
+  if(idx===-1){toast('No se encontró','err');return;}
   DB.pagosTDC.splice(idx,1);
-  save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);toast('Pago eliminado');
+  save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);toast('Pago eliminado ✓');
 }
 function editarPagoTDC(id){
   // Si ya hay otro en edición, restaurarlo primero
@@ -2617,10 +2617,10 @@ function actualizarMeta(id,val){const m=DB.metas.find(m=>m.id===id);if(m){m.actu
 function eliminarMeta(id){
   if(!confirm('¿Eliminar esta meta?'))return;
   var idStr=String(id);
-  var idx=DB.metas.findIndex(function(m){return String(m.id)===idStr;});
-  if(idx===-1){toast('No se encontró la meta','err');return;}
+  var idx=DB.metas.findIndex(function(x){return String(x.id)===idStr||String(Math.round(parseFloat(x.id)))===idStr;});
+  if(idx===-1){toast('No se encontró','err');return;}
   DB.metas.splice(idx,1);
-  save();renderMetas();syncSheetDelete('Metas',DB.metas);toast('Meta eliminada');
+  save();renderMetas();syncSheetDelete('Metas',DB.metas);toast('Meta eliminada ✓');
 }
 function renderMetas(){
   const c=document.getElementById('metas-list');
@@ -2644,12 +2644,12 @@ function agregarRecurrente(){
   renderRecurrentes();toast('Gasto recurrente agregado ✓');
 }
 function eliminarRecurrente(id){
-  if(!confirm('¿Eliminar recurrente?'))return;
+  if(!confirm('¿Eliminar este gasto recurrente?'))return;
   var idStr=String(id);
-  var idx=DB.recurrentes.findIndex(function(r){return String(r.id)===idStr;});
-  if(idx===-1){toast('No se encontró el recurrente','err');return;}
+  var idx=DB.recurrentes.findIndex(function(x){return String(x.id)===idStr||String(Math.round(parseFloat(x.id)))===idStr;});
+  if(idx===-1){toast('No se encontró','err');return;}
   DB.recurrentes.splice(idx,1);
-  save();renderRecurrentes();syncSheetDelete('Recurrentes',DB.recurrentes);toast('Recurrente eliminado');
+  save();renderRecurrentes();syncSheetDelete('Recurrentes',DB.recurrentes);toast('Recurrente eliminado ✓');
 }
 function registrarRecurrente(id){
   const r=DB.recurrentes.find(r=>r.id===id);if(!r)return;
