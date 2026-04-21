@@ -691,16 +691,16 @@ async function pullFromSheets(){
       if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){
         var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];
       }
-      return{id:(r.id!==undefined&&r.id!==null&&r.id!=='')?String(r.id):String(Date.now()),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas};
+      return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas};
     });
-    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){return{id:(r.id!==undefined&&r.id!==null&&r.id!=='')?String(r.id):String(Date.now()),fecha:r.fecha,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};});
+    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),fecha:r.fecha,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};});
     if(data.inversiones)DB.inversiones=data.inversiones.map(function(r){
       var per=r.periodo?String(r.periodo).split('T')[0]:r.periodo;
-      return{id:r.id||Date.now(),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
+      return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
     });
-    if(data.pagosTDC)DB.pagosTDC=data.pagosTDC.map(function(r){return{id:r.id||Date.now(),fecha:r.fecha,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas};});
-    if(data.metas)DB.metas=data.metas.map(function(r){return{id:r.id||Date.now(),nombre:r.nombre,objetivo:parseFloat(r.objetivo)||0,fecha:r.fecha,actual:parseFloat(r.actual)||0,notas:r.notas};});
-    if(data.recurrentes)DB.recurrentes=data.recurrentes.map(function(r){return{id:r.id||Date.now(),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
+    if(data.pagosTDC)DB.pagosTDC=data.pagosTDC.map(function(r){return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),fecha:r.fecha,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas};});
+    if(data.metas)DB.metas=data.metas.map(function(r){return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),nombre:r.nombre,objetivo:parseFloat(r.objetivo)||0,fecha:r.fecha,actual:parseFloat(r.actual)||0,notas:r.notas};});
+    if(data.recurrentes)DB.recurrentes=data.recurrentes.map(function(r){return{id:r.id?(typeof r.id==='number'?r.id:parseInt(parseFloat(r.id))):Date.now(),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
     // Update cuentasInv if available
     if(data.cuentasInv&&Object.keys(data.cuentasInv).length>0){
       Object.keys(data.cuentasInv).forEach(function(n){
@@ -1345,6 +1345,10 @@ async function syncSheetDelete(sheet,rows){
     console.error('syncSheetDelete: rows inválido para '+sheet);
     return;
   }
+  if(rows.length===0){
+    console.warn('syncSheetDelete: BLOQUEADO - array vacío para '+sheet+'. No se envía a Sheets.');
+    return;
+  }
   try{
     var res=await fetch(DB.config.scriptURL,{method:'POST',body:JSON.stringify({action:'syncSheet',sheet:sheet,rows:rows})});
     if(res.ok){
@@ -1449,7 +1453,7 @@ function agregarGasto(){
   const m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   const mes=m.charAt(0).toUpperCase()+m.slice(1);
   const ciclo=(tdc&&tdc!=='Efectivo')?cicloDeGastoCorrecto(fecha,tdc):(mes+'-'+new Date(fecha+'T12:00:00').getFullYear());
-  DB.gastos.unshift({id:String(Date.now()),fecha,desc,cat,monto,tdc,msi,meses,notas,mes,ciclo});
+  DB.gastos.unshift({id:Date.now(),fecha,desc,cat,monto,tdc,msi,meses,notas,mes,ciclo});
   if(!save()){toast('❌ Error al guardar','err');DB.gastos.shift();return;}
   pushSheets('Gastos',[fecha,desc,cat,monto,tdc,mes,msi,meses,notas]);
   limpiarGasto();renderGastos();toast('✓ Gasto registrado');
@@ -1457,11 +1461,10 @@ function agregarGasto(){
 function limpiarGasto(){['g-fecha','g-monto','g-desc','g-notas'].forEach(id=>document.getElementById(id).value='');['g-cat','g-tdc'].forEach(id=>document.getElementById(id).value='');document.getElementById('g-msi').value='';document.getElementById('msi-meses-field').style.display='none';document.getElementById('g-fecha').value=today();}
 function eliminarGasto(id){
   if(!confirm('¿Eliminar este gasto?'))return;
-  var idStr=String(id).trim();
+  var idStr=String(id);
   var antes=DB.gastos.length;
-  DB.gastos=DB.gastos.filter(function(g){return String(g.id).trim()!==idStr;});
-  var despues=DB.gastos.length;
-  if(despues===antes){toast('No se encontró el gasto (id:'+idStr+')','err');return;}
+  DB.gastos=DB.gastos.filter(function(g){return String(g.id)!==idStr;});
+  if(DB.gastos.length===antes){toast('No se encontró el gasto','err');return;}
   save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Gasto eliminado');
 }
 var _gSort={col:'fecha',asc:false};
@@ -1642,7 +1645,7 @@ function agregarIngreso(){
   
   const m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   const mes=m.charAt(0).toUpperCase()+m.slice(1);
-  DB.ingresos.unshift({id:String(Date.now()),fecha,tipo,desc,monto,mes});
+  DB.ingresos.unshift({id:Date.now(),fecha,tipo,desc,monto,mes});
   if(!save()){toast('❌ Error al guardar','err');DB.ingresos.shift();return;}
   pushSheets('Ingresos',[fecha,tipo,desc,monto,mes]);
   document.getElementById('i-fecha').value=today();['i-monto','i-desc'].forEach(id=>document.getElementById(id).value='');
@@ -1650,11 +1653,10 @@ function agregarIngreso(){
 }
 function eliminarIngreso(id){
   if(!confirm('¿Eliminar este ingreso?'))return;
-  var idStr=String(id).trim();
-  var antes=DB.ingresos.length;
-  DB.ingresos=DB.ingresos.filter(function(i){return String(i.id).trim()!==idStr;});
-  var despues=DB.ingresos.length;
-  if(despues===antes){toast('No se encontró el ingreso (id:'+idStr+')','err');return;}
+  var idStr=String(id);
+  var idx=DB.ingresos.findIndex(function(i){return String(i.id)===idStr;});
+  if(idx===-1){toast('No se encontró el ingreso','err');return;}
+  DB.ingresos.splice(idx,1);
   save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);toast('Ingreso eliminado');
 }
 var _iSort={col:'fecha',asc:false};
@@ -2417,9 +2419,12 @@ function guardarSaldoInversion(nombre,key,val,prev,notas){
   var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);pushCuentasInv();
   toast('Saldo de '+nombre+' actualizado ✓');
 }
-function eliminarInversion(id){var idStr=String(id);
+function eliminarInversion(id){
   if(!confirm('¿Eliminar este registro de inversión?'))return;
-  DB.inversiones=DB.inversiones.filter(function(i){return String(i.id)!==idStr;});
+  var idStr=String(id);
+  var idx=DB.inversiones.findIndex(function(i){return String(i.id)===idStr;});
+  if(idx===-1){toast('No se encontró el registro','err');return;}
+  DB.inversiones.splice(idx,1);
   save();renderInversiones();syncSheetDelete('Inversiones',DB.inversiones);toast('Registro eliminado');
 }
 
@@ -2512,9 +2517,12 @@ function agregarPagoTDC(){
   renderDashboard();
   toast('Pago de '+tdc+' registrado ✓ ('+ciclo+')');
 }
-function eliminarPagoTDC(id){var idStr=String(id);
+function eliminarPagoTDC(id){
   if(!confirm('¿Eliminar este pago?'))return;
-  DB.pagosTDC=DB.pagosTDC.filter(function(p){return String(p.id)!==idStr;});
+  var idStr=String(id);
+  var idx=DB.pagosTDC.findIndex(function(p){return String(p.id)===idStr;});
+  if(idx===-1){toast('No se encontró el pago','err');return;}
+  DB.pagosTDC.splice(idx,1);
   save();renderTDC();syncSheetDelete('PagosTDC',DB.pagosTDC);toast('Pago eliminado');
 }
 function editarPagoTDC(id){
@@ -2606,9 +2614,12 @@ function agregarMeta(){
   renderMetas();toast('Meta agregada ✓');
 }
 function actualizarMeta(id,val){const m=DB.metas.find(m=>m.id===id);if(m){m.actual=parseFloat(val)||0;save();}}
-function eliminarMeta(id){var idStr=String(id);
+function eliminarMeta(id){
   if(!confirm('¿Eliminar esta meta?'))return;
-  DB.metas=DB.metas.filter(function(m){return String(m.id)!==idStr;});
+  var idStr=String(id);
+  var idx=DB.metas.findIndex(function(m){return String(m.id)===idStr;});
+  if(idx===-1){toast('No se encontró la meta','err');return;}
+  DB.metas.splice(idx,1);
   save();renderMetas();syncSheetDelete('Metas',DB.metas);toast('Meta eliminada');
 }
 function renderMetas(){
@@ -2632,9 +2643,12 @@ function agregarRecurrente(){
   ['r-desc','r-monto','r-dia'].forEach(id=>document.getElementById(id).value='');
   renderRecurrentes();toast('Gasto recurrente agregado ✓');
 }
-function eliminarRecurrente(id){var idStr=String(id);
-  if(!confirm('¿Eliminar este gasto recurrente?'))return;
-  DB.recurrentes=DB.recurrentes.filter(function(r){return String(r.id)!==idStr;});
+function eliminarRecurrente(id){
+  if(!confirm('¿Eliminar recurrente?'))return;
+  var idStr=String(id);
+  var idx=DB.recurrentes.findIndex(function(r){return String(r.id)===idStr;});
+  if(idx===-1){toast('No se encontró el recurrente','err');return;}
+  DB.recurrentes.splice(idx,1);
   save();renderRecurrentes();syncSheetDelete('Recurrentes',DB.recurrentes);toast('Recurrente eliminado');
 }
 function registrarRecurrente(id){
@@ -2643,7 +2657,7 @@ function registrarRecurrente(id){
   const m=new Date().toLocaleString('es-MX',{month:'long'});
   const mes=m.charAt(0).toUpperCase()+m.slice(1);
   const ciclo=(r.tdc&&r.tdc!=='Efectivo')?cicloDeGastoCorrecto(hoyStr,r.tdc):(mes+'-'+new Date().getFullYear());
-  DB.gastos.unshift({id:String(Date.now()),fecha:hoyStr,desc:r.desc,cat:r.cat,monto:r.monto,tdc:r.tdc,msi:'',meses:'',notas:'Recurrente',mes,ciclo});
+  DB.gastos.unshift({id:Date.now(),fecha:hoyStr,desc:r.desc,cat:r.cat,monto:r.monto,tdc:r.tdc,msi:'',meses:'',notas:'Recurrente',mes,ciclo});
   save();pushSheets('Gastos',[hoyStr,r.desc,r.cat,r.monto,r.tdc,mes,'','','Recurrente']);
   toast(`${r.desc} registrado ✓`);
 }
