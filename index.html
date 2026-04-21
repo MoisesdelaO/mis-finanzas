@@ -691,9 +691,9 @@ async function pullFromSheets(){
       if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){
         var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];
       }
-      return{id:parseFloat(r.id)||Date.now(),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas};
+      return{id:(r.id!==undefined&&r.id!==null&&r.id!=='')?String(r.id):String(Date.now()),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas};
     });
-    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){return{id:parseFloat(r.id)||Date.now(),fecha:r.fecha,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};});
+    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){return{id:(r.id!==undefined&&r.id!==null&&r.id!=='')?String(r.id):String(Date.now()),fecha:r.fecha,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};});
     if(data.inversiones)DB.inversiones=data.inversiones.map(function(r){
       var per=r.periodo?String(r.periodo).split('T')[0]:r.periodo;
       return{id:r.id||Date.now(),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
@@ -1449,7 +1449,7 @@ function agregarGasto(){
   const m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   const mes=m.charAt(0).toUpperCase()+m.slice(1);
   const ciclo=(tdc&&tdc!=='Efectivo')?cicloDeGastoCorrecto(fecha,tdc):(mes+'-'+new Date(fecha+'T12:00:00').getFullYear());
-  DB.gastos.unshift({id:Date.now(),fecha,desc,cat,monto,tdc,msi,meses,notas,mes,ciclo});
+  DB.gastos.unshift({id:String(Date.now()),fecha,desc,cat,monto,tdc,msi,meses,notas,mes,ciclo});
   if(!save()){toast('❌ Error al guardar','err');DB.gastos.shift();return;}
   pushSheets('Gastos',[fecha,desc,cat,monto,tdc,mes,msi,meses,notas]);
   limpiarGasto();renderGastos();toast('✓ Gasto registrado');
@@ -1457,12 +1457,11 @@ function agregarGasto(){
 function limpiarGasto(){['g-fecha','g-monto','g-desc','g-notas'].forEach(id=>document.getElementById(id).value='');['g-cat','g-tdc'].forEach(id=>document.getElementById(id).value='');document.getElementById('g-msi').value='';document.getElementById('msi-meses-field').style.display='none';document.getElementById('g-fecha').value=today();}
 function eliminarGasto(id){
   if(!confirm('¿Eliminar este gasto?'))return;
-  var idNum=parseFloat(id);
+  var idStr=String(id).trim();
   var antes=DB.gastos.length;
-  DB.gastos=DB.gastos.filter(function(g){return parseFloat(g.id)!==idNum;});
+  DB.gastos=DB.gastos.filter(function(g){return String(g.id).trim()!==idStr;});
   var despues=DB.gastos.length;
-  if(despues===antes){toast('No se encontró el gasto','err');return;}
-  if(despues===0&&antes>1){toast('Error: no se pudo identificar el gasto','err');return;}
+  if(despues===antes){toast('No se encontró el gasto (id:'+idStr+')','err');return;}
   save();renderGastos();syncSheetDelete('Gastos',DB.gastos);toast('Gasto eliminado');
 }
 var _gSort={col:'fecha',asc:false};
@@ -1643,7 +1642,7 @@ function agregarIngreso(){
   
   const m=new Date(fecha+'T12:00:00').toLocaleString('es-MX',{month:'long'});
   const mes=m.charAt(0).toUpperCase()+m.slice(1);
-  DB.ingresos.unshift({id:Date.now(),fecha,tipo,desc,monto,mes});
+  DB.ingresos.unshift({id:String(Date.now()),fecha,tipo,desc,monto,mes});
   if(!save()){toast('❌ Error al guardar','err');DB.ingresos.shift();return;}
   pushSheets('Ingresos',[fecha,tipo,desc,monto,mes]);
   document.getElementById('i-fecha').value=today();['i-monto','i-desc'].forEach(id=>document.getElementById(id).value='');
@@ -1651,12 +1650,11 @@ function agregarIngreso(){
 }
 function eliminarIngreso(id){
   if(!confirm('¿Eliminar este ingreso?'))return;
-  var idNum=parseFloat(id);
+  var idStr=String(id).trim();
   var antes=DB.ingresos.length;
-  DB.ingresos=DB.ingresos.filter(function(i){return parseFloat(i.id)!==idNum;});
+  DB.ingresos=DB.ingresos.filter(function(i){return String(i.id).trim()!==idStr;});
   var despues=DB.ingresos.length;
-  if(despues===antes){toast('No se encontró el ingreso','err');return;}
-  if(despues===0&&antes>1){toast('Error: no se pudo identificar el ingreso','err');return;}
+  if(despues===antes){toast('No se encontró el ingreso (id:'+idStr+')','err');return;}
   save();renderIngresos();syncSheetDelete('Ingresos',DB.ingresos);toast('Ingreso eliminado');
 }
 var _iSort={col:'fecha',asc:false};
@@ -2645,7 +2643,7 @@ function registrarRecurrente(id){
   const m=new Date().toLocaleString('es-MX',{month:'long'});
   const mes=m.charAt(0).toUpperCase()+m.slice(1);
   const ciclo=(r.tdc&&r.tdc!=='Efectivo')?cicloDeGastoCorrecto(hoyStr,r.tdc):(mes+'-'+new Date().getFullYear());
-  DB.gastos.unshift({id:Date.now(),fecha:hoyStr,desc:r.desc,cat:r.cat,monto:r.monto,tdc:r.tdc,msi:'',meses:'',notas:'Recurrente',mes,ciclo});
+  DB.gastos.unshift({id:String(Date.now()),fecha:hoyStr,desc:r.desc,cat:r.cat,monto:r.monto,tdc:r.tdc,msi:'',meses:'',notas:'Recurrente',mes,ciclo});
   save();pushSheets('Gastos',[hoyStr,r.desc,r.cat,r.monto,r.tdc,mes,'','','Recurrente']);
   toast(`${r.desc} registrado ✓`);
 }
