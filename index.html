@@ -29,7 +29,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mis Finanzas v3.0</title>
+<title>Mis Finanzas</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💳</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -224,7 +225,6 @@ tr:hover td{background:var(--surface2)}
     <button class="nav-tab" onclick="show('ingresos')">Ingresos</button>
     <button class="nav-tab" onclick="show('inversiones')">Inversiones</button>
     <button class="nav-tab" onclick="show('tdc')">TDC</button>
-    <button class="nav-tab" onclick="show('metas')">Metas</button>
     <button class="nav-tab" onclick="show('anual')">Anual</button>
     <button class="nav-tab" onclick="show('config')">Config</button>
   </div>
@@ -258,9 +258,6 @@ tr:hover td{background:var(--surface2)}
       </button>
       <button class="mob-item" id="mob-tdc" onclick="showMob('tdc')">
         <span style="font-size:18px">💳</span><span>Pagos TDC</span>
-      </button>
-      <button class="mob-item" id="mob-metas" onclick="showMob('metas')">
-        <span style="font-size:18px">🎯</span><span>Metas</span>
       </button>
       <button class="mob-item" id="mob-anual" onclick="showMob('anual')">
         <span style="font-size:18px">📅</span><span>Resumen anual</span>
@@ -358,7 +355,7 @@ tr:hover td{background:var(--surface2)}
       <div class="field"><label>Monto (MXN)</label><input type="number" id="i-monto" placeholder="0.00" step="0.01"></div>
     </div>
     <div class="form-grid" style="margin-top:10px">
-      <div class="field"><label>Tipo</label><select id="i-tipo"><option>Sueldo</option><option>Bono / aguinaldo / PTU</option><option>Rendimiento inversion</option><option>Otro ingreso</option></select></div>
+      <div class="field"><label>Tipo</label><select id="i-tipo"></select></div>
       <div class="field"><label>Descripción</label><input type="text" id="i-desc" placeholder="Ej. Quincena 15 marzo"></div>
     </div>
     <div style="margin-top:14px"><button class="btn btn-primary" onclick="agregarIngreso()" style="width:100%">+ Registrar ingreso</button></div>
@@ -453,24 +450,6 @@ tr:hover td{background:var(--surface2)}
     <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tarjeta</th><th>Ciclo</th><th style="text-align:right">Pagado</th><th></th><th></th></tr></thead><tbody id="tdc-tbody"></tbody></table></div></div>
 </div>
 
-<!-- ═══ METAS ═══ -->
-<div id="metas" class="screen">
-  <div class="card">
-    <div class="card-title">Nueva meta</div>
-    <div class="form-grid triple">
-      <div class="field"><label>Nombre</label><input type="text" id="m-nombre" placeholder="Ej. Viaje a Cancún"></div>
-      <div class="field"><label>Objetivo (MXN)</label><input type="number" id="m-objetivo" placeholder="15000"></div>
-      <div class="field"><label>Fecha límite</label><input type="text" id="m-fecha" placeholder="Jun 2025"></div>
-    </div>
-    <div class="form-grid" style="margin-top:10px">
-      <div class="field"><label>Monto actual (MXN)</label><input type="number" id="m-actual" placeholder="0"></div>
-      <div class="field"><label>Notas</label><input type="text" id="m-notas" placeholder="Opcional"></div>
-    </div>
-    <div style="margin-top:14px"><button class="btn btn-primary" onclick="agregarMeta()" style="width:100%">+ Agregar meta</button></div>
-  </div>
-  <div id="metas-list"></div>
-</div>
-
 <!-- ═══ RECURRENTES ═══ -->
 <div id="recurrentes" class="screen">
   <div class="card" style="background:var(--bluel);border-color:#B5D4F4">
@@ -541,6 +520,11 @@ tr:hover td{background:var(--surface2)}
       <div style="display:flex;gap:8px"><input type="text" id="new-cat" placeholder="Nueva..." style="flex:1;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-size:12px"><button class="btn btn-ghost btn-sm" onclick="agregarCat()">+</button></div>
     </div>
     <div class="card">
+      <div class="card-title">Tipos de ingreso</div>
+      <div id="cfg-tipos-ingreso" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px"><input type="text" id="new-tipo-ingreso" placeholder="Nuevo..." style="flex:1;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-size:12px"><button class="btn btn-ghost btn-sm" onclick="agregarTipoIngreso()">+</button></div>
+    </div>
+    <div class="card">
       <div class="card-title">Tarjetas / TDC</div>
       <div id="cfg-tdcs" style="margin-bottom:10px"></div>
       <div style="display:flex;gap:8px"><input type="text" id="new-tdc" placeholder="Nueva..." style="flex:1;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--rs);font-size:12px"><button class="btn btn-ghost btn-sm" onclick="agregarTDC()">+</button></div>
@@ -580,7 +564,7 @@ tr:hover td{background:var(--surface2)}
 // ESTADO
 // ══════════════════════════════════════════════════════════
 let DB={
-  gastos:[],ingresos:[],inversiones:[],pagosTDC:[],metas:[],recurrentes:[],
+  gastos:[],ingresos:[],inversiones:[],pagosTDC:[],recurrentes:[],
   cuentasInv:{
     Openbank:{saldo:0,ultimaAct:'',tramos:[{limite:40000,tasa:13},{limite:null,tasa:7.3}]},
     'Nu Cajita':{saldo:0,ultimaAct:'',tramos:[{limite:null,tasa:9.1}]},
@@ -592,6 +576,7 @@ let DB={
     categorias:['Comida','Transporte','Salud','Entretenimiento','Ropa y cuidado personal','Deudas / creditos / TDC','Ahorro / inversion','Otros'],
     tdcs:['Nu','BBVA Azul','Banamex Joy','Efectivo'],
     cuentas:['Openbank','Nu Cajita','DiDi Cuenta','Revolut'],
+    tiposIngreso:['Sueldo'],
     presupuesto:{Comida:5000,Transporte:3000,Salud:1500,Entretenimiento:1000,'Ropa y cuidado personal':1000,'Deudas / creditos / TDC':4000,'Ahorro / inversion':3000,Otros:500},
     cortesTDC:{Nu:{corte:5,diasPago:20},'BBVA Azul':{corte:10,diasPago:20},'Banamex Joy':{corte:20,diasPago:20}},
     limitesTDC:{Nu:15000,'BBVA Azul':47400,'Banamex Joy':42500},
@@ -615,7 +600,7 @@ function save(){
     // Also persist transactional data locally as fallback
     localStorage.setItem('mf_data',JSON.stringify({
       gastos:DB.gastos,ingresos:DB.ingresos,inversiones:DB.inversiones,
-      pagosTDC:DB.pagosTDC,metas:DB.metas,recurrentes:DB.recurrentes
+      pagosTDC:DB.pagosTDC,recurrentes:DB.recurrentes
     }));
     return true;
   } catch(e){
@@ -633,6 +618,7 @@ function load(){
         categorias:p.config.categorias||DB.config.categorias,
         tdcs:p.config.tdcs||DB.config.tdcs,
         cuentas:p.config.cuentas||DB.config.cuentas,
+        tiposIngreso:p.config.tiposIngreso||DB.config.tiposIngreso,
         presupuesto:{...DB.config.presupuesto,...(p.config.presupuesto||{})},
         cortesTDC:{...DB.config.cortesTDC,...(p.config.cortesTDC||{})},
         limitesTDC:{...DB.config.limitesTDC,...(p.config.limitesTDC||{})}
@@ -644,18 +630,20 @@ function load(){
     if(data){
       var d=JSON.parse(data);
       DB.gastos=d.gastos||[];DB.ingresos=d.ingresos||[];DB.inversiones=d.inversiones||[];
-      DB.pagosTDC=d.pagosTDC||[];DB.metas=d.metas||[];DB.recurrentes=d.recurrentes||[];
+      DB.pagosTDC=d.pagosTDC||[];DB.recurrentes=d.recurrentes||[];
     }
     // Legacy migration
     var legacy=localStorage.getItem('mf_db');
     if(legacy&&!cfg&&!data){
       var p=JSON.parse(legacy);
       DB.gastos=p.gastos||[];DB.ingresos=p.ingresos||[];DB.inversiones=p.inversiones||[];
-      DB.pagosTDC=p.pagosTDC||[];DB.metas=p.metas||[];DB.recurrentes=p.recurrentes||[];
+      DB.pagosTDC=p.pagosTDC||[];DB.recurrentes=p.recurrentes||[];
       if(p.cuentasInv)DB.cuentasInv={...DB.cuentasInv,...p.cuentasInv};
       if(p.config)DB.config={...DB.config,...p.config};
       save(); // migrate to new format
     }
+    // Sincronizar cuentasInv con config.cuentas (después de cargar todo)
+    if(typeof sincronizarCuentasInv==='function') sincronizarCuentasInv();
   } catch(e){
     console.error('Error loading data:', e);
   }
@@ -701,19 +689,8 @@ async function pullFromSheets(){
       return{id:normalizeId(r.id),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
     });
     if(data.pagosTDC)DB.pagosTDC=data.pagosTDC.map(function(r){return{id:normalizeId(r.id),fecha:r.fecha,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas};});
-    if(data.metas)DB.metas=data.metas.map(function(r){return{id:normalizeId(r.id),nombre:r.nombre,objetivo:parseFloat(r.objetivo)||0,fecha:r.fecha,actual:parseFloat(r.actual)||0,notas:r.notas};});
     if(data.recurrentes)DB.recurrentes=data.recurrentes.map(function(r){return{id:normalizeId(r.id),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
-    // Update cuentasInv if available
-    if(data.cuentasInv&&Object.keys(data.cuentasInv).length>0){
-      Object.keys(data.cuentasInv).forEach(function(n){
-        if(!DB.cuentasInv[n])DB.cuentasInv[n]={saldo:0,ultimaAct:'',tramos:[{limite:null,tasa:0}]};
-        DB.cuentasInv[n].saldo=parseFloat(data.cuentasInv[n].saldo)||0;
-        DB.cuentasInv[n].ultimaAct=data.cuentasInv[n].ultimaAct||'';
-        if(data.cuentasInv[n].tramos&&data.cuentasInv[n].tramos.length)
-          DB.cuentasInv[n].tramos=data.cuentasInv[n].tramos;
-      });
-    }
-    // Update config from Sheets (cortes, límites, presupuesto, etc.)
+    // Update config from Sheets PRIMERO (categorías, cuentas, tdcs, etc.)
     if(data.appConfig&&typeof data.appConfig==='object'){
       var sc=data.appConfig;
       if(sc.cortesTDC) DB.config.cortesTDC={...DB.config.cortesTDC,...sc.cortesTDC};
@@ -723,6 +700,23 @@ async function pullFromSheets(){
       if(sc.categorias&&sc.categorias.length) DB.config.categorias=sc.categorias;
       if(sc.tdcs&&sc.tdcs.length) DB.config.tdcs=sc.tdcs;
       if(sc.cuentas&&sc.cuentas.length) DB.config.cuentas=sc.cuentas;
+      if(sc.tiposIngreso&&sc.tiposIngreso.length) DB.config.tiposIngreso=sc.tiposIngreso;
+    }
+    // Update cuentasInv: solo cuentas que estén en config.cuentas
+    if(data.cuentasInv&&Object.keys(data.cuentasInv).length>0){
+      var cuentasValidas=DB.config.cuentas||[];
+      Object.keys(data.cuentasInv).forEach(function(n){
+        if(!cuentasValidas.includes(n))return; // ignorar cuentas que no están en config
+        if(!DB.cuentasInv[n])DB.cuentasInv[n]={saldo:0,ultimaAct:'',tramos:[{limite:null,tasa:0}]};
+        DB.cuentasInv[n].saldo=parseFloat(data.cuentasInv[n].saldo)||0;
+        DB.cuentasInv[n].ultimaAct=data.cuentasInv[n].ultimaAct||'';
+        if(data.cuentasInv[n].tramos&&data.cuentasInv[n].tramos.length)
+          DB.cuentasInv[n].tramos=data.cuentasInv[n].tramos;
+      });
+      // Limpiar cuentas locales que ya no existen en config
+      Object.keys(DB.cuentasInv).forEach(function(n){
+        if(!cuentasValidas.includes(n)) delete DB.cuentasInv[n];
+      });
     }
     save();
     return true;
@@ -755,7 +749,8 @@ async function pushConfigToSheets(){
       presupuesto:DB.config.presupuesto,
       categorias:DB.config.categorias,
       tdcs:DB.config.tdcs,
-      cuentas:DB.config.cuentas
+      cuentas:DB.config.cuentas,
+      tiposIngreso:DB.config.tiposIngreso
     };
     await fetch(DB.config.scriptURL,{
       method:'POST',
@@ -1292,9 +1287,9 @@ function show(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  const names=['dashboard','gastos','ingresos','inversiones','tdc','metas','anual','config'];
+  const names=['dashboard','gastos','ingresos','inversiones','tdc','anual','config'];
   const idx=names.indexOf(id);if(idx>=0)document.querySelectorAll('.nav-tab')[idx].classList.add('active');
-  const fn={dashboard:renderDashboard,gastos:renderGastos,ingresos:renderIngresos,inversiones:renderInversiones,tdc:renderTDC,metas:renderMetas,recurrentes:renderRecurrentes,anual:renderAnual,config:renderConfig};
+  const fn={dashboard:renderDashboard,gastos:renderGastos,ingresos:renderIngresos,inversiones:renderInversiones,tdc:renderTDC,recurrentes:renderRecurrentes,anual:renderAnual,config:renderConfig};
   if(fn[id])fn[id]();
 }
 
@@ -1324,7 +1319,7 @@ async function syncAll(){
     if(active){
       var id=active.id;
       var fn={dashboard:renderDashboard,gastos:renderGastos,ingresos:renderIngresos,
-              inversiones:renderInversiones,tdc:renderTDC,metas:renderMetas,
+              inversiones:renderInversiones,tdc:renderTDC,
               recurrentes:renderRecurrentes,anual:renderAnual,config:renderConfig};
       if(fn[id])fn[id]();
     }
@@ -1394,7 +1389,6 @@ function importarDatos(input){
       if(data.ingresos)DB.ingresos=data.ingresos;
       if(data.inversiones)DB.inversiones=data.inversiones;
       if(data.pagosTDC)DB.pagosTDC=data.pagosTDC;
-      if(data.metas)DB.metas=data.metas;
       if(data.recurrentes)DB.recurrentes=data.recurrentes;
       if(data.cuentasInv)DB.cuentasInv={...DB.cuentasInv,...data.cuentasInv};
       if(data.config)DB.config={...DB.config,...data.config};
@@ -1934,8 +1928,21 @@ function guardarInversion(id){
   var open=getOpenAccs();renderInversiones();restoreOpenAccs(open);
   toast('Inversión actualizada ✓');
 }
+// Helper: garantiza que DB.cuentasInv solo contenga cuentas que están en DB.config.cuentas
+function sincronizarCuentasInv(){
+  var cuentasConfig=DB.config.cuentas||[];
+  Object.keys(DB.cuentasInv).forEach(function(n){
+    if(!cuentasConfig.includes(n)) delete DB.cuentasInv[n];
+  });
+}
+
 function renderInversiones(){
-  var cuentas=Object.entries(DB.cuentasInv);
+  // Sincronizar cuentasInv con config.cuentas
+  sincronizarCuentasInv();
+  // Solo mostrar cuentas que estén en config.cuentas (en el orden de config)
+  var cuentas=(DB.config.cuentas||[])
+    .filter(function(n){return DB.cuentasInv[n];})
+    .map(function(n){return [n, DB.cuentasInv[n]];});
   // Usar saldo proyectado (crece diariamente desde última actualización)
   var total=cuentas.reduce(function(s,e){return s+saldoProyectado(e[1]);},0);
   var rdHoy=cuentas.reduce(function(s,e){
@@ -2604,36 +2611,6 @@ function renderTDC(){
 }
 
 // ══════════════════════════════════════════════════════════
-// METAS
-// ══════════════════════════════════════════════════════════
-function agregarMeta(){
-  const nombre=document.getElementById('m-nombre').value.trim(),objetivo=parseFloat(document.getElementById('m-objetivo').value),fecha=document.getElementById('m-fecha').value.trim(),actual=parseFloat(document.getElementById('m-actual').value)||0,notas=document.getElementById('m-notas').value;
-  if(!nombre||!objetivo){toast('Completa nombre y objetivo','err');return;}
-  DB.metas.push({id:Date.now(),nombre,objetivo,fecha,actual,notas});save();
-  ['m-nombre','m-objetivo','m-fecha','m-actual','m-notas'].forEach(id=>document.getElementById(id).value='');
-  renderMetas();toast('Meta agregada ✓');
-}
-function actualizarMeta(id,val){const m=DB.metas.find(m=>m.id===id);if(m){m.actual=parseFloat(val)||0;save();}}
-function eliminarMeta(id){
-  if(!confirm('¿Eliminar esta meta?'))return;
-  var idStr=String(id);
-  var idx=DB.metas.findIndex(function(x){return String(x.id)===idStr||String(Math.round(parseFloat(x.id)))===idStr;});
-  if(idx===-1){toast('No se encontró','err');return;}
-  DB.metas.splice(idx,1);
-  save();renderMetas();syncSheetDelete('Metas',DB.metas);toast('Meta eliminada ✓');
-}
-function renderMetas(){
-  const c=document.getElementById('metas-list');
-  if(!DB.metas.length){c.innerHTML='<div class="card" style="text-align:center;color:var(--text3);padding:32px">Sin metas aún</div>';return;}
-  c.innerHTML=DB.metas.map(m=>{
-    const p=Math.min(m.actual/m.objetivo,1),ps=Math.round(p*100);
-    const estado=p>=1?'¡Lograda!':p>=0.75?'Muy cerca':'En progreso';
-    const cls=p>=1?'tag-green':p>=0.75?'tag-amber':'tag-blue';
-    const color=p>=1?'var(--teal)':p>=0.75?'var(--amber)':'var(--blue)';
-    return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div><div style="font-size:14px;font-weight:600">${m.nombre}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${m.fecha||'Sin fecha'}</div></div><div style="display:flex;gap:8px;align-items:center"><span class="tag ${cls}">${estado}</span><button onclick="eliminarMeta(${m.id})" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px">×</button></div></div><div style="display:flex;align-items:center;gap:12px;margin-bottom:8px"><div class="bar-wrap"><div class="bar-fill" style="width:${ps}%;background:${color}"></div></div><span style="font-size:13px;font-weight:600;color:${color};min-width:38px">${ps}%</span></div><div style="display:flex;justify-content:space-between;align-items:center;font-size:12px"><span style="color:var(--text3)">Objetivo: <strong style="color:var(--text)">${fmtK(m.objetivo)}</strong></span><div style="display:flex;align-items:center;gap:8px"><span style="color:var(--text3)">Actual:</span><input type="number" value="${m.actual}" onchange="actualizarMeta(${m.id},this.value);save();" style="width:100px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px;font-family:monospace;font-size:12px;text-align:right"></div></div>${m.notas?`<div style="margin-top:6px;font-size:11px;color:var(--text3)">${m.notas}</div>`:''}</div>`;}).join('');
-}
-
-// ══════════════════════════════════════════════════════════
 // RECURRENTES
 // ══════════════════════════════════════════════════════════
 function agregarRecurrente(){
@@ -2776,6 +2753,7 @@ function renderConfig(){
   if(DB.config.scriptURL)document.getElementById('script-url').value=DB.config.scriptURL;
   const chip=(txt,fn)=>`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:12px;margin:3px">${txt}<button onclick="${fn}" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;line-height:1">×</button></span>`;
   document.getElementById('cfg-cats').innerHTML=DB.config.categorias.map((c,i)=>chip(c,`quitarCat(${i})`)).join('');
+  document.getElementById('cfg-tipos-ingreso').innerHTML=(DB.config.tiposIngreso||[]).map((t,i)=>chip(t,`quitarTipoIngreso(${i})`)).join('');
   document.getElementById('cfg-tdcs').innerHTML=DB.config.tdcs.map((t,i)=>chip(t,`quitarTDC(${i})`)).join('');
   document.getElementById('cfg-ctas').innerHTML=DB.config.cuentas.map((c,i)=>chip(c,`quitarCuenta(${i})`)).join('');
   document.getElementById('cfg-cortes').innerHTML=DB.config.tdcs.filter(t=>t!=='Efectivo').map(function(t){
@@ -2793,18 +2771,29 @@ function agregarCat(){const v=document.getElementById('new-cat').value.trim();if
 function quitarCat(i){DB.config.categorias.splice(i,1);save();pushConfigToSheets();renderConfig();}
 function agregarTDC(){const v=document.getElementById('new-tdc').value.trim();if(v&&!DB.config.tdcs.includes(v)){DB.config.tdcs.push(v);save();pushConfigToSheets();renderConfig();document.getElementById('new-tdc').value='';}}
 function quitarTDC(i){DB.config.tdcs.splice(i,1);save();pushConfigToSheets();renderConfig();}
+function agregarTipoIngreso(){const v=document.getElementById('new-tipo-ingreso').value.trim();if(!DB.config.tiposIngreso)DB.config.tiposIngreso=[];if(v&&!DB.config.tiposIngreso.includes(v)){DB.config.tiposIngreso.push(v);save();pushConfigToSheets();renderConfig();document.getElementById('new-tipo-ingreso').value='';}}
+function quitarTipoIngreso(i){if(!DB.config.tiposIngreso)return;if(DB.config.tiposIngreso.length<=1){toast('Debe quedar al menos un tipo','err');return;}DB.config.tiposIngreso.splice(i,1);save();pushConfigToSheets();renderConfig();}
 function agregarCuenta(){var v=document.getElementById('new-cta').value.trim();if(v&&!DB.config.cuentas.includes(v)){DB.config.cuentas.push(v);if(!DB.cuentasInv[v])DB.cuentasInv[v]={saldo:0,ultimaAct:'',tramos:[{limite:null,tasa:0}]};save();pushConfigToSheets();renderConfig();document.getElementById('new-cta').value='';}}
 function quitarCuenta(i){
   var nombre=DB.config.cuentas[i];
   DB.config.cuentas.splice(i,1);
   if(nombre&&DB.cuentasInv[nombre]) delete DB.cuentasInv[nombre];
-  save();pushConfigToSheets();renderConfig();
+  save();pushConfigToSheets();pushCuentasInv();renderConfig();
   if(document.getElementById('acc-cards')) renderInversiones();
 }
 function poblarSelects(){
+  // Auto-migrar: agregar tipos de ingreso existentes que no estén en config (sin duplicar)
+  if(DB.ingresos&&DB.ingresos.length){
+    DB.ingresos.forEach(function(i){
+      if(i.tipo&&!DB.config.tiposIngreso.includes(i.tipo)){
+        DB.config.tiposIngreso.push(i.tipo);
+      }
+    });
+  }
   ['g-cat','r-cat'].forEach(id=>{const s=document.getElementById(id);if(s)s.innerHTML='<option value="">— Categoría —</option>'+DB.config.categorias.map(c=>`<option>${c}</option>`).join('');});
   ['g-tdc','r-tdc'].forEach(id=>{const s=document.getElementById(id);if(s)s.innerHTML='<option value="">— Tarjeta —</option>'+DB.config.tdcs.map(t=>`<option>${t}</option>`).join('');});
   const tt=document.getElementById('t-tdc');if(tt)tt.innerHTML='<option value="">— Tarjeta —</option>'+DB.config.tdcs.filter(t=>t!=='Efectivo').map(t=>`<option>${t}</option>`).join('');
+  const ti=document.getElementById('i-tipo');if(ti)ti.innerHTML=DB.config.tiposIngreso.map(t=>`<option>${t}</option>`).join('');
 }
 function resetearSaldos(){
   if(!confirm('¿Resetear saldos a $0? Los tramos de tasa se conservan.')) return;
@@ -2825,7 +2814,7 @@ function resetearSaldos(){
 }
 function borrarTodo(){
   if(!confirm('¿Seguro? Borra TODOS los datos en este dispositivo.'))return;
-  DB.gastos=[];DB.ingresos=[];DB.inversiones=[];DB.pagosTDC=[];DB.metas=[];DB.recurrentes=[];
+  DB.gastos=[];DB.ingresos=[];DB.inversiones=[];DB.pagosTDC=[];DB.recurrentes=[];
   Object.keys(DB.cuentasInv).forEach(function(n){DB.cuentasInv[n].saldo=0;DB.cuentasInv[n].ultimaAct='';});
   save();
   toast('Datos borrados ✓');
