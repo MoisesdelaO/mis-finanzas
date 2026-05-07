@@ -311,22 +311,22 @@ input,select,textarea{font-family:inherit;font-size:15px;color:inherit;}
   border:1px solid rgba(255,255,255,0.15);
   border-radius:var(--r-pill);
   padding:4px;
+  flex-shrink:0;
 }
 .month-nav-btn{
   width:30px;height:30px;
   border-radius:50%;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  display:flex;align-items:center;justify-content:center;
   color:var(--hero-text);
   transition:background 0.15s ease;
+  flex-shrink:0;
 }
 .month-nav-btn:active{background:rgba(255,255,255,0.15);}
 .month-nav-btn .lucide{width:14px;height:14px;}
 .month-nav-label{
-  padding:0 6px;
-  font-size:12px;
-  font-weight:600;
+  padding:0 8px;
+  font-size:13px;
+  font-weight:700;
   color:var(--hero-text);
   letter-spacing:0.01em;
   min-width:56px;
@@ -672,7 +672,7 @@ input,select,textarea{font-family:inherit;font-size:15px;color:inherit;}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .donut-leg-pct{font-size:11px;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
-.donut-leg-val{display:none;}
+.donut-leg-val{font-size:10px;color:var(--text-3);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
 
 /* ═══════════════════════════════════════════════════════════════════════
    PÁGINA: Todos los movimientos (tabla filtrable)
@@ -1695,7 +1695,7 @@ body.no-scroll .app{overflow:hidden;}
     <div class="greeting">
       <div>
         <span class="hi">Buen día,</span>
-        <span class="name">Moises</span>
+        <span class="name" id="greeting-name">Moises</span>
       </div>
     </div>
     <div class="header-actions">
@@ -2732,6 +2732,8 @@ function navigate(pageId){
 // ══════════════════════════════════════════════════════════
 // PÁGINA: TODOS LOS MOVIMIENTOS (con filtros)
 // ══════════════════════════════════════════════════════════
+var _movsPagina=1;
+var _MOVS_POR_PAG=12;
 let _movsFiltros={
   tipo:'todos',     // 'todos' | 'gasto' | 'ingreso' | 'pago'
   tdc:'todos',      // 'todos' | nombre de TDC
@@ -2773,8 +2775,12 @@ function renderMovsPage(){
   if(movs.length===0){
     listaHTML='<div class="empty-state"><div class="empty-state-icon"><i data-lucide="search-x"></i></div><div class="empty-state-text">Sin movimientos con estos filtros.</div></div>';
   } else {
+    var totalPags=Math.ceil(movs.length/_MOVS_POR_PAG);
+    if(_movsPagina>totalPags) _movsPagina=totalPags;
+    var inicio=(_movsPagina-1)*_MOVS_POR_PAG;
+    var movsPage=movs.slice(inicio,inicio+_MOVS_POR_PAG);
     var iconMap={ingreso:'arrow-down-left',pago:'credit-card'};
-    listaHTML='<div class="item-list">'+movs.map(function(m){
+    var rows=movsPage.map(function(m){
       var fc=String(m.fecha).substring(8,10)+'/'+String(m.fecha).substring(5,7)+'/'+String(m.fecha).substring(0,4);
       var sign=m.type==='ingreso'?'+':'-';
       var icono=m.type==='gasto'?iconoDeCategoria(m.cat||''):(m.type==='ingreso'?'arrow-down-left':'credit-card');
@@ -2786,7 +2792,16 @@ function renderMovsPage(){
         '</div>'+
         '<div class="item-amount '+m.type+'">'+sign+fmtK(Math.round(m.monto))+'</div>'+
       '</div>';
-    }).join('')+'</div>';
+    }).join('');
+
+    // Pagination controls
+    var pagCtrl='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-top:8px;">'+
+      '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+ (_movsPagina<=1?'opacity:0.35;pointer-events:none;':'')+'" onclick="movsPag(-1)">← Anterior</button>'+
+      '<span style="font-size:12px;color:var(--text-3);">'+_movsPagina+' / '+totalPags+'</span>'+
+      '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+(_movsPagina>=totalPags?'opacity:0.35;pointer-events:none;':'')+'" onclick="movsPag(1)">Siguiente →</button>'+
+    '</div>';
+
+    listaHTML='<div class="item-list">'+rows+'</div>'+pagCtrl;
   }
 
   var html=''+
@@ -2871,14 +2886,21 @@ function closeFilterSheet(){
 
 function setMovsFiltroSheet(campo,valor){
   _movsFiltros[campo]=valor;
-  // Re-render the filter sheet to update active states
+  _movsPagina=1;
   openFilterSheet();
-  // Also update the main page behind
   renderMovsPage();
+}
+
+function movsPag(delta){
+  _movsPagina+=delta;
+  if(_movsPagina<1)_movsPagina=1;
+  renderMovsPage();
+  document.querySelector('.app').scrollTop=0;
 }
 
 function setMovsFiltro(campo,valor){
   _movsFiltros[campo]=valor;
+  _movsPagina=1;
   renderMovsPage();
 }
 
@@ -3157,6 +3179,9 @@ function renderDashboard(){
   document.getElementById('month-nav-label').textContent=labelMes;
   var cashMeta=document.getElementById('cash-meta');
   if(cashMeta) cashMeta.textContent=labelMes;
+  // Update greeting name
+  var gn=document.getElementById('greeting-name');
+  if(gn) gn.textContent=DB.config.nombre||'Moises';
 
   // Ingresos del mes
   var ingresos=DB.ingresos.filter(function(i){return gastoEnMes(i,mesKey);}).reduce(function(s,i){return s+i.monto;},0);
@@ -4037,10 +4062,10 @@ function renderStatsNuevo(){
         '<div style="font-size:13px;color:var(--text-2);">Gastos por categoría</div>'+
         (totalMesAnt>0?'<div style="font-size:11px;color:var(--text-3);margin-top:2px;">vs '+fmtK(totalMesAnt)+' en '+MESES_ES[prevMesIdx]+deltaTxt+'</div>':'')+
       '</div>'+
-      '<div class="month-nav" style="flex-shrink:0;">'+
-        '<button class="month-nav-btn" onclick="changeMonthDelta(-1);renderStatsNuevo();" style="background:var(--surface-2);border:1px solid var(--border);border-radius:50%;"><i data-lucide="chevron-left"></i></button>'+
-        '<span style="font-size:12px;font-weight:700;color:var(--text);min-width:44px;text-align:center;">'+labelMes+'</span>'+
-        '<button class="month-nav-btn" onclick="changeMonthDelta(1);renderStatsNuevo();" style="background:var(--surface-2);border:1px solid var(--border);border-radius:50%;"><i data-lucide="chevron-right"></i></button>'+
+      '<div class="month-nav" style="background:var(--surface-2);border-color:var(--border);flex-shrink:0;">'+
+        '<button class="month-nav-btn" onclick="changeMonthDelta(-1);renderStatsNuevo();" style="color:var(--text-2);"><i data-lucide="chevron-left"></i></button>'+
+        '<span style="font-size:13px;font-weight:700;color:var(--text);min-width:56px;text-align:center;white-space:nowrap;padding:0 8px;">'+labelMes+'</span>'+
+        '<button class="month-nav-btn" onclick="changeMonthDelta(1);renderStatsNuevo();" style="color:var(--text-2);"><i data-lucide="chevron-right"></i></button>'+
       '</div>'+
     '</div>';
 
@@ -4053,6 +4078,11 @@ function renderStatsNuevo(){
     var otros=conGastos.slice(4).reduce(function(s,e){return s+e[1];},0);
     var donutData=top4.map(function(e,i){return {name:e[0],val:e[1],color:colorDonut(i)};});
     if(otros>0) donutData.push({name:'Otros',val:otros,color:colorDonut(4)});
+    html+=
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+        '<span style="font-size:14px;font-weight:700;color:var(--text);">Top gastos</span>'+
+        '<span style="font-size:11px;color:var(--text-3);">'+labelMes+'</span>'+
+      '</div>';
     html+=buildDonutHTML(donutData,totalMes);
 
     // === VER MOVIMIENTOS - banner entre donut y categorías ===
@@ -4107,109 +4137,129 @@ function renderStatsNuevo(){
   renderIcons();
 }
 
-// Construye SVG donut interactivo
+// Construye SVG donut — opción B (tap en chip, sin % en SVG)
 function buildDonutHTML(data,total){
   if(!data.length||total<=0) return '';
-  var R=44, C=2*Math.PI*R;
-  var GAP=2.5;
-  var offset=0;
+  var R=42, C=2*Math.PI*R;
+  var GAP=2;
+  var angleOffset=0; // acumulamos en ángulo (radianes)
   var segs='';
-  var pctLabels='';
 
   data.forEach(function(d,i){
     var frac=d.val/total;
-    var len=Math.max(0,frac*C-GAP);
-    // midpoint angle for label (in radians, starting from top = -PI/2)
-    var midAngle=(offset/C + frac/2)*2*Math.PI - Math.PI/2;
-    var labelR=32;
-    var lx=60+labelR*Math.cos(midAngle);
-    var ly=60+labelR*Math.sin(midAngle);
-    var pct=Math.round(frac*100);
+    var sweep=frac*2*Math.PI;
+    var dashLen=Math.max(0,frac*C-GAP);
+    var arcStart=(angleOffset/(2*Math.PI))*C;
 
-    // Offset starts from top (0 = rightmost point of circle, we rotate the group -90deg)
     segs+=
       '<circle class="donut-segment" cx="60" cy="60" r="'+R+'" '+
         'stroke="'+d.color+'" stroke-width="18" fill="none" '+
-        'stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" '+
-        'stroke-dashoffset="'+(-offset).toFixed(2)+'" '+
-        'style="cursor:pointer;transition:stroke-width 0.18s ease;" '+
+        'stroke-dasharray="'+dashLen.toFixed(2)+' '+(C-dashLen).toFixed(2)+'" '+
+        'stroke-dashoffset="'+(-arcStart).toFixed(2)+'" '+
+        'transform="rotate(-90 60 60)" '+
+        'style="transition:stroke-width .2s ease,opacity .2s ease;cursor:pointer;" '+
         'data-idx="'+i+'" '+
-        'onmouseenter="donutHover(this,'+i+')" onmouseleave="donutUnhover(this,'+i+')" '+
-        'ontouchstart="event.preventDefault();donutHover(this,'+i+')" ontouchend="donutUnhover(this,'+i+')"/>';
+        'onclick="donutTap('+i+')" />';
 
-    if(pct>=7){
-      pctLabels+='<text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" '+
-        'text-anchor="middle" dominant-baseline="middle" '+
-        'style="font-size:7px;font-weight:700;fill:#fff;pointer-events:none;">'+pct+'%</text>';
-    }
-    offset+=frac*C;
+    angleOffset+=sweep;
+  });
+
+  // Build hit-area rings (invisible, wider stroke for easier touch)
+  var hits='';
+  var hitOffset=0;
+  data.forEach(function(d,i){
+    var frac=d.val/total;
+    var sweep=frac*2*Math.PI;
+    var dashLen=Math.max(0,frac*C-GAP);
+    var arcStart=(hitOffset/(2*Math.PI))*C;
+    hits+=
+      '<circle cx="60" cy="60" r="'+R+'" fill="none" '+
+        'stroke="transparent" stroke-width="28" '+
+        'stroke-dasharray="'+dashLen.toFixed(2)+' '+(C-dashLen).toFixed(2)+'" '+
+        'stroke-dashoffset="'+(-arcStart).toFixed(2)+'" '+
+        'transform="rotate(-90 60 60)" '+
+        'style="cursor:pointer;" '+
+        'onclick="donutTap('+i+')" />';
+    hitOffset+=sweep;
   });
 
   var dataJSON=JSON.stringify(data.map(function(d){return {n:d.name,v:d.val};}));
 
   var legend=data.map(function(d,i){
     var pct=Math.round((d.val/total)*100);
-    return '<div class="donut-leg-item" id="dleg-'+i+'">'+
+    return '<div class="donut-leg-item" id="dleg-'+i+'" onclick="donutTap('+i+')" style="cursor:pointer;">'+
       '<span class="donut-leg-dot" style="background:'+d.color+'"></span>'+
       '<span class="donut-leg-name">'+d.name+'</span>'+
       '<span class="donut-leg-pct">'+pct+'%</span>'+
+      '<span class="donut-leg-val">'+fmtK(d.val)+'</span>'+
     '</div>';
   }).join('');
 
   return '<div class="donut-card">'+
-    '<svg class="donut-svg" viewBox="0 0 120 120" id="donut-svg" data-total="'+total+'" data-items=\''+dataJSON+'\'>'+
-      '<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="var(--surface-2)" stroke-width="18"/>'+
-      '<g transform="rotate(-90 60 60)">'+segs+'</g>'+
-      pctLabels+
-      '<text id="donut-cl" class="donut-center donut-center-label" x="60" y="52">Total</text>'+
-      '<text id="donut-ca" class="donut-center donut-center-amount" x="60" y="65">'+fmtK(total)+'</text>'+
-      '<text id="donut-cs" x="60" y="74" style="font-size:6px;fill:var(--text-3);text-anchor:middle;"></text>'+
-    '</svg>'+
+    '<div style="flex-shrink:0;width:140px;height:140px;">'+
+      '<svg viewBox="0 0 120 120" style="width:140px;height:140px;display:block;" '+
+        'id="donut-svg" data-total="'+total+'" data-items=\''+dataJSON+'\'>'+
+        '<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="var(--surface-2)" stroke-width="18"/>'+
+        segs+
+        hits+
+        '<text id="donut-cl" x="60" y="54" text-anchor="middle" style="font-size:8px;fill:var(--text-3);font-family:\'Outfit\',sans-serif;text-transform:uppercase;letter-spacing:0.05em;">Total</text>'+
+        '<text id="donut-ca" x="60" y="68" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--text);font-family:\'JetBrains Mono\',monospace;">'+fmtK(total)+'</text>'+
+        '<text id="donut-cs" x="60" y="77" text-anchor="middle" style="font-size:6.5px;fill:var(--text-3);font-family:\'Outfit\',sans-serif;"></text>'+
+      '</svg>'+
+    '</div>'+
     '<div class="donut-legend" id="donut-legend">'+legend+'</div>'+
   '</div>';
 }
 
-function donutHover(seg,idx){
+var _donutActiveIdx=-1;
+
+function donutTap(idx){
+  if(_donutActiveIdx===idx){
+    _donutActiveIdx=-1;
+    _donutReset();
+  } else {
+    _donutActiveIdx=idx;
+    _donutSelect(idx);
+  }
+}
+
+function _donutSelect(idx){
   var svg=document.getElementById('donut-svg');
   if(!svg) return;
   var total=parseFloat(svg.getAttribute('data-total'));
   var items=JSON.parse(svg.getAttribute('data-items'));
-  var d=items[idx];if(!d)return;
+  var d=items[idx]; if(!d) return;
   svg.querySelectorAll('.donut-segment').forEach(function(s){
     var isThis=s.getAttribute('data-idx')===String(idx);
-    s.style.strokeWidth=isThis?'22':'15';
-    s.style.opacity=isThis?'1':'0.45';
+    s.style.strokeWidth=isThis?'23':'14';
+    s.style.opacity=isThis?'1':'0.35';
   });
-  var cl=document.getElementById('donut-cl');
-  var ca=document.getElementById('donut-ca');
-  var cs=document.getElementById('donut-cs');
-  if(cl)cl.textContent=d.n;
-  if(ca)ca.textContent=fmtK(d.v);
-  if(cs)cs.textContent=Math.round((d.v/total)*100)+'%';
+  document.getElementById('donut-cl').textContent=d.n;
+  document.getElementById('donut-ca').textContent=fmtK(d.v);
+  document.getElementById('donut-cs').textContent=Math.round((d.v/total)*100)+'% del total';
   document.querySelectorAll('.donut-leg-item').forEach(function(el,i){
-    el.style.opacity=i===idx?'1':'0.4';
+    el.style.opacity=i===idx?'1':'0.45';
     el.classList.toggle('active-leg',i===idx);
   });
 }
 
-function donutUnhover(seg,idx){
+function _donutReset(){
   var svg=document.getElementById('donut-svg');
-  if(!svg)return;
+  if(!svg) return;
   var total=parseFloat(svg.getAttribute('data-total'));
   svg.querySelectorAll('.donut-segment').forEach(function(s){
-    s.style.strokeWidth='18';s.style.opacity='1';
+    s.style.strokeWidth='18'; s.style.opacity='1';
   });
-  var cl=document.getElementById('donut-cl');
-  var ca=document.getElementById('donut-ca');
-  var cs=document.getElementById('donut-cs');
-  if(cl)cl.textContent='Total';
-  if(ca)ca.textContent=fmtK(total);
-  if(cs)cs.textContent='';
+  document.getElementById('donut-cl').textContent='Total';
+  document.getElementById('donut-ca').textContent=fmtK(total);
+  document.getElementById('donut-cs').textContent='';
   document.querySelectorAll('.donut-leg-item').forEach(function(el){
-    el.style.opacity='1';
-    el.classList.remove('active-leg');
+    el.style.opacity='1'; el.classList.remove('active-leg');
   });
 }
+
+function donutHover(seg,idx){ _donutSelect(idx); }
+function donutUnhover(seg,idx){ if(_donutActiveIdx<0) _donutReset(); }
 
 // Click en cuadrito de categoría → modal con desglose
 function verDetalleCategoria(cat){
@@ -4330,6 +4380,14 @@ function renderPerfilNuevo(){
       '<button class="icon-btn" onclick="toggleTheme()" aria-label="Cambiar tema"><i data-lucide="moon" id="theme-icon"></i></button>'+
     '</div>'+
 
+    '<div class="setup-card" style="margin-bottom:12px;">'+
+      '<div class="setup-card-title"><i data-lucide="user"></i> Tu nombre</div>'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;">'+
+        '<span style="font-size:16px;font-weight:700;color:var(--text);flex:1;">'+(DB.config.nombre||'Moises')+'</span>'+
+        '<button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="editarNombre()"><i data-lucide="pencil"></i> Editar</button>'+
+      '</div>'+
+    '</div>'+
+
     '<div class="setup-card">'+
       '<div class="setup-card-title"><i data-lucide="cloud"></i> Sincronización con Google Sheets</div>'+
       '<div class="setup-card-desc">'+
@@ -4378,6 +4436,16 @@ function renderAnual(){
   var mesActual=hoy.getMonth(); // 0-based
   var patrimonio=Object.values(DB.cuentasInv).reduce(function(s,c){return s+(c.saldo||0);},0);
 
+  // Build patrimonio snapshot per month from historico
+  var patrimonioMes={};
+  Object.values(DB.cuentasInv).forEach(function(cta){
+    (cta.historico||[]).forEach(function(h){
+      var key=h.mes; // e.g. "Febrero"
+      if(!patrimonioMes[key]) patrimonioMes[key]=0;
+      patrimonioMes[key]+=(h.saldoFinal||0);
+    });
+  });
+
   var ytdIngresos=0,ytdGastos=0;
 
   var filas=MESES_ES.map(function(mes,i){
@@ -4392,9 +4460,18 @@ function renderAnual(){
 
     if(tieneDatos){ytdIngresos+=ingresos;ytdGastos+=gastos;}
 
-    // Patrimonio: mostramos el actual para todos los meses con datos
-    var patStr=tieneDatos&&patrimonio>0
-      ? '<td style="padding:9px 12px;text-align:right;color:var(--info);font-weight:600;font-family:\'JetBrains Mono\',monospace;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--border);">'+fmtK(patrimonio)+'</td>'
+    // Patrimonio: use historico snapshot for past months, current for present/future
+    var patVal=null;
+    if(esMesActual||esFuturo){
+      patVal=tieneDatos||esMesActual?patrimonio:null;
+    } else {
+      patVal=patrimonioMes[mes]||null;
+      // fallback: if no historico snapshot, show current only for months with data
+      if(!patVal&&tieneDatos) patVal=null; // don't show — no snapshot
+    }
+
+    var patStr=patVal!==null
+      ? '<td style="padding:9px 12px;text-align:right;color:var(--info);font-weight:600;font-family:\'JetBrains Mono\',monospace;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--border);">'+fmtK(patVal)+'</td>'
       : '<td style="padding:9px 12px;text-align:right;color:var(--text-3);border-bottom:1px solid var(--border);">—</td>';
 
     if(esFuturo&&!tieneDatos){
@@ -4478,6 +4555,29 @@ function renderAnual(){
 
   // Ajustar td padding inline para tbody
   page.innerHTML='<div style="padding:0 20px;">'+html+'</div>';
+}
+
+function editarNombre(){
+  appModalOpen({
+    title:'Tu nombre',
+    subtitle:'Aparece en el saludo del inicio',
+    bodyHTML:'<div class="field"><label class="field-label">Nombre</label>'+
+      '<input type="text" id="en-nombre" class="field-input" value="'+(DB.config.nombre||'Moises')+'" placeholder="Tu nombre" autofocus maxlength="30"></div>',
+    actions:[
+      {label:'Cancelar',style:'secondary',value:null},
+      {label:'Guardar',style:'primary',value:true}
+    ],
+    onResult:function(ok){
+      if(!ok) return;
+      var val=(document.getElementById('en-nombre').value||'').trim();
+      if(!val) return;
+      DB.config.nombre=val;
+      save();
+      toast('Nombre actualizado ✓');
+      renderDashboard();
+      renderPerfilNuevo();
+    }
+  });
 }
 
 async function syncNow(){
@@ -4888,6 +4988,15 @@ function renderAll(){
 // ══════════════════════════════════════════════════════════
 // ESC key cierra modales
 // ══════════════════════════════════════════════════════════
+document.addEventListener('click',function(e){
+  if(_donutActiveIdx<0) return;
+  var card=document.querySelector('.donut-card');
+  if(card&&!card.contains(e.target)){
+    _donutActiveIdx=-1;
+    _donutReset();
+  }
+});
+
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     closeSheet();
