@@ -1,5 +1,5 @@
 <meta charset="UTF-8">
-<!-- Mis Finanzas v5.1 build:20260506 -->
+<!-- Mis Finanzas v5.2 build:20260508 -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0a">
@@ -1695,7 +1695,7 @@ body.no-scroll .app{overflow:hidden;}
     <div class="greeting">
       <div>
         <span class="hi">Buen día,</span>
-        <span class="name" id="greeting-name">Moises</span>
+        <span class="name" id="greeting-name" onclick="editarNombre()" style="cursor:pointer;" title="Editar nombre">Moises</span>
       </div>
     </div>
     <div class="header-actions">
@@ -2001,7 +2001,35 @@ function bankInfo(tdc){
 }
 
 // ══════════════════════════════════════════════════════════
-// CATÁLOGO DE ICONOS para categorías (Lucide)
+// LOGOS DE INVERSIÓN — SVG inline por cuenta
+// ══════════════════════════════════════════════════════════
+const INV_LOGOS={
+  'DiDi Cuenta':{
+    bg:'#FF8000',
+    svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="width:24px;height:24px;"><rect width="40" height="40" rx="8" fill="#FF8000"/><path d="M8 12h10c5.5 0 10 4.5 10 10s-4.5 10-10 10H8V12z" fill="white"/><path d="M13 17h5c2.8 0 5 2.2 5 5s-2.2 5-5 5h-5V17z" fill="#FF8000"/></svg>'
+  },
+  'Openbank':{
+    bg:'#1a1a1a',
+    svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="width:26px;height:26px;"><circle cx="20" cy="20" r="12" fill="none" stroke="white" stroke-width="3"/><line x1="20" y1="8" x2="20" y2="20" stroke="white" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="10" r="4" fill="#ec0000"/></svg>'
+  },
+  'Revolut':{
+    bg:'#191C1F',
+    svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="width:24px;height:24px;"><path d="M8 8h14c4.4 0 8 3.6 8 8 0 3-1.7 5.7-4.2 7.1L30 32h-5l-3.8-8H13v8H8V8z" fill="white"/><rect x="13" y="13" width="9" height="6" rx="2" fill="#191C1F"/></svg>'
+  },
+  'Nu Cajita':{
+    bg:'#820AD1',
+    svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="width:22px;height:22px;"><rect x="7" y="13" width="26" height="20" rx="3" fill="white"/><rect x="7" y="13" width="26" height="6" rx="3" fill="rgba(255,255,255,0.4)"/><line x1="20" y1="7" x2="20" y2="14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>'
+  }
+};
+function invLogoHTML(nombre,size){
+  size=size||40;
+  var info=INV_LOGOS[nombre];
+  if(!info) return '<div class="cuenta-card-logo" style="background:var(--accent);"><i data-lucide="piggy-bank"></i></div>';
+  return '<div style="width:'+size+'px;height:'+size+'px;border-radius:'+(size<=36?'10px':'var(--r-md)')+';background:'+info.bg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">'+info.svg+'</div>';
+}
+function invLogoHTMLPerfil(nombre){
+  return invLogoHTML(nombre,36);
+}
 // ══════════════════════════════════════════════════════════
 const ICONOS_DISPONIBLES=[
   'utensils','shopping-cart','car','bus','plane','train',
@@ -2671,7 +2699,7 @@ function cicloDelPago(fechaPagoStr,tdc){
 }
 
 function eliminarGastoById(id){
-  var idx=DB.gastos.findIndex(function(g){return g.id===id;});
+  var idx=DB.gastos.findIndex(function(g){return String(g.id)===String(id);});
   if(idx<0) return;
   appConfirm('¿Eliminar gasto?','Esta acción no se puede deshacer.',{okLabel:'Eliminar',danger:true}).then(function(ok){
     if(!ok) return;
@@ -2683,7 +2711,7 @@ function eliminarGastoById(id){
   });
 }
 function eliminarIngresoById(id){
-  var idx=DB.ingresos.findIndex(function(i){return i.id===id;});
+  var idx=DB.ingresos.findIndex(function(i){return String(i.id)===String(id);});
   if(idx<0) return;
   appConfirm('¿Eliminar ingreso?','Esta acción no se puede deshacer.',{okLabel:'Eliminar',danger:true}).then(function(ok){
     if(!ok) return;
@@ -2695,7 +2723,7 @@ function eliminarIngresoById(id){
   });
 }
 function eliminarPagoById(id){
-  var idx=DB.pagosTDC.findIndex(function(p){return p.id===id;});
+  var idx=DB.pagosTDC.findIndex(function(p){return String(p.id)===String(id);});
   if(idx<0) return;
   appConfirm('¿Eliminar pago?','Esta acción no se puede deshacer.',{okLabel:'Eliminar',danger:true}).then(function(ok){
     if(!ok) return;
@@ -2733,6 +2761,8 @@ function navigate(pageId){
 // PÁGINA: TODOS LOS MOVIMIENTOS (con filtros)
 // ══════════════════════════════════════════════════════════
 var _movsPagina=1;
+var _catsPagina=1;
+var _CATS_POR_PAG=10;
 var _MOVS_POR_PAG=12;
 let _movsFiltros={
   tipo:'todos',     // 'todos' | 'gasto' | 'ingreso' | 'pago'
@@ -2746,6 +2776,7 @@ let _movsFiltros={
 function renderMovsPage(){
   var page=document.getElementById('page-movs');
   if(!page) return;
+  _movsRef=[]; // limpiar referencias del render anterior
 
   var f=_movsFiltros;
   var movs=combinarMovimientos(f);
@@ -2780,11 +2811,13 @@ function renderMovsPage(){
     var inicio=(_movsPagina-1)*_MOVS_POR_PAG;
     var movsPage=movs.slice(inicio,inicio+_MOVS_POR_PAG);
     var iconMap={ingreso:'arrow-down-left',pago:'credit-card'};
-    var rows=movsPage.map(function(m){
+    var rows=movsPage.map(function(m,i){
       var fc=String(m.fecha).substring(8,10)+'/'+String(m.fecha).substring(5,7)+'/'+String(m.fecha).substring(0,4);
       var sign=m.type==='ingreso'?'+':'-';
       var icono=m.type==='gasto'?iconoDeCategoria(m.cat||''):(m.type==='ingreso'?'arrow-down-left':'credit-card');
-      return '<div class="item-row clickable" onclick="verDetalle'+(m.type==='gasto'?'Gasto':m.type==='ingreso'?'Ingreso':'Pago')+'('+m.id+')">'+
+      var refIdx=_movsRef.length;
+      _movsRef.push({type:m.type, obj:m._obj}); // _obj es la referencia al objeto original
+      return '<div class="item-row clickable" onclick="verMovRef('+refIdx+')">'+
         '<div class="item-icon '+m.type+'"><i data-lucide="'+icono+'"></i></div>'+
         '<div class="item-info">'+
           '<div class="item-title">'+(m.desc||'(s/desc)')+'</div>'+
@@ -2815,7 +2848,16 @@ function renderMovsPage(){
       '<button class="filter-toggle-btn'+(hayFiltros?' has-filters':'')+'" onclick="openFilterSheet()">'+
         '<i data-lucide="sliders-horizontal"></i> Filtros'+(hayFiltros?' ('+[f.tipo!=='todos'?1:0,f.tdc!=='todos'?1:0,f.cat!=='todos'?1:0].reduce(function(a,b){return a+b;},0)+')':'')+
       '</button>'+
-      '<div class="filter-active-tags">'+tags+'</div>'+
+      '<div style="position:relative;display:inline-flex;align-items:center;">'+
+        '<select class="filter-toggle-btn" style="appearance:none;-webkit-appearance:none;padding-right:28px;cursor:pointer;background:var(--surface);border:1px solid var(--border);color:var(--text-2);" onchange="setMovsFiltro(\'orden\',this.value)">'+
+          '<option value="reciente"'+(f.orden==='reciente'?' selected':'')+'>Reciente</option>'+
+          '<option value="antiguo"'+(f.orden==='antiguo'?' selected':'')+'>Antiguo</option>'+
+          '<option value="mayor"'+(f.orden==='mayor'?' selected':'')+'>Mayor $</option>'+
+          '<option value="menor"'+(f.orden==='menor'?' selected':'')+'>Menor $</option>'+
+        '</select>'+
+        '<span style="position:absolute;right:10px;pointer-events:none;display:flex;align-items:center;"><i data-lucide="arrow-up-down" style="width:12px;height:12px;color:var(--text-3);"></i></span>'+
+      '</div>'+
+      (tags?'<div class="filter-active-tags" style="flex:1;overflow-x:auto;scrollbar-width:none;">'+tags+'</div>':'')+
     '</div>'+
 
     '<div class="field-row" style="margin-bottom:12px;">'+
@@ -2849,18 +2891,9 @@ function openFilterSheet(){
   var catOpts=[{k:'todos',l:'Todas'}].concat((DB.config.categorias||[]).map(function(c){return {k:c,l:c};}))
     .map(function(c){var safe=c.k.replace(/'/g,"\\'");return '<button class="filter-opt'+(f.cat===c.k?' active':'')+'" onclick="setMovsFiltroSheet(\'cat\',\''+safe+'\')">'+c.l+'</button>';}).join('');
 
-  var ordenOpts=[
-    {k:'reciente',l:'Más reciente'},
-    {k:'antiguo',l:'Más antiguo'},
-    {k:'mayor',l:'Mayor monto'},
-    {k:'menor',l:'Menor monto'}
-  ].map(function(c){return '<button class="filter-opt'+(f.orden===c.k?' active':'')+'" onclick="setMovsFiltroSheet(\'orden\',\''+c.k+'\')">'+c.l+'</button>';}).join('');
-
   var sheetHTML=
     '<div class="sheet-handle"></div>'+
     '<div class="sheet-title">Filtros</div>'+
-    '<div class="filter-section-title">Ordenar por</div>'+
-    '<div class="filter-options">'+ordenOpts+'</div>'+
     '<div class="filter-section-title">Tipo de movimiento</div>'+
     '<div class="filter-options">'+tipoOpts+'</div>'+
     '<div class="filter-section-title">Tarjeta / método de pago</div>'+
@@ -2916,35 +2949,35 @@ function combinarMovimientos(f){
     DB.gastos.forEach(function(g){
       if(f.tdc!=='todos' && g.tdc!==f.tdc) return;
       if(f.cat!=='todos' && g.cat!==f.cat) return;
-      if(f.desde && (g.fecha||'')<f.desde) return;
-      if(f.hasta && (g.fecha||'')>f.hasta) return;
+      if(f.desde && String(g.fecha||'').split('T')[0]<f.desde) return;
+      if(f.hasta && String(g.fecha||'').split('T')[0]>f.hasta) return;
       movs.push({
         type:'gasto',id:g.id,fecha:g.fecha,desc:g.desc,
-        cat:g.cat,
-        monto:g.monto,
-        meta:g.cat+' · '+g.tdc+(g.msi==='Si'?' · MSI '+(g.meses||'?')+'m':'')
+        cat:g.cat,monto:g.monto,
+        meta:g.cat+' · '+g.tdc+(g.msi==='Si'?' · MSI '+(g.meses||'?')+'m':''),
+        _obj:g
       });
     });
   }
   if(f.tipo==='todos' || f.tipo==='ingreso'){
     DB.ingresos.forEach(function(i){
-      if(f.tdc!=='todos') return; // ingreso no tiene tdc
-      if(f.cat!=='todos') return; // ingreso no tiene cat
-      if(f.desde && (i.fecha||'')<f.desde) return;
-      if(f.hasta && (i.fecha||'')>f.hasta) return;
-      movs.push({type:'ingreso',id:i.id,fecha:i.fecha,desc:i.desc||i.tipo,monto:i.monto,meta:i.tipo});
+      if(f.tdc!=='todos') return;
+      if(f.cat!=='todos') return;
+      if(f.desde && String(i.fecha||'').split('T')[0]<f.desde) return;
+      if(f.hasta && String(i.fecha||'').split('T')[0]>f.hasta) return;
+      movs.push({type:'ingreso',id:i.id,fecha:i.fecha,desc:i.desc||i.tipo,monto:i.monto,meta:i.tipo,_obj:i});
     });
   }
   if(f.tipo==='todos' || f.tipo==='pago'){
     DB.pagosTDC.forEach(function(p){
       if(f.tdc!=='todos' && p.tdc!==f.tdc) return;
-      if(f.cat!=='todos') return; // pago no tiene cat
-      if(f.desde && (p.fecha||'')<f.desde) return;
-      if(f.hasta && (p.fecha||'')>f.hasta) return;
-      movs.push({type:'pago',id:p.id,fecha:p.fecha,desc:'Pago a '+p.tdc,monto:p.monto,meta:p.tdc});
+      if(f.cat!=='todos') return;
+      if(f.desde && String(p.fecha||'').split('T')[0]<f.desde) return;
+      if(f.hasta && String(p.fecha||'').split('T')[0]>f.hasta) return;
+      movs.push({type:'pago',id:p.id,fecha:p.fecha,desc:'Pago a '+p.tdc,monto:p.monto,meta:p.tdc,_obj:p});
     });
   }
-  movs.sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+  movs.sort(function(a,b){return (String(b.fecha||'')).localeCompare(String(a.fecha||''));});
   return movs;
 }
 
@@ -2982,143 +3015,163 @@ function exportarMovsCSV(){
   toast('CSV exportado ✓ ('+movs.length+' movs)');
 }
 
-// ══════════════════════════════════════════════════════════
-// DETALLE DE MOVIMIENTO (Gasto/Ingreso/Pago) con Editar y Eliminar
-// ══════════════════════════════════════════════════════════
-function verDetalleGasto(id){
-  var g=DB.gastos.find(function(x){return x.id===id;});
+// Array global de referencias a objetos del render actual de movimientos
+var _movsRef=[];
+var _editObj=null; // objeto completo en edición activa
+
+function verMovRef(idx){
+  var entry=_movsRef[idx];
+  if(!entry){toast('Movimiento no encontrado','err');return;}
+  if(entry.type==='gasto') verDetalleGasto_obj(entry.obj);
+  else if(entry.type==='ingreso') verDetalleIngreso_obj(entry.obj);
+  else if(entry.type==='pago') verDetallePago_obj(entry.obj);
+}
+
+function verDetalleGasto_obj(g){
   if(!g){toast('Gasto no encontrado','err');return;}
+  var fechaLimpia=String(g.fecha||'').split('T')[0];
   var bodyHTML=
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Monto</span><span class="tdc-detail-value" style="color:var(--danger);font-size:15px;">'+fmt(g.monto)+'</span></div>'+
-    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value" style="font-family:inherit;">'+g.fecha+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value" style="font-family:inherit;">'+fechaLimpia+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Descripción</span><span class="tdc-detail-value" style="font-family:inherit;">'+(g.desc||'—')+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Categoría</span><span class="tdc-detail-value" style="font-family:inherit;">'+(g.cat||'—')+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">TDC / Efectivo</span><span class="tdc-detail-value" style="font-family:inherit;">'+(g.tdc||'—')+'</span></div>'+
     (g.msi==='Si'?'<div class="tdc-detail-row"><span class="tdc-detail-label">MSI</span><span class="tdc-detail-value">'+(g.meses||'?')+' meses · '+fmt(g.monto/(parseInt(g.meses)||1))+'/mes</span></div>':'')+
     (g.notas?'<div class="tdc-detail-row"><span class="tdc-detail-label">Notas</span><span class="tdc-detail-value" style="font-family:inherit;font-weight:400;">'+g.notas+'</span></div>':'');
+  var gastoRef=g;
   appModalOpen({
-    title:'Gasto',
-    subtitle:g.fecha,
-    bodyHTML:bodyHTML,
-    actions:[
-      {label:'Eliminar',style:'danger',value:'del'},
-      {label:'Editar',style:'primary',value:'edit'}
-    ],
+    title:'Gasto',subtitle:fechaLimpia,bodyHTML:bodyHTML,
+    actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
     onResult:function(r){
-      if(r==='edit') setTimeout(function(){editarGasto(id);},250);
-      else if(r==='del') eliminarGastoById(id);
+      if(r==='edit') setTimeout(function(){_abrirEditorGasto(gastoRef);},250);
+      else if(r==='del') eliminarGastoById(String(gastoRef.id));
     }
   });
 }
 
-function verDetalleIngreso(id){
-  var i=DB.ingresos.find(function(x){return x.id===id;});
+function verDetalleIngreso_obj(i){
   if(!i){toast('Ingreso no encontrado','err');return;}
+  var fechaLimpia=String(i.fecha||'').split('T')[0];
   var bodyHTML=
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Monto</span><span class="tdc-detail-value" style="color:var(--success);font-size:15px;">'+fmt(i.monto)+'</span></div>'+
-    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value" style="font-family:inherit;">'+i.fecha+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value" style="font-family:inherit;">'+fechaLimpia+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Tipo</span><span class="tdc-detail-value" style="font-family:inherit;">'+(i.tipo||'—')+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Descripción</span><span class="tdc-detail-value" style="font-family:inherit;">'+(i.desc||'—')+'</span></div>';
+  var ingresoRef=i;
   appModalOpen({
-    title:'Ingreso',
-    subtitle:i.fecha,
-    bodyHTML:bodyHTML,
-    actions:[
-      {label:'Eliminar',style:'danger',value:'del'},
-      {label:'Editar',style:'primary',value:'edit'}
-    ],
+    title:'Ingreso',subtitle:fechaLimpia,bodyHTML:bodyHTML,
+    actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
     onResult:function(r){
-      if(r==='edit') setTimeout(function(){editarIngreso(id);},250);
-      else if(r==='del') eliminarIngresoById(id);
+      if(r==='edit') setTimeout(function(){_abrirEditorIngreso(ingresoRef);},250);
+      else if(r==='del') eliminarIngresoById(String(ingresoRef.id));
     }
   });
 }
 
-function verDetallePago(id){
-  var p=DB.pagosTDC.find(function(x){return x.id===id;});
+function verDetallePago_obj(p){
   if(!p){toast('Pago no encontrado','err');return;}
+  var fechaLimpia=String(p.fecha||'').split('T')[0];
   var bodyHTML=
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Monto</span><span class="tdc-detail-value" style="color:var(--info);font-size:15px;">'+fmt(p.monto)+'</span></div>'+
-    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value" style="font-family:inherit;">'+p.fecha+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value" style="font-family:inherit;">'+fechaLimpia+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">TDC</span><span class="tdc-detail-value" style="font-family:inherit;">'+(p.tdc||'—')+'</span></div>'+
     (p.notas?'<div class="tdc-detail-row"><span class="tdc-detail-label">Notas</span><span class="tdc-detail-value" style="font-family:inherit;font-weight:400;">'+p.notas+'</span></div>':'');
+  var pagoRef=p;
   appModalOpen({
-    title:'Pago a TDC',
-    subtitle:p.fecha,
-    bodyHTML:bodyHTML,
-    actions:[
-      {label:'Eliminar',style:'danger',value:'del'},
-      {label:'Editar',style:'primary',value:'edit'}
-    ],
+    title:'Pago a TDC',subtitle:fechaLimpia,bodyHTML:bodyHTML,
+    actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
     onResult:function(r){
-      if(r==='edit') setTimeout(function(){editarPago(id);},250);
-      else if(r==='del') eliminarPagoById(id);
+      if(r==='edit') setTimeout(function(){_abrirEditorPago(pagoRef);},250);
+      else if(r==='del') eliminarPagoById(String(pagoRef.id));
     }
   });
 }
 
-// Editar reabre el form con datos existentes
-function editarGasto(id){
-  var g=DB.gastos.find(function(x){return x.id===id;});
-  if(!g) return;
+// Abre el form editor con el objeto directo (sin búsqueda por ID)
+function _abrirEditorGasto(obj){
+  _editObj=obj;
   _formMode='gasto';
-  _formEditId=id;
+  _formEditId=String(obj.id);
   document.getElementById('form-title').textContent='Editar gasto';
   buildFormBody('gasto');
-  // Pre-llenar campos
   setTimeout(function(){
-    document.getElementById('ff-monto').value=g.monto;
-    document.getElementById('ff-desc').value=g.desc||'';
-    document.getElementById('ff-cat').value=g.cat||'';
-    document.getElementById('ff-tdc').value=g.tdc||'';
-    document.getElementById('ff-fecha').value=g.fecha||today();
-    document.getElementById('ff-notas').value=g.notas||'';
-    if(g.msi==='Si'){
-      toggleMSI(true);
-      document.getElementById('ff-meses').value=g.meses||'';
-    }
-  },50);
+    if(!_editObj) return;
+    var o=_editObj;
+    var el=function(id){return document.getElementById(id);};
+    if(el('ff-monto')) el('ff-monto').value=o.monto;
+    if(el('ff-desc'))  el('ff-desc').value=o.desc||'';
+    if(el('ff-cat'))   el('ff-cat').value=o.cat||'';
+    if(el('ff-tdc'))   el('ff-tdc').value=o.tdc||'';
+    if(el('ff-fecha')) el('ff-fecha').value=String(o.fecha||today()).split('T')[0];
+    if(el('ff-notas')) el('ff-notas').value=o.notas||'';
+    if(o.msi==='Si'){toggleMSI(true);if(el('ff-meses'))el('ff-meses').value=o.meses||'';}
+  },80);
   document.getElementById('form-modal').classList.add('open');
   document.getElementById('form-backdrop').classList.add('open');
   document.querySelector('.app').classList.add('no-scroll');
 }
 
-function editarIngreso(id){
-  var i=DB.ingresos.find(function(x){return x.id===id;});
-  if(!i) return;
+function _abrirEditorIngreso(obj){
+  _editObj=obj;
   _formMode='ingreso';
-  _formEditId=id;
+  _formEditId=String(obj.id);
   document.getElementById('form-title').textContent='Editar ingreso';
   buildFormBody('ingreso');
   setTimeout(function(){
-    document.getElementById('ff-monto').value=i.monto;
-    document.getElementById('ff-tipo').value=i.tipo||'';
-    document.getElementById('ff-desc').value=i.desc||'';
-    document.getElementById('ff-fecha').value=i.fecha||today();
-  },50);
+    if(!_editObj) return;
+    var o=_editObj;
+    var el=function(id){return document.getElementById(id);};
+    if(el('ff-monto')) el('ff-monto').value=o.monto;
+    if(el('ff-tipo'))  el('ff-tipo').value=o.tipo||'';
+    if(el('ff-desc'))  el('ff-desc').value=o.desc||'';
+    if(el('ff-fecha')) el('ff-fecha').value=String(o.fecha||today()).split('T')[0];
+  },80);
   document.getElementById('form-modal').classList.add('open');
   document.getElementById('form-backdrop').classList.add('open');
   document.querySelector('.app').classList.add('no-scroll');
 }
 
-function editarPago(id){
-  var p=DB.pagosTDC.find(function(x){return x.id===id;});
-  if(!p) return;
+function _abrirEditorPago(obj){
+  _editObj=obj;
   _formMode='pago';
-  _formEditId=id;
+  _formEditId=String(obj.id);
   document.getElementById('form-title').textContent='Editar pago';
   buildFormBody('pago');
   setTimeout(function(){
-    document.getElementById('ff-monto').value=p.monto;
-    document.getElementById('ff-tdc').value=p.tdc||'';
-    document.getElementById('ff-fecha').value=p.fecha||today();
-    document.getElementById('ff-notas').value=p.notas||'';
+    if(!_editObj) return;
+    var o=_editObj;
+    var el=function(id){return document.getElementById(id);};
+    if(el('ff-monto')) el('ff-monto').value=o.monto;
+    if(el('ff-tdc'))   el('ff-tdc').value=o.tdc||'';
+    if(el('ff-fecha')) el('ff-fecha').value=String(o.fecha||today()).split('T')[0];
+    if(el('ff-notas')) el('ff-notas').value=o.notas||'';
     updatePagoSugerido();
-  },50);
+  },80);
   document.getElementById('form-modal').classList.add('open');
   document.getElementById('form-backdrop').classList.add('open');
   document.querySelector('.app').classList.add('no-scroll');
 }
+
+// === wrappers por ID (llamados desde desglose TDC, categorías, etc.) ===
+function verDetalleGasto(id){
+  var g=DB.gastos.find(function(x){return String(x.id)===String(id);});
+  if(!g){toast('Gasto no encontrado','err');return;}
+  verDetalleGasto_obj(g);
+}
+function verDetalleIngreso(id){
+  var i=DB.ingresos.find(function(x){return String(x.id)===String(id);});
+  if(!i){toast('Ingreso no encontrado','err');return;}
+  verDetalleIngreso_obj(i);
+}
+function verDetallePago(id){
+  var p=DB.pagosTDC.find(function(x){return String(x.id)===String(id);});
+  if(!p){toast('Pago no encontrado','err');return;}
+  verDetallePago_obj(p);
+}
+function editarGasto(id){var g=DB.gastos.find(function(x){return String(x.id)===String(id);});if(!g){toast('Gasto no encontrado','err');return;}  _abrirEditorGasto(g);}
+function editarIngreso(id){var i=DB.ingresos.find(function(x){return String(x.id)===String(id);});if(!i){toast('Ingreso no encontrado','err');return;}  _abrirEditorIngreso(i);}
+function editarPago(id){var p=DB.pagosTDC.find(function(x){return String(x.id)===String(id);});if(!p){toast('Pago no encontrado','err');return;}  _abrirEditorPago(p);}
+
 
 
 function buildMonthOptions(){
@@ -3564,6 +3617,7 @@ function closeForm(e){
   document.querySelector('.app').classList.remove('no-scroll');
   _formMode=null;
   _formEditId=null;
+  _editObj=null;
 }
 
 function buildFormBody(mode){
@@ -3675,15 +3729,14 @@ function submitForm(){
     if(msi==='Si' && (!meses || meses<1)){toast('Indica el número de meses MSI','err');return;}
     var notas=document.getElementById('ff-notas').value.trim();
     if(isEdit){
-      var g=DB.gastos.find(function(x){return x.id===_formEditId;});
+      var g=_editObj || DB.gastos.find(function(x){return String(x.id)===String(_formEditId);});
       if(g){
         g.fecha=fecha;g.monto=monto;g.desc=desc;g.cat=cat;g.tdc=tdc;
         g.msi=msi;g.meses=meses;g.notas=notas;
         g.mes=mesEsFromKey(fecha.substring(0,7));
         g.ciclo=cicloDeGastoCorrecto(fecha,tdc);
         save();
-        // Para sincronizar edits con Sheets: borramos el viejo y agregamos nuevo
-        syncSheetDelete('gastos',[_formEditId]);
+        syncSheetDelete('gastos',[g.id]);
         pushSheets('gastos',g);
         toast('Gasto actualizado ✓');
       }
@@ -3696,12 +3749,12 @@ function submitForm(){
     var tipo=document.getElementById('ff-tipo').value;
     var desc=document.getElementById('ff-desc').value.trim();
     if(isEdit){
-      var i=DB.ingresos.find(function(x){return x.id===_formEditId;});
+      var i=_editObj || DB.ingresos.find(function(x){return String(x.id)===String(_formEditId);});
       if(i){
         i.fecha=fecha;i.monto=monto;i.tipo=tipo;i.desc=desc;
         i.mes=mesEsFromKey(fecha.substring(0,7));
         save();
-        syncSheetDelete('ingresos',[_formEditId]);
+        syncSheetDelete('ingresos',[i.id]);
         pushSheets('ingresos',i);
         toast('Ingreso actualizado ✓');
       }
@@ -3715,13 +3768,13 @@ function submitForm(){
     if(!tdc){toast('Selecciona una tarjeta','err');return;}
     var notas=document.getElementById('ff-notas').value.trim();
     if(isEdit){
-      var p=DB.pagosTDC.find(function(x){return x.id===_formEditId;});
+      var p=_editObj || DB.pagosTDC.find(function(x){return String(x.id)===String(_formEditId);});
       if(p){
         p.fecha=fecha;p.monto=monto;p.tdc=tdc;p.notas=notas;
         p.mes=mesEsFromKey(fecha.substring(0,7));
         p.ciclo=cicloDelPago(fecha,tdc);
         save();
-        syncSheetDelete('pagosTDC',[_formEditId]);
+        syncSheetDelete('pagosTDC',[p.id]);
         pushSheets('pagosTDC',p);
         toast('Pago actualizado ✓');
       }
@@ -3829,7 +3882,7 @@ function renderInversionesNuevo(){
 
       html+='<div class="cuenta-card" id="cc-'+safeN+'">'+
         '<div class="cuenta-card-header" onclick="toggleCuenta(\''+safeN+'\')">'+
-          '<div class="cuenta-card-logo"><i data-lucide="piggy-bank"></i></div>'+
+          invLogoHTML(nombre,40)+
           '<div class="cuenta-card-info">'+
             '<div class="cuenta-card-name">'+nombre+'</div>'+
             '<div class="cuenta-card-tasa">'+tasaEfec.toFixed(2)+'% ef. · '+tramos.length+' tramo'+(tramos.length>1?'s':'')+'</div>'+
@@ -4063,9 +4116,9 @@ function renderStatsNuevo(){
         (totalMesAnt>0?'<div style="font-size:11px;color:var(--text-3);margin-top:2px;">vs '+fmtK(totalMesAnt)+' en '+MESES_ES[prevMesIdx]+deltaTxt+'</div>':'')+
       '</div>'+
       '<div class="month-nav" style="background:var(--surface-2);border-color:var(--border);flex-shrink:0;">'+
-        '<button class="month-nav-btn" onclick="changeMonthDelta(-1);renderStatsNuevo();" style="color:var(--text-2);"><i data-lucide="chevron-left"></i></button>'+
+        '<button class="month-nav-btn" onclick="changeMonthDelta(-1);_catsPagina=1;renderStatsNuevo();" style="color:var(--text-2);"><i data-lucide="chevron-left"></i></button>'+
         '<span style="font-size:13px;font-weight:700;color:var(--text);min-width:56px;text-align:center;white-space:nowrap;padding:0 8px;">'+labelMes+'</span>'+
-        '<button class="month-nav-btn" onclick="changeMonthDelta(1);renderStatsNuevo();" style="color:var(--text-2);"><i data-lucide="chevron-right"></i></button>'+
+        '<button class="month-nav-btn" onclick="changeMonthDelta(1);_catsPagina=1;renderStatsNuevo();" style="color:var(--text-2);"><i data-lucide="chevron-right"></i></button>'+
       '</div>'+
     '</div>';
 
@@ -4104,10 +4157,18 @@ function renderStatsNuevo(){
       '<i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--text-3);flex-shrink:0;"></i>'+
     '</div>';
 
-    // === GRID DE CUADRITOS ===
-    html+='<div class="section-head" style="margin-bottom:12px;"><span class="section-title">Por categoría</span></div>';
+    // === GRID DE CUADRITOS CON PAGINACIÓN (máx 10) ===
+    var conGastosCats=sorted.filter(function(e){return e[1]>0;});
+    var totalCatsPags=Math.ceil(conGastosCats.length/_CATS_POR_PAG);
+    if(_catsPagina>totalCatsPags) _catsPagina=Math.max(1,totalCatsPags);
+    var catInicio=(_catsPagina-1)*_CATS_POR_PAG;
+    var catsPage=conGastosCats.slice(catInicio,catInicio+_CATS_POR_PAG);
+
+    html+='<div class="section-head" style="margin-bottom:12px;"><span class="section-title">Por categoría</span>'+
+      (totalCatsPags>1?'<span style="font-size:11px;color:var(--text-3);font-weight:500;">'+_catsPagina+' / '+totalCatsPags+'</span>':'')+
+    '</div>';
     html+='<div class="cat-grid">';
-    sorted.forEach(function(e){
+    catsPage.forEach(function(e){
       var cat=e[0];var total=e[1];
       var lim=DB.config.presupuesto[cat]||0;
       var pctOfTotal=totalMes>0?(total/totalMes)*100:0;
@@ -4131,6 +4192,15 @@ function renderStatsNuevo(){
       '</div>';
     });
     html+='</div>';
+
+    // Paginación de categorías
+    if(totalCatsPags>1){
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;margin-top:4px;">'+
+        '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+(_catsPagina<=1?'opacity:0.35;pointer-events:none;':'')+'" onclick="_catsPagina--;renderStatsNuevo()">← Anterior</button>'+
+        '<span style="font-size:12px;color:var(--text-3);">'+_catsPagina+' / '+totalCatsPags+' · '+conGastosCats.length+' categorías</span>'+
+        '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+(_catsPagina>=totalCatsPags?'opacity:0.35;pointer-events:none;':'')+'" onclick="_catsPagina++;renderStatsNuevo()">Siguiente →</button>'+
+      '</div>';
+    }
   }
 
   page.innerHTML='<div style="padding:0 20px;">'+html+'</div>';
@@ -4342,8 +4412,8 @@ function renderPerfilNuevo(){
   var ctasHTML=(DB.config.cuentas||[]).map(function(c){
     var safeC=c.replace(/'/g,"\\'");
     return '<div class="item-row">'+
-      '<div class="item-icon" style="background:var(--accent-soft);"><i data-lucide="piggy-bank" style="color:var(--accent);"></i></div>'+
-      '<div class="item-info"><div class="item-title">'+c+'</div><div class="item-meta">Gestiona tramos en Inversiones</div></div>'+
+      invLogoHTMLPerfil(c)+
+      '<div class="item-info" style="margin-left:12px;"><div class="item-title">'+c+'</div><div class="item-meta">Gestiona tramos en Inversiones</div></div>'+
       '<button class="row-action-btn" onclick="eliminarCuenta(\''+safeC+'\')" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>'+
     '</div>';
   }).join('');
@@ -4377,14 +4447,9 @@ function renderPerfilNuevo(){
     '<div class="page-header-bar">'+
       '<button class="icon-btn" onclick="navigate(\'inicio\')" aria-label="Volver"><i data-lucide="arrow-left"></i></button>'+
       '<div class="title">Configuración</div>'+
-      '<button class="icon-btn" onclick="toggleTheme()" aria-label="Cambiar tema"><i data-lucide="moon" id="theme-icon"></i></button>'+
-    '</div>'+
-
-    '<div class="setup-card" style="margin-bottom:12px;">'+
-      '<div class="setup-card-title"><i data-lucide="user"></i> Tu nombre</div>'+
-      '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;">'+
-        '<span style="font-size:16px;font-weight:700;color:var(--text);flex:1;">'+(DB.config.nombre||'Moises')+'</span>'+
-        '<button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="editarNombre()"><i data-lucide="pencil"></i> Editar</button>'+
+      '<div style="display:flex;gap:6px;">'+
+        '<button class="icon-btn" onclick="editarNombre()" aria-label="Editar nombre" title="Editar nombre: '+(DB.config.nombre||'Moises')+'"><i data-lucide="user-pen"></i></button>'+
+        '<button class="icon-btn" onclick="toggleTheme()" aria-label="Cambiar tema"><i data-lucide="moon" id="theme-icon"></i></button>'+
       '</div>'+
     '</div>'+
 
@@ -4422,7 +4487,7 @@ function renderPerfilNuevo(){
       '<input type="file" id="import-file" accept=".json" style="display:none;" onchange="importarDatos(this)">'+
     '</div>'+
 
-    '<div style="text-align:center;font-size:11px;color:var(--text-3);padding:20px 0 40px;">Mis Finanzas v5.0 · Fase 3</div>';
+    '<div style="text-align:center;font-size:11px;color:var(--text-3);padding:20px 0 40px;">Mis Finanzas v5.2 · Fase 3</div>';
 
   page.innerHTML='<div style="padding:0 20px;">'+html+'</div>';
   renderIcons();
