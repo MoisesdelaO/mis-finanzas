@@ -1740,11 +1740,11 @@ body.no-scroll .app{overflow:hidden;}
 
     <!-- Patrimonio strip - 3 cards -->
     <div class="patrimonio-strip">
-      <div class="patr-card">
+      <div class="patr-card clickable" onclick="navigate('ingresos')" title="Ver ingresos">
         <span class="patr-label"><i data-lucide="arrow-down-circle"></i> Ingresos</span>
         <span class="patr-value success mono" id="strip-ingresos">$42,120</span>
       </div>
-      <div class="patr-card">
+      <div class="patr-card clickable" onclick="navigate('movs')" title="Ver gastos">
         <span class="patr-label"><i data-lucide="arrow-up-circle"></i> Gastos</span>
         <span class="patr-value danger mono" id="strip-gastos">$13,580</span>
       </div>
@@ -1835,6 +1835,13 @@ body.no-scroll .app{overflow:hidden;}
        ════════════════════════════════════════════════════════════════ -->
   <section class="page" id="page-movs">
     <!-- Renderizado dinámicamente por renderMovsPage() -->
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       PÁGINA: INGRESOS (con filtros)
+       ════════════════════════════════════════════════════════════════ -->
+  <section class="page" id="page-ingresos">
+    <!-- Renderizado dinámicamente por renderIngresosPage() -->
   </section>
 
 </div>
@@ -2755,6 +2762,7 @@ function navigate(pageId){
   if(pageId==='anual') renderAnual();
   if(pageId==='perfil') renderPerfilNuevo();
   if(pageId==='movs') renderMovsPage();
+  if(pageId==='ingresos') renderIngresosPage();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2938,8 +2946,169 @@ function setMovsFiltro(campo,valor){
 }
 
 function limpiarFiltrosMovs(){
-  _movsFiltros={tipo:'todos',tdc:'todos',cat:'todos',desde:'',hasta:''};
+  _movsFiltros={tipo:'todos',tdc:'todos',cat:'todos',desde:'',hasta:'',orden:'reciente'};
   renderMovsPage();
+}
+
+// ══════════════════════════════════════════════════════════
+// PÁGINA: INGRESOS
+// ══════════════════════════════════════════════════════════
+var _ingPagina=1;
+var _ING_POR_PAG=15;
+var _ingFiltros={tipo:'todos',desde:'',hasta:'',orden:'reciente'};
+
+function renderIngresosPage(){
+  var page=document.getElementById('page-ingresos');
+  if(!page) return;
+  _movsRef=[];
+  var f=_ingFiltros;
+
+  // Obtener y filtrar ingresos
+  var lista=DB.ingresos.filter(function(i){
+    if(f.tipo!=='todos' && i.tipo!==f.tipo) return false;
+    if(f.desde && String(i.fecha||'').split('T')[0]<f.desde) return false;
+    if(f.hasta && String(i.fecha||'').split('T')[0]>f.hasta) return false;
+    return true;
+  });
+
+  // Ordenar
+  lista.sort(function(a,b){
+    if(f.orden==='antiguo') return String(a.fecha||'').localeCompare(String(b.fecha||''));
+    if(f.orden==='mayor') return b.monto-a.monto;
+    if(f.orden==='menor') return a.monto-b.monto;
+    return String(b.fecha||'').localeCompare(String(a.fecha||''));
+  });
+
+  var totalMonto=lista.reduce(function(s,i){return s+i.monto;},0);
+  var hayFiltros=(f.tipo!=='todos'||f.desde||f.hasta);
+
+  // Tags activos
+  var tags='';
+  if(f.tipo!=='todos') tags+='<span class="filter-active-tag">'+f.tipo+'<i data-lucide="x" onclick="setIngFiltro(\'tipo\',\'todos\')"></i></span>';
+  if(f.desde) tags+='<span class="filter-active-tag">Desde '+f.desde+'<i data-lucide="x" onclick="setIngFiltro(\'desde\',\'\')"></i></span>';
+  if(f.hasta) tags+='<span class="filter-active-tag">Hasta '+f.hasta+'<i data-lucide="x" onclick="setIngFiltro(\'hasta\',\'\')"></i></span>';
+
+  // Lista paginada
+  var listaHTML='';
+  if(lista.length===0){
+    listaHTML='<div class="empty-state"><div class="empty-state-icon"><i data-lucide="inbox"></i></div><div class="empty-state-text">Sin ingresos con estos filtros.</div></div>';
+  } else {
+    var totalPags=Math.ceil(lista.length/_ING_POR_PAG);
+    if(_ingPagina>totalPags) _ingPagina=totalPags;
+    var inicio=(_ingPagina-1)*_ING_POR_PAG;
+    var pageItems=lista.slice(inicio,inicio+_ING_POR_PAG);
+    var rows=pageItems.map(function(i){
+      var fc=String(i.fecha||'').substring(8,10)+'/'+String(i.fecha||'').substring(5,7)+'/'+String(i.fecha||'').substring(0,4);
+      var refIdx=_movsRef.length;
+      _movsRef.push({type:'ingreso',obj:i});
+      return '<div class="item-row clickable" onclick="verMovRef('+refIdx+')">'+
+        '<div class="item-icon ingreso"><i data-lucide="arrow-down-left"></i></div>'+
+        '<div class="item-info">'+
+          '<div class="item-title">'+(i.desc||i.tipo||'Ingreso')+'</div>'+
+          '<div class="item-meta">'+fc+(i.tipo?' · '+i.tipo:'')+'</div>'+
+        '</div>'+
+        '<div class="item-amount ingreso">+'+fmtK(Math.round(i.monto))+'</div>'+
+      '</div>';
+    }).join('');
+
+    var pagCtrl=totalPags>1?'<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-top:8px;">'+
+      '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+(_ingPagina<=1?'opacity:0.35;pointer-events:none;':'')+'" onclick="ingPag(-1)">← Anterior</button>'+
+      '<span style="font-size:12px;color:var(--text-3);">'+_ingPagina+' / '+totalPags+'</span>'+
+      '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+(_ingPagina>=totalPags?'opacity:0.35;pointer-events:none;':'')+'" onclick="ingPag(1)">Siguiente →</button>'+
+    '</div>':'';
+
+    listaHTML='<div class="item-list">'+rows+'</div>'+pagCtrl;
+  }
+
+  // Tipos únicos para filtro
+  var tiposUnicos=['todos'].concat(
+    DB.ingresos.map(function(i){return i.tipo||'';})
+    .filter(function(t,idx,arr){return t && arr.indexOf(t)===idx;})
+    .sort()
+  );
+
+  var html=
+    '<div class="page-header-bar">'+
+      '<button class="icon-btn" onclick="navigate(\'stats\')" aria-label="Volver"><i data-lucide="arrow-left"></i></button>'+
+      '<div class="title">Ingresos</div>'+
+      '<button class="icon-btn" onclick="exportarIngresosCSV()" aria-label="Exportar CSV"><i data-lucide="download"></i></button>'+
+    '</div>'+
+
+    // Resumen hero
+    '<div style="background:linear-gradient(135deg,var(--success) 0%,#22c55e 100%);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:16px;color:#fff;">'+
+      '<div style="font-size:11px;font-weight:600;opacity:0.85;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Total ingresos filtrados</div>'+
+      '<div style="font-size:28px;font-weight:800;letter-spacing:-0.02em;">'+fmt(totalMonto)+'</div>'+
+      '<div style="font-size:12px;opacity:0.8;margin-top:4px;">'+lista.length+' registro'+(lista.length===1?'':'s')+'</div>'+
+    '</div>'+
+
+    // Filtro tipo (chips)
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
+      tiposUnicos.map(function(t){
+        var label=t==='todos'?'Todos':t;
+        var active=f.tipo===t;
+        return '<button onclick="setIngFiltro(\'tipo\',\''+t.replace(/'/g,"\\'")+'\')" style="'+
+          'padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid;transition:all 0.15s;'+
+          (active?'background:var(--success);color:#fff;border-color:var(--success);':'background:var(--surface);color:var(--text-2);border-color:var(--border);')+
+        '">'+label+'</button>';
+      }).join('')+
+    '</div>'+
+
+    // Barra filtros + orden
+    '<div class="filter-bar" style="margin-bottom:12px;">'+
+      (hayFiltros?'<button class="filter-toggle-btn has-filters" onclick="limpiarIngFiltros()"><i data-lucide="x"></i> Limpiar</button>':'<span style="font-size:12px;color:var(--text-3);">Todos los ingresos</span>')+
+      '<div style="flex:1;"></div>'+
+      '<div style="position:relative;display:inline-flex;align-items:center;">'+
+        '<select class="filter-toggle-btn" style="appearance:none;-webkit-appearance:none;padding-right:28px;cursor:pointer;background:var(--surface);border:1px solid var(--border);color:var(--text-2);" onchange="setIngFiltro(\'orden\',this.value)">'+
+          '<option value="reciente"'+(f.orden==='reciente'?' selected':'')+'>Reciente</option>'+
+          '<option value="antiguo"'+(f.orden==='antiguo'?' selected':'')+'>Antiguo</option>'+
+          '<option value="mayor"'+(f.orden==='mayor'?' selected':'')+'>Mayor $</option>'+
+          '<option value="menor"'+(f.orden==='menor'?' selected':'')+'>Menor $</option>'+
+        '</select>'+
+        '<span style="position:absolute;right:10px;pointer-events:none;display:flex;align-items:center;"><i data-lucide="arrow-up-down" style="width:12px;height:12px;color:var(--text-3);"></i></span>'+
+      '</div>'+
+    '</div>'+
+
+    // Rango de fechas
+    '<div class="field-row" style="margin-bottom:14px;">'+
+      '<div><label class="field-label">Desde</label><input type="date" class="field-input" value="'+f.desde+'" onchange="setIngFiltro(\'desde\',this.value)"></div>'+
+      '<div><label class="field-label">Hasta</label><input type="date" class="field-input" value="'+f.hasta+'" onchange="setIngFiltro(\'hasta\',this.value)"></div>'+
+    '</div>'+
+
+    listaHTML;
+
+  page.innerHTML='<div style="padding:0 20px;">'+html+'</div>';
+  renderIcons();
+}
+
+function ingPag(delta){
+  _ingPagina+=delta;
+  if(_ingPagina<1)_ingPagina=1;
+  renderIngresosPage();
+  document.querySelector('.app').scrollTop=0;
+}
+
+function setIngFiltro(campo,valor){
+  _ingFiltros[campo]=valor;
+  _ingPagina=1;
+  renderIngresosPage();
+}
+
+function limpiarIngFiltros(){
+  _ingFiltros={tipo:'todos',desde:'',hasta:'',orden:'reciente'};
+  _ingPagina=1;
+  renderIngresosPage();
+}
+
+function exportarIngresosCSV(){
+  var lista=DB.ingresos;
+  if(lista.length===0){toast('No hay ingresos para exportar','err');return;}
+  var rows=[['Fecha','Tipo','Descripción','Monto']];
+  lista.forEach(function(i){rows.push([i.fecha,i.tipo||'',i.desc||'',i.monto.toFixed(2)]);});
+  var csv=rows.map(function(r){return r.map(function(c){var s=String(c||'');return s.indexOf(',')>=0?'"'+s+'"':s;}).join(',');}).join('\n');
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='ingresos.csv';a.click();
+  toast('CSV exportado ✓');
 }
 
 // Combinar gastos + ingresos + pagos según filtros (sin filtro de mes - este es el "todos")
@@ -4138,23 +4307,53 @@ function renderStatsNuevo(){
       '</div>';
     html+=buildDonutHTML(donutData,totalMes);
 
-    // === VER MOVIMIENTOS - banner entre donut y categorías ===
-    var totalMovs=DB.gastos.filter(function(g){return gastoEnMes(g,mesKey);}).length;
-    html+='<div onclick="navigate(\'movs\')" style="'+
-      'display:flex;align-items:center;gap:12px;'+
-      'padding:13px 16px;margin-bottom:20px;'+
-      'background:var(--surface);border:1px solid var(--border);'+
-      'border-radius:var(--r-lg);cursor:pointer;'+
-      'transition:border-color 0.15s ease,transform 0.1s ease;'+
-      '" onmouseenter="this.style.borderColor=\'var(--accent)\'" onmouseleave="this.style.borderColor=\'var(--border)\'" ontouchstart="this.style.transform=\'scale(0.99)\'" ontouchend="this.style.transform=\'scale(1)\'">'+
-      '<div style="width:36px;height:36px;border-radius:var(--r-md);background:var(--accent-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+
-        '<i data-lucide="receipt" style="width:18px;height:18px;color:var(--accent);"></i>'+
+    // === DOS BOTONES LLAMATIVOS: GASTOS / INGRESOS ===
+    var totalGastosMes=DB.gastos.filter(function(g){return gastoEnMes(g,mesKey);}).reduce(function(s,g){return s+montoRealMensual(g);},0);
+    var totalIngresosMes=DB.ingresos.filter(function(i){return gastoEnMes(i,mesKey);}).reduce(function(s,i){return s+i.monto;},0);
+    var nGastosMes=DB.gastos.filter(function(g){return gastoEnMes(g,mesKey);}).length;
+    var nIngresosMes=DB.ingresos.filter(function(i){return gastoEnMes(i,mesKey);}).length;
+
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">'+
+
+      // Botón GASTOS
+      '<div onclick="navigate(\'movs\')" style="'+
+        'background:linear-gradient(135deg,#e5484d 0%,#f87171 100%);'+
+        'border-radius:var(--r-lg);padding:16px 14px;cursor:pointer;'+
+        'box-shadow:0 4px 14px rgba(229,72,77,0.28);'+
+        'transition:transform 0.15s,box-shadow 0.15s;'+
+        'active:transform:scale(0.97);" '+
+        'ontouchstart="this.style.transform=\'scale(0.96)\';this.style.boxShadow=\'0 2px 8px rgba(229,72,77,0.2)\'" '+
+        'ontouchend="this.style.transform=\'scale(1)\';this.style.boxShadow=\'0 4px 14px rgba(229,72,77,0.28)\'">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+          '<div style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;">'+
+            '<i data-lucide="trending-down" style="width:16px;height:16px;color:#fff;"></i>'+
+          '</div>'+
+          '<i data-lucide="chevron-right" style="width:14px;height:14px;color:rgba(255,255,255,0.7);"></i>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Gastos</div>'+
+        '<div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.02em;">'+fmtK(totalGastosMes)+'</div>'+
+        '<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px;">'+nGastosMes+' registro'+(nGastosMes===1?'':'s')+' · '+labelMes+'</div>'+
       '</div>'+
-      '<div style="flex:1;min-width:0;">'+
-        '<div style="font-size:13px;font-weight:700;color:var(--text);">Ver todos los movimientos</div>'+
-        '<div style="font-size:11px;color:var(--text-3);margin-top:1px;">'+totalMovs+' registro'+(totalMovs===1?'':'s')+' en '+labelMes+' · filtros por tipo, TDC y categoría</div>'+
+
+      // Botón INGRESOS
+      '<div onclick="navigate(\'ingresos\')" style="'+
+        'background:linear-gradient(135deg,#1ba472 0%,#22c55e 100%);'+
+        'border-radius:var(--r-lg);padding:16px 14px;cursor:pointer;'+
+        'box-shadow:0 4px 14px rgba(27,164,114,0.28);'+
+        'transition:transform 0.15s,box-shadow 0.15s;" '+
+        'ontouchstart="this.style.transform=\'scale(0.96)\';this.style.boxShadow=\'0 2px 8px rgba(27,164,114,0.2)\'" '+
+        'ontouchend="this.style.transform=\'scale(1)\';this.style.boxShadow=\'0 4px 14px rgba(27,164,114,0.28)\'">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+          '<div style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;">'+
+            '<i data-lucide="trending-up" style="width:16px;height:16px;color:#fff;"></i>'+
+          '</div>'+
+          '<i data-lucide="chevron-right" style="width:14px;height:14px;color:rgba(255,255,255,0.7);"></i>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Ingresos</div>'+
+        '<div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.02em;">'+fmtK(totalIngresosMes)+'</div>'+
+        '<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px;">'+nIngresosMes+' registro'+(nIngresosMes===1?'':'s')+' · '+labelMes+'</div>'+
       '</div>'+
-      '<i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--text-3);flex-shrink:0;"></i>'+
+
     '</div>';
 
     // === GRID DE CUADRITOS CON PAGINACIÓN (máx 10) ===
