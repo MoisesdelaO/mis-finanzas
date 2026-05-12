@@ -1844,6 +1844,13 @@ body.no-scroll .app{overflow:hidden;}
     <!-- Renderizado dinámicamente por renderIngresosPage() -->
   </section>
 
+  <!-- ════════════════════════════════════════════════════════════════
+       PÁGINA: PAGOS TDC
+       ════════════════════════════════════════════════════════════════ -->
+  <section class="page" id="page-pagos-tdc">
+    <!-- Renderizado dinámicamente por renderPagosTDCPage() -->
+  </section>
+
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
@@ -2283,7 +2290,7 @@ function fmt(n){
   return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function fmtK(n){
-  return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+  return '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function rdtoDia(s,t){return s*(Math.pow(1+t/100,1/365)-1);}
 
@@ -2763,6 +2770,7 @@ function navigate(pageId){
   if(pageId==='perfil') renderPerfilNuevo();
   if(pageId==='movs') renderMovsPage();
   if(pageId==='ingresos') renderIngresosPage();
+  if(pageId==='pagos-tdc') renderPagosTDCPage();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2831,7 +2839,7 @@ function renderMovsPage(){
           '<div class="item-title">'+(m.desc||'(s/desc)')+'</div>'+
           '<div class="item-meta">'+fc+' · '+m.meta+'</div>'+
         '</div>'+
-        '<div class="item-amount '+m.type+'">'+sign+fmtK(Math.round(m.monto))+'</div>'+
+        '<div class="item-amount '+m.type+'">'+sign+fmtK(m.monto)+'</div>'+
       '</div>';
     }).join('');
 
@@ -3007,7 +3015,7 @@ function renderIngresosPage(){
           '<div class="item-title">'+(i.desc||i.tipo||'Ingreso')+'</div>'+
           '<div class="item-meta">'+fc+(i.tipo?' · '+i.tipo:'')+'</div>'+
         '</div>'+
-        '<div class="item-amount ingreso">+'+fmtK(Math.round(i.monto))+'</div>'+
+        '<div class="item-amount ingreso">+'+fmtK(i.monto)+'</div>'+
       '</div>';
     }).join('');
 
@@ -3108,6 +3116,170 @@ function exportarIngresosCSV(){
   var a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));
   a.download='ingresos.csv';a.click();
+  toast('CSV exportado ✓');
+}
+
+// ══════════════════════════════════════════════════════════
+// PÁGINA: PAGOS TDC
+// ══════════════════════════════════════════════════════════
+var _pagosTDCPagina=1;
+var _PAGOS_TDC_POR_PAG=15;
+var _pagosTDCFiltros={tdc:'todos',desde:'',hasta:'',orden:'reciente'};
+
+function renderPagosTDCPage(){
+  var page=document.getElementById('page-pagos-tdc');
+  if(!page) return;
+  _movsRef=[];
+  var f=_pagosTDCFiltros;
+
+  var lista=DB.pagosTDC.filter(function(p){
+    if(f.tdc!=='todos' && p.tdc!==f.tdc) return false;
+    if(f.desde && String(p.fecha||'').split('T')[0]<f.desde) return false;
+    if(f.hasta && String(p.fecha||'').split('T')[0]>f.hasta) return false;
+    return true;
+  });
+
+  lista.sort(function(a,b){
+    if(f.orden==='antiguo') return String(a.fecha||'').localeCompare(String(b.fecha||''));
+    if(f.orden==='mayor') return b.monto-a.monto;
+    if(f.orden==='menor') return a.monto-b.monto;
+    return String(b.fecha||'').localeCompare(String(a.fecha||''));
+  });
+
+  var totalMonto=lista.reduce(function(s,p){return s+p.monto;},0);
+  var hayFiltros=(f.tdc!=='todos'||f.desde||f.hasta);
+
+  // Desglose por TDC
+  var porTDC={};
+  lista.forEach(function(p){
+    var k=p.tdc||'Sin TDC';
+    if(!porTDC[k]) porTDC[k]=0;
+    porTDC[k]+=p.monto;
+  });
+
+  // Lista paginada
+  var listaHTML='';
+  if(lista.length===0){
+    listaHTML='<div class="empty-state"><div class="empty-state-icon"><i data-lucide="credit-card"></i></div><div class="empty-state-text">Sin pagos con estos filtros.</div></div>';
+  } else {
+    var totalPags=Math.ceil(lista.length/_PAGOS_TDC_POR_PAG);
+    if(_pagosTDCPagina>totalPags) _pagosTDCPagina=totalPags;
+    var inicio=(_pagosTDCPagina-1)*_PAGOS_TDC_POR_PAG;
+    var pageItems=lista.slice(inicio,inicio+_PAGOS_TDC_POR_PAG);
+    var rows=pageItems.map(function(p){
+      var fc=String(p.fecha||'').substring(8,10)+'/'+String(p.fecha||'').substring(5,7)+'/'+String(p.fecha||'').substring(0,4);
+      var refIdx=_movsRef.length;
+      _movsRef.push({type:'pago',obj:p});
+      return '<div class="item-row clickable" onclick="verMovRef('+refIdx+')">'+
+        '<div class="item-icon pago"><i data-lucide="credit-card"></i></div>'+
+        '<div class="item-info">'+
+          '<div class="item-title">Pago a '+(p.tdc||'TDC')+'</div>'+
+          '<div class="item-meta">'+fc+(p.notas?' · '+p.notas:'')+'</div>'+
+        '</div>'+
+        '<div class="item-amount pago">-'+fmtK(p.monto)+'</div>'+
+      '</div>';
+    }).join('');
+
+    var pagCtrl=totalPags>1?'<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-top:8px;">'+
+      '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+(_pagosTDCPagina<=1?'opacity:0.35;pointer-events:none;':'')+'" onclick="pagosTDCPag(-1)">← Anterior</button>'+
+      '<span style="font-size:12px;color:var(--text-3);">'+_pagosTDCPagina+' / '+totalPags+'</span>'+
+      '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+(_pagosTDCPagina>=totalPags?'opacity:0.35;pointer-events:none;':'')+'" onclick="pagosTDCPag(1)">Siguiente →</button>'+
+    '</div>':'';
+
+    listaHTML='<div class="item-list">'+rows+'</div>'+pagCtrl;
+  }
+
+  // Chips por TDC
+  var tdcsDisp=[{k:'todos',l:'Todas'}].concat((DB.config.tdcs||[]).map(function(t){return {k:t,l:t};}));
+
+  var html=
+    '<div class="page-header-bar">'+
+      '<button class="icon-btn" onclick="navigate(\'stats\')" aria-label="Volver"><i data-lucide="arrow-left"></i></button>'+
+      '<div class="title">Pagos a TDC</div>'+
+      '<button class="icon-btn" onclick="exportarPagosTDCCSV()" aria-label="Exportar CSV"><i data-lucide="download"></i></button>'+
+    '</div>'+
+
+    // Hero oscuro
+    '<div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:16px;">'+
+      '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Total pagado</div>'+
+      '<div style="font-size:28px;font-weight:800;letter-spacing:-0.02em;color:#fff;">'+fmtK(totalMonto)+'</div>'+
+      '<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">'+lista.length+' pago'+(lista.length===1?'':'s')+' registrado'+(lista.length===1?'':'s')+'</div>'+
+      // Mini desglose por TDC
+      (Object.keys(porTDC).length>1?
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1);">'+
+          Object.keys(porTDC).map(function(k){
+            return '<div><div style="font-size:10px;color:rgba(255,255,255,0.4);">'+k+'</div>'+
+              '<div style="font-size:13px;font-weight:700;color:#fff;">'+fmtK(porTDC[k])+'</div></div>';
+          }).join('')+
+        '</div>':'')+
+    '</div>'+
+
+    // Chips TDC
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
+      tdcsDisp.map(function(t){
+        var active=f.tdc===t.k;
+        return '<button onclick="setPagosTDCFiltro(\'tdc\',\''+t.k.replace(/'/g,"\\'")+'\')" style="'+
+          'padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid;transition:all 0.15s;'+
+          (active?'background:#334155;color:#fff;border-color:#334155;':'background:var(--surface);color:var(--text-2);border-color:var(--border);')+
+        '">'+t.l+'</button>';
+      }).join('')+
+    '</div>'+
+
+    // Barra orden + limpiar
+    '<div class="filter-bar" style="margin-bottom:12px;">'+
+      (hayFiltros?'<button class="filter-toggle-btn has-filters" onclick="limpiarPagosTDCFiltros()"><i data-lucide="x"></i> Limpiar</button>':'<span style="font-size:12px;color:var(--text-3);">Todos los pagos</span>')+
+      '<div style="flex:1;"></div>'+
+      '<div style="position:relative;display:inline-flex;align-items:center;">'+
+        '<select class="filter-toggle-btn" style="appearance:none;-webkit-appearance:none;padding-right:28px;cursor:pointer;background:var(--surface);border:1px solid var(--border);color:var(--text-2);" onchange="setPagosTDCFiltro(\'orden\',this.value)">'+
+          '<option value="reciente"'+(f.orden==='reciente'?' selected':'')+'>Reciente</option>'+
+          '<option value="antiguo"'+(f.orden==='antiguo'?' selected':'')+'>Antiguo</option>'+
+          '<option value="mayor"'+(f.orden==='mayor'?' selected':'')+'>Mayor $</option>'+
+          '<option value="menor"'+(f.orden==='menor'?' selected':'')+'>Menor $</option>'+
+        '</select>'+
+        '<span style="position:absolute;right:10px;pointer-events:none;display:flex;align-items:center;"><i data-lucide="arrow-up-down" style="width:12px;height:12px;color:var(--text-3);"></i></span>'+
+      '</div>'+
+    '</div>'+
+
+    // Fechas
+    '<div class="field-row" style="margin-bottom:14px;">'+
+      '<div><label class="field-label">Desde</label><input type="date" class="field-input" value="'+f.desde+'" onchange="setPagosTDCFiltro(\'desde\',this.value)"></div>'+
+      '<div><label class="field-label">Hasta</label><input type="date" class="field-input" value="'+f.hasta+'" onchange="setPagosTDCFiltro(\'hasta\',this.value)"></div>'+
+    '</div>'+
+
+    listaHTML;
+
+  page.innerHTML='<div style="padding:0 20px;">'+html+'</div>';
+  renderIcons();
+}
+
+function pagosTDCPag(delta){
+  _pagosTDCPagina+=delta;
+  if(_pagosTDCPagina<1)_pagosTDCPagina=1;
+  renderPagosTDCPage();
+  document.querySelector('.app').scrollTop=0;
+}
+
+function setPagosTDCFiltro(campo,valor){
+  _pagosTDCFiltros[campo]=valor;
+  _pagosTDCPagina=1;
+  renderPagosTDCPage();
+}
+
+function limpiarPagosTDCFiltros(){
+  _pagosTDCFiltros={tdc:'todos',desde:'',hasta:'',orden:'reciente'};
+  _pagosTDCPagina=1;
+  renderPagosTDCPage();
+}
+
+function exportarPagosTDCCSV(){
+  var lista=DB.pagosTDC;
+  if(lista.length===0){toast('No hay pagos para exportar','err');return;}
+  var rows=[['Fecha','TDC','Monto','Notas']];
+  lista.forEach(function(p){rows.push([p.fecha,p.tdc||'',p.monto.toFixed(2),p.notas||'']);});
+  var csv=rows.map(function(r){return r.map(function(c){var s=String(c||'');return s.indexOf(',')>=0?'"'+s+'"':s;}).join(',');}).join('\n');
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download='pagos-tdc.csv';a.click();
   toast('CSV exportado ✓');
 }
 
@@ -3550,7 +3722,7 @@ function renderRecentes(){
         '<div class="item-title">'+(m.desc||'(Sin descripción)')+'</div>'+
         '<div class="item-meta">'+fecha+' · '+m.meta+'</div>'+
       '</div>'+
-      '<div class="item-amount '+m.type+'">'+sign+fmtK(Math.round(m.monto))+'</div>'+
+      '<div class="item-amount '+m.type+'">'+sign+fmtK(m.monto)+'</div>'+
     '</div>';
   }).join('');
   cont.innerHTML=html;
@@ -4313,7 +4485,73 @@ function renderStatsNuevo(){
     var nGastosMes=DB.gastos.filter(function(g){return gastoEnMes(g,mesKey);}).length;
     var nIngresosMes=DB.ingresos.filter(function(i){return gastoEnMes(i,mesKey);}).length;
 
-    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">'+
+    // Pagos TDC del mes
+    var pagosMes=DB.pagosTDC.filter(function(p){
+      var d=String(p.fecha||'').split('T')[0];
+      return d.substring(0,7)===mesKey;
+    });
+    var totalPagosMes=pagosMes.reduce(function(s,p){return s+p.monto;},0);
+
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
+
+      // Botón GASTOS
+      '<div onclick="navigate(\'movs\')" style="'+
+        'background:linear-gradient(135deg,#e5484d 0%,#f87171 100%);'+
+        'border-radius:var(--r-lg);padding:16px 14px;cursor:pointer;'+
+        'box-shadow:0 4px 14px rgba(229,72,77,0.28);'+
+        'transition:transform 0.15s,box-shadow 0.15s;" '+
+        'ontouchstart="this.style.transform=\'scale(0.96)\';this.style.boxShadow=\'0 2px 8px rgba(229,72,77,0.2)\'" '+
+        'ontouchend="this.style.transform=\'scale(1)\';this.style.boxShadow=\'0 4px 14px rgba(229,72,77,0.28)\'">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+          '<div style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;">'+
+            '<i data-lucide="trending-down" style="width:16px;height:16px;color:#fff;"></i>'+
+          '</div>'+
+          '<i data-lucide="chevron-right" style="width:14px;height:14px;color:rgba(255,255,255,0.7);"></i>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Gastos</div>'+
+        '<div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.02em;">'+fmtK(totalGastosMes)+'</div>'+
+        '<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px;">'+nGastosMes+' registro'+(nGastosMes===1?'':'s')+' · '+labelMes+'</div>'+
+      '</div>'+
+
+      // Botón INGRESOS
+      '<div onclick="navigate(\'ingresos\')" style="'+
+        'background:linear-gradient(135deg,#1ba472 0%,#22c55e 100%);'+
+        'border-radius:var(--r-lg);padding:16px 14px;cursor:pointer;'+
+        'box-shadow:0 4px 14px rgba(27,164,114,0.28);'+
+        'transition:transform 0.15s,box-shadow 0.15s;" '+
+        'ontouchstart="this.style.transform=\'scale(0.96)\';this.style.boxShadow=\'0 2px 8px rgba(27,164,114,0.2)\'" '+
+        'ontouchend="this.style.transform=\'scale(1)\';this.style.boxShadow=\'0 4px 14px rgba(27,164,114,0.28)\'">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+          '<div style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;">'+
+            '<i data-lucide="trending-up" style="width:16px;height:16px;color:#fff;"></i>'+
+          '</div>'+
+          '<i data-lucide="chevron-right" style="width:14px;height:14px;color:rgba(255,255,255,0.7);"></i>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Ingresos</div>'+
+        '<div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.02em;">'+fmtK(totalIngresosMes)+'</div>'+
+        '<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px;">'+nIngresosMes+' registro'+(nIngresosMes===1?'':'s')+' · '+labelMes+'</div>'+
+      '</div>'+
+
+    '</div>'+
+
+    // Botón PAGOS TDC — ancho completo, estilo oscuro/neutro
+    '<div onclick="navigate(\'pagos-tdc\')" style="'+
+      'display:flex;align-items:center;gap:14px;'+
+      'background:linear-gradient(135deg,#1e293b 0%,#334155 100%);'+
+      'border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;margin-bottom:20px;'+
+      'box-shadow:0 3px 10px rgba(15,23,42,0.2);transition:transform 0.15s;" '+
+      'ontouchstart="this.style.transform=\'scale(0.98)\'" '+
+      'ontouchend="this.style.transform=\'scale(1)\'">'+
+      '<div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+
+        '<i data-lucide="credit-card" style="width:18px;height:18px;color:#94a3b8;"></i>'+
+      '</div>'+
+      '<div style="flex:1;min-width:0;">'+
+        '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.05em;">Pagos a TDC</div>'+
+        '<div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.02em;">'+fmtK(totalPagosMes)+'</div>'+
+        '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px;">'+pagosMes.length+' pago'+(pagosMes.length===1?'':'s')+' registrado'+(pagosMes.length===1?'':'s')+' en '+labelMes+'</div>'+
+      '</div>'+
+      '<i data-lucide="chevron-right" style="width:14px;height:14px;color:rgba(255,255,255,0.3);flex-shrink:0;"></i>'+
+    '</div>';
 
       // Botón GASTOS
       '<div onclick="navigate(\'movs\')" style="'+
