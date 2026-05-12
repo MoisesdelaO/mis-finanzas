@@ -2187,12 +2187,22 @@ async function pullFromSheets(){
       }
       return{id:normalizeId(r.id),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas,ciclo:r.ciclo};
     });
-    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){return{id:normalizeId(r.id),fecha:r.fecha,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};});
+    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){
+      var fechaStr=r.fecha?String(r.fecha):'';
+      if(fechaStr.length>10&&fechaStr.indexOf('T')>=0) fechaStr=fechaStr.split('T')[0];
+      if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];}
+      return{id:normalizeId(r.id),fecha:fechaStr,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};
+    });
     if(data.inversiones)DB.inversiones=data.inversiones.map(function(r){
       var per=r.periodo?String(r.periodo).split('T')[0]:r.periodo;
       return{id:normalizeId(r.id),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
     });
-    if(data.pagosTDC)DB.pagosTDC=data.pagosTDC.map(function(r){return{id:normalizeId(r.id),fecha:r.fecha,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas,ciclo:r.ciclo};});
+    if(data.pagosTDC)DB.pagosTDC=data.pagosTDC.map(function(r){
+      var fechaStr=r.fecha?String(r.fecha):'';
+      if(fechaStr.length>10&&fechaStr.indexOf('T')>=0) fechaStr=fechaStr.split('T')[0];
+      if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];}
+      return{id:normalizeId(r.id),fecha:fechaStr,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas,ciclo:r.ciclo};
+    });
     if(data.recurrentes)DB.recurrentes=data.recurrentes.map(function(r){return{id:normalizeId(r.id),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
     if(data.appConfig&&typeof data.appConfig==='object'){
       var sc=data.appConfig;
@@ -5484,7 +5494,18 @@ function toggleTheme(){
 // ══════════════════════════════════════════════════════════
 function renderAll(){
   renderDashboard();
-  // Las otras páginas se renderizan al navegar a ellas
+  // Re-render la página secundaria activa si el usuario está en ella
+  var activa=document.querySelector('.page.active');
+  if(activa){
+    var id=activa.id.replace('page-','');
+    if(id==='movs') renderMovsPage();
+    else if(id==='ingresos') renderIngresosPage();
+    else if(id==='pagos-tdc') renderPagosTDCPage();
+    else if(id==='stats') renderStatsNuevo();
+    else if(id==='inversiones') renderInversionesNuevo();
+    else if(id==='anual') renderAnual();
+    else if(id==='perfil') renderPerfilNuevo();
+  }
 }
 
 // ══════════════════════════════════════════════════════════
