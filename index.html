@@ -14,6 +14,11 @@
 <!-- Lucide Icons - versión fija para estabilidad -->
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.453.0/dist/umd/lucide.min.js"></script>
 
+<!-- Firebase SDK v9+ (compat-free) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
+
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
    TOKENS
@@ -1688,7 +1693,26 @@ body.no-scroll .app{overflow:hidden;}
 </head>
 <body data-theme="light">
 
-<div class="app">
+<!-- PANEL DE LOGIN CON GOOGLE -->
+<div id="auth-panel" style="display:flex;align-items:center;justify-content:center;width:100%;height:100vh;background:var(--bg);flex-direction:column;gap:20px;">
+  <div style="text-align:center;gap:20px;display:flex;flex-direction:column;align-items:center;">
+    <div style="font-size:32px;font-weight:800;color:var(--text);">Mis Finanzas</div>
+    <div style="font-size:14px;color:var(--text-2);max-width:300px;">Accede con tu cuenta Google para sincronizar tus datos en todos tus dispositivos.</div>
+    <button onclick="loginWithGoogle()" style="padding:12px 24px;background:linear-gradient(135deg,#4285f4,#357ae8);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M12 2v20M2 12h20"></path>
+      </svg>
+      Entrar con Google
+    </button>
+    <div style="font-size:11px;color:var(--text-3);margin-top:20px;max-width:280px;">
+      Tu configuración se guardará automáticamente en la nube y podrás acceder desde cualquier dispositivo.
+    </div>
+  </div>
+</div>
+
+<!-- APP PRINCIPAL (oculta hasta login) -->
+<div class="app" id="app-main" style="display:none;">
 
   <!-- HEADER -->
   <header class="header">
@@ -2121,6 +2145,85 @@ function load(){
     }
     sincronizarCuentasInv();
   }catch(e){console.error('Error loading data:',e);}
+}
+
+// ══════════════════════════════════════════════════════════
+// FIREBASE CONFIGURATION & AUTH
+// ══════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyDzIWJNPC_RSL-Dm5MzdMCibMRoxcoa61E",
+  authDomain: "finanzas-app-61705.firebaseapp.com",
+  projectId: "finanzas-app-61705",
+  storageBucket: "finanzas-app-61705.firebasestorage.app",
+  messagingSenderId: "211508445870",
+  appId: "1:211508445870:web:06f7b858306c4daf95633f",
+  measurementId: "G-02D9YJKWCJ"
+};
+
+var firebaseApp=null, firebaseAuth=null, firebaseDB=null;
+var _currentUser=null;
+
+function initFirebase(){
+  try{
+    firebaseApp=firebase.initializeApp(firebaseConfig);
+    firebaseAuth=firebase.auth(firebaseApp);
+    firebaseDB=firebase.firestore(firebaseApp);
+    firebaseAuth.onAuthStateChanged(function(user){
+      _currentUser=user;
+      if(user){
+        loadConfigFromFirestore(user.uid);
+      }
+    });
+  }catch(e){console.error('Firebase init error:',e);}
+}
+
+function loginWithGoogle(){
+  var provider=new firebase.auth.GoogleAuthProvider();
+  firebaseAuth.signInWithPopup(provider)
+    .then(function(result){
+      _currentUser=result.user;
+      toast('Bienvenido, '+result.user.displayName+'!');
+      document.getElementById('auth-panel').style.display='none';
+      document.getElementById('app-main').style.display='block';
+      pullFromSheets().then(function(){renderAll();});
+    })
+    .catch(function(error){
+      toast('Error en login: '+error.message,'err');
+    });
+}
+
+function logout(){
+  firebaseAuth.signOut().then(function(){
+    _currentUser=null;
+    document.getElementById('auth-panel').style.display='flex';
+    document.getElementById('app-main').style.display='none';
+    toast('Sesión cerrada');
+  });
+}
+
+function loadConfigFromFirestore(uid){
+  firebaseDB.collection('users').doc(uid).get()
+    .then(function(doc){
+      if(doc.exists){
+        var userData=doc.data();
+        if(userData.scriptURL){
+          DB.config.scriptURL=userData.scriptURL;
+          save();
+        }
+      }
+    })
+    .catch(function(e){console.error('Error loading config:',e);});
+}
+
+function saveConfigToFirestore(uid){
+  if(!firebaseDB||!_currentUser) return;
+  firebaseDB.collection('users').doc(uid).set({
+    email:_currentUser.email,
+    displayName:_currentUser.displayName,
+    scriptURL:DB.config.scriptURL,
+    lastUpdate:new Date()
+  },{ merge:true })
+    .catch(function(e){console.error('Error saving config:',e);});
 }
 
 function normalizeId(v){if(!v&&v!==0)return Date.now();if(typeof v==='number')return v;var n=parseFloat(v);return isNaN(n)?Date.now():Math.round(n);}
@@ -4576,7 +4679,10 @@ function renderPerfilNuevo(){
     '<div class="page-header-bar">'+
       '<button class="icon-btn" onclick="navigate(\'inicio\')" aria-label="Volver"><i data-lucide="arrow-left"></i></button>'+
       '<div class="title">Configuración</div>'+
-      '<button class="icon-btn" onclick="toggleTheme()" aria-label="Cambiar tema"><i data-lucide="moon" id="theme-icon"></i></button>'+
+      '<div style="display:flex;gap:6px;">'+
+        '<button class="icon-btn" onclick="toggleTheme()" aria-label="Cambiar tema"><i data-lucide="moon" id="theme-icon"></i></button>'+
+        '<button class="icon-btn" onclick="logout()" aria-label="Cerrar sesión" title="Cerrar sesión"><i data-lucide="log-out"></i></button>'+
+      '</div>'+
     '</div>'+
 
     '<div class="setup-card" style="margin-bottom:12px;">'+
@@ -5233,6 +5339,9 @@ window.addEventListener('DOMContentLoaded',function(){
   // Cargar datos locales
   load();
 
+  // Inicializar Firebase
+  initFirebase();
+
   // Restaurar estado de patrimonio
   _patHidden=localStorage.getItem('mf-pat-hidden')==='1';
   if(_patHidden){
@@ -5240,14 +5349,18 @@ window.addEventListener('DOMContentLoaded',function(){
     if(eye) eye.setAttribute('data-lucide','eye-off');
   }
 
-  // Render inicial
-  renderDashboard();
+  // Render inicial (si el usuario ya está autenticado)
+  if(_currentUser){
+    document.getElementById('auth-panel').style.display='none';
+    document.getElementById('app-main').style.display='block';
+    renderDashboard();
+  }
 
   // Iconos lucide
   renderIcons();
 
   // Si hay scriptURL, sincronizar en background
-  if(DB.config.scriptURL && DB.config.scriptURL.trim()){
+  if(_currentUser && DB.config.scriptURL && DB.config.scriptURL.trim()){
     pullFromSheets().then(function(ok){
       if(ok){renderAll();}
     });
