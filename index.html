@@ -14,10 +14,10 @@
 <!-- Lucide Icons - versión fija para estabilidad -->
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.453.0/dist/umd/lucide.min.js"></script>
 
-<!-- Firebase SDK v9+ (compat-free) -->
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
+<!-- Firebase SDK (compat version - funciona con sintaxis var/function) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
@@ -2165,65 +2165,105 @@ var _currentUser=null;
 
 function initFirebase(){
   try{
-    firebaseApp=firebase.initializeApp(firebaseConfig);
-    firebaseAuth=firebase.auth(firebaseApp);
-    firebaseDB=firebase.firestore(firebaseApp);
+    if(!firebase.apps.length){
+      firebaseApp=firebase.initializeApp(firebaseConfig);
+    } else {
+      firebaseApp=firebase.apps[0];
+    }
+    firebaseAuth=firebase.auth();
+    firebaseDB=firebase.firestore();
+
     firebaseAuth.onAuthStateChanged(function(user){
       _currentUser=user;
       if(user){
-        loadConfigFromFirestore(user.uid);
+        // Usuario autenticado — mostrar app
+        document.getElementById('auth-panel').style.display='none';
+        document.getElementById('app-main').style.display='block';
+        // Cargar config del usuario desde Firestore
+        loadConfigFromFirestore(user.uid).then(function(){
+          // Sync con Sheets si hay URL
+          if(DB.config.scriptURL && DB.config.scriptURL.trim()){
+            pullFromSheets().then(function(ok){
+              if(ok) renderAll();
+            });
+          } else {
+            renderAll();
+          }
+        });
+        // Actualizar saludo con nombre de Google
+        var nameEl=document.getElementById('greeting-name');
+        if(nameEl && user.displayName){
+          var firstName=user.displayName.split(' ')[0];
+          nameEl.textContent=firstName;
+          DB.config.nombre=firstName;
+        }
+      } else {
+        // No autenticado — mostrar login
+        document.getElementById('auth-panel').style.display='flex';
+        document.getElementById('app-main').style.display='none';
       }
     });
-  }catch(e){console.error('Firebase init error:',e);}
+  }catch(e){
+    console.error('Firebase init error:',e);
+    // Si Firebase falla, mostrar la app de todas formas
+    document.getElementById('auth-panel').style.display='none';
+    document.getElementById('app-main').style.display='block';
+    renderAll();
+  }
 }
 
 function loginWithGoogle(){
   var provider=new firebase.auth.GoogleAuthProvider();
   firebaseAuth.signInWithPopup(provider)
     .then(function(result){
-      _currentUser=result.user;
-      toast('Bienvenido, '+result.user.displayName+'!');
-      document.getElementById('auth-panel').style.display='none';
-      document.getElementById('app-main').style.display='block';
-      pullFromSheets().then(function(){renderAll();});
+      // onAuthStateChanged se encarga del resto
+      toast('Bienvenido, '+result.user.displayName.split(' ')[0]+'! 👋');
     })
     .catch(function(error){
-      toast('Error en login: '+error.message,'err');
+      console.error('Login error:', error);
+      if(error.code==='auth/popup-blocked'){
+        toast('Activa los popups para este sitio','err');
+      } else if(error.code==='auth/unauthorized-domain'){
+        toast('Dominio no autorizado en Firebase','err');
+      } else {
+        toast('Error: '+error.message,'err');
+      }
     });
 }
 
 function logout(){
   firebaseAuth.signOut().then(function(){
     _currentUser=null;
-    document.getElementById('auth-panel').style.display='flex';
-    document.getElementById('app-main').style.display='none';
     toast('Sesión cerrada');
   });
 }
 
 function loadConfigFromFirestore(uid){
-  firebaseDB.collection('users').doc(uid).get()
+  return firebaseDB.collection('users').doc(uid).get()
     .then(function(doc){
       if(doc.exists){
         var userData=doc.data();
-        if(userData.scriptURL){
+        if(userData.scriptURL && userData.scriptURL.trim()){
           DB.config.scriptURL=userData.scriptURL;
-          save();
+          saveLocal();
         }
       }
     })
-    .catch(function(e){console.error('Error loading config:',e);});
+    .catch(function(e){
+      console.error('Error loading config from Firestore:',e);
+    });
 }
 
-function saveConfigToFirestore(uid){
+function saveConfigToFirestore(){
   if(!firebaseDB||!_currentUser) return;
-  firebaseDB.collection('users').doc(uid).set({
+  firebaseDB.collection('users').doc(_currentUser.uid).set({
     email:_currentUser.email,
     displayName:_currentUser.displayName,
-    scriptURL:DB.config.scriptURL,
-    lastUpdate:new Date()
+    scriptURL:DB.config.scriptURL||'',
+    lastUpdate:firebase.firestore.FieldValue.serverTimestamp()
   },{ merge:true })
-    .catch(function(e){console.error('Error saving config:',e);});
+  .then(function(){toast('Config guardada en la nube ✓');})
+  .catch(function(e){console.error('Error saving to Firestore:',e);});
 }
 
 function normalizeId(v){if(!v&&v!==0)return Date.now();if(typeof v==='number')return v;var n=parseFloat(v);return isNaN(n)?Date.now():Math.round(n);}
@@ -2693,6 +2733,7 @@ function setupConnection(){
     url=url.trim();
     DB.config.scriptURL=url;
     saveLocal();
+    saveConfigToFirestore(); // guardar en Firestore para sync cross-device
     if(url){
       toast('Conectando a Sheets...');
       pullFromSheets().then(function(ok){
