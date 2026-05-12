@@ -1698,7 +1698,7 @@ body.no-scroll .app{overflow:hidden;}
   <div style="text-align:center;gap:20px;display:flex;flex-direction:column;align-items:center;">
     <div style="font-size:32px;font-weight:800;color:var(--text);">Mis Finanzas</div>
     <div style="font-size:14px;color:var(--text-2);max-width:300px;">Accede con tu cuenta Google para sincronizar tus datos en todos tus dispositivos.</div>
-    <button onclick="loginWithGoogle()" style="padding:12px 24px;background:linear-gradient(135deg,#4285f4,#357ae8);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;">
+    <button id="btn-google-login" onclick="loginWithGoogle()" style="padding:12px 24px;background:linear-gradient(135deg,#4285f4,#357ae8);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10"></circle>
         <path d="M12 2v20M2 12h20"></path>
@@ -2176,53 +2176,56 @@ function initFirebase(){
     firebaseAuth.onAuthStateChanged(function(user){
       _currentUser=user;
       if(user){
-        // Usuario autenticado — mostrar app
-        document.getElementById('auth-panel').style.display='none';
-        document.getElementById('app-main').style.display='block';
-        // Cargar config del usuario desde Firestore
-        loadConfigFromFirestore(user.uid).then(function(){
-          // Sync con Sheets si hay URL
-          if(DB.config.scriptURL && DB.config.scriptURL.trim()){
-            pullFromSheets().then(function(ok){
-              if(ok) renderAll();
-            });
-          } else {
-            renderAll();
-          }
-        });
-        // Actualizar saludo con nombre de Google
-        var nameEl=document.getElementById('greeting-name');
-        if(nameEl && user.displayName){
-          var firstName=user.displayName.split(' ')[0];
-          nameEl.textContent=firstName;
-          DB.config.nombre=firstName;
-        }
+        mostrarApp(user);
       } else {
-        // No autenticado — mostrar login
         document.getElementById('auth-panel').style.display='flex';
         document.getElementById('app-main').style.display='none';
       }
     });
   }catch(e){
     console.error('Firebase init error:',e);
-    // Si Firebase falla, mostrar la app de todas formas
-    document.getElementById('auth-panel').style.display='none';
-    document.getElementById('app-main').style.display='block';
-    renderAll();
+    mostrarApp(null);
   }
 }
 
+function mostrarApp(user){
+  document.getElementById('auth-panel').style.display='none';
+  document.getElementById('app-main').style.display='block';
+  // Actualizar nombre
+  if(user && user.displayName){
+    var firstName=user.displayName.split(' ')[0];
+    DB.config.nombre=firstName;
+    var nameEl=document.getElementById('greeting-name');
+    if(nameEl) nameEl.textContent=firstName;
+  }
+  // Cargar config de Firestore y luego render
+  var p = (user && firebaseDB)
+    ? loadConfigFromFirestore(user.uid)
+    : Promise.resolve();
+  p.then(function(){
+    renderAll();
+    // Sync con Sheets en background
+    if(DB.config.scriptURL && DB.config.scriptURL.trim()){
+      pullFromSheets().then(function(ok){if(ok) renderAll();});
+    }
+  });
+}
+
 function loginWithGoogle(){
+  var btn=document.getElementById('btn-google-login');
+  if(btn){ btn.disabled=true; btn.textContent='Conectando...'; }
   var provider=new firebase.auth.GoogleAuthProvider();
   firebaseAuth.signInWithPopup(provider)
     .then(function(result){
-      // onAuthStateChanged se encarga del resto
       toast('Bienvenido, '+result.user.displayName.split(' ')[0]+'! 👋');
     })
     .catch(function(error){
       console.error('Login error:', error);
+      if(btn){ btn.disabled=false; btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2v20M2 12h20"></path></svg> Entrar con Google'; }
       if(error.code==='auth/popup-blocked'){
         toast('Activa los popups para este sitio','err');
+      } else if(error.code==='auth/cancelled-popup-request'||error.code==='auth/popup-closed-by-user'){
+        // ignorar — usuario cerró el popup
       } else if(error.code==='auth/unauthorized-domain'){
         toast('Dominio no autorizado en Firebase','err');
       } else {
@@ -5390,22 +5393,9 @@ window.addEventListener('DOMContentLoaded',function(){
     if(eye) eye.setAttribute('data-lucide','eye-off');
   }
 
-  // Render inicial (si el usuario ya está autenticado)
-  if(_currentUser){
-    document.getElementById('auth-panel').style.display='none';
-    document.getElementById('app-main').style.display='block';
-    renderDashboard();
-  }
-
-  // Iconos lucide
+  // Iconos lucide iniciales (auth-panel)
   renderIcons();
-
-  // Si hay scriptURL, sincronizar en background
-  if(_currentUser && DB.config.scriptURL && DB.config.scriptURL.trim()){
-    pullFromSheets().then(function(ok){
-      if(ok){renderAll();}
-    });
-  }
+  // El render de la app lo maneja onAuthStateChanged
 });
 
 // ══════════════════════════════════════════════════════════
