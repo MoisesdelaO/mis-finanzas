@@ -1693,30 +1693,15 @@ body.no-scroll .app{overflow:hidden;}
 </head>
 <body data-theme="light">
 
-<!-- PANEL DE LOGIN CON GOOGLE Y EMAIL/PASSWORD -->
+<!-- PANEL DE LOGIN -->
 <div id="auth-panel" style="display:flex;align-items:center;justify-content:center;width:100%;height:100vh;background:var(--bg);flex-direction:column;gap:30px;">
   <div style="text-align:center;gap:20px;display:flex;flex-direction:column;align-items:center;max-width:380px;">
     <div style="font-size:32px;font-weight:800;color:var(--text);">Mis Finanzas</div>
-    <div style="font-size:14px;color:var(--text-2);">Accede con tu cuenta para sincronizar tus datos en todos tus dispositivos.</div>
+    <div style="font-size:14px;color:var(--text-2);">Accede con tu correo para sincronizar tus datos en todos tus dispositivos.</div>
     
-    <!-- LOGIN CON GOOGLE -->
-    <div style="width:100%;display:flex;flex-direction:column;gap:10px;">
-      <button id="btn-google-login" onclick="loginWithGoogle()" style="padding:12px 24px;background:linear-gradient(135deg,#4285f4,#357ae8);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2v20M2 12h20"></path></svg>
-        Entrar con Google
-      </button>
-    </div>
-
-    <!-- DIVIDER -->
-    <div style="width:100%;display:flex;align-items:center;gap:12px;margin:10px 0;">
-      <div style="flex:1;height:1px;background:var(--border);"></div>
-      <span style="font-size:12px;color:var(--text-3);">O</span>
-      <div style="flex:1;height:1px;background:var(--border);"></div>
-    </div>
-
-    <!-- LOGIN CON EMAIL/PASSWORD -->
+    <!-- LOGIN CON USUARIO/PASSWORD -->
     <div style="width:100%;display:flex;flex-direction:column;gap:8px;">
-      <input type="email" id="auth-email" placeholder="Correo electrónico" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;">
+      <input type="text" id="auth-username" placeholder="Usuario" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;">
       <input type="password" id="auth-password" placeholder="Contraseña" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;" onkeypress="if(event.key==='Enter') loginWithEmailPassword();">
       <button id="btn-email-login" onclick="loginWithEmailPassword()" style="padding:12px 24px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">
         Entrar
@@ -1737,7 +1722,7 @@ body.no-scroll .app{overflow:hidden;}
     <div class="greeting">
       <div>
         <span class="hi">Buen día,</span>
-        <span class="name" id="greeting-name">Moises</span>
+        <span class="name" id="greeting-name" onclick="editarNombreInline()" style="cursor:pointer;" title="Clic para editar">Moises</span>
       </div>
     </div>
     <div class="header-actions">
@@ -2211,12 +2196,12 @@ function initFirebase(){
 function mostrarApp(user){
   document.getElementById('auth-panel').style.display='none';
   document.getElementById('app-main').style.display='block';
-  // Actualizar nombre
-  if(user && user.displayName){
-    var firstName=user.displayName.split(' ')[0];
-    DB.config.nombre=firstName;
+  // Actualizar nombre con la primera parte del email
+  if(user && user.email){
+    var nombreUsuario=user.email.split('@')[0];
+    DB.config.nombre=nombreUsuario;
     var nameEl=document.getElementById('greeting-name');
-    if(nameEl) nameEl.textContent=firstName;
+    if(nameEl) nameEl.textContent=nombreUsuario;
   }
   // Cargar config de Firestore y luego render
   var p = (user && firebaseDB)
@@ -2234,48 +2219,33 @@ function mostrarApp(user){
       if(DB.config.scriptURL && DB.config.scriptURL.trim()){
         pullFromSheets().then(function(ok){if(ok) renderAll();});
       }
-    }, 5*60*1000);
+    }, 30*1000); // sync cada 30 segundos
   });
 }
 
-function loginWithGoogle(){
-  var btn=document.getElementById('btn-google-login');
-  if(btn){ btn.disabled=true; btn.textContent='Conectando...'; }
-  var provider=new firebase.auth.GoogleAuthProvider();
-  firebaseAuth.signInWithPopup(provider)
-    .then(function(result){
-      toast('Bienvenido, '+result.user.displayName.split(' ')[0]+'! 👋');
-    })
-    .catch(function(error){
-      console.error('Login error:', error);
-      if(btn){ btn.disabled=false; btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2v20M2 12h20"></path></svg> Entrar con Google'; }
-      if(error.code==='auth/popup-blocked'){
-        toast('Activa los popups para este sitio','err');
-      } else if(error.code==='auth/cancelled-popup-request'||error.code==='auth/popup-closed-by-user'){
-        // ignorar — usuario cerró el popup
-      } else if(error.code==='auth/unauthorized-domain'){
-        toast('Dominio no autorizado en Firebase','err');
-      } else {
-        toast('Error: '+error.message,'err');
-      }
-    });
-}
-
 function loginWithEmailPassword(){
-  var email=document.getElementById('auth-email').value.trim();
+  var username=document.getElementById('auth-username').value.trim().toLowerCase();
   var password=document.getElementById('auth-password').value;
   var btn=document.getElementById('btn-email-login');
   
-  if(!email||!password){
-    toast('Completa email y contraseña','err');
+  if(!username||!password){
+    toast('Completa usuario y contraseña','err');
     return;
   }
+  
+  // Mapeo de username a email
+  var emailMap={
+    'moises':'moises.delaomurillo@hotmail.com',
+    'lucero':'lualma6698.la@gmail.com'
+  };
+  
+  var email=emailMap[username] || username;
   
   if(btn){ btn.disabled=true; btn.textContent='Conectando...'; }
   
   firebaseAuth.signInWithEmailAndPassword(email, password)
     .then(function(result){
-      document.getElementById('auth-email').value='';
+      document.getElementById('auth-username').value='';
       document.getElementById('auth-password').value='';
       toast('¡Bienvenido! 👋');
     })
@@ -2287,7 +2257,9 @@ function loginWithEmailPassword(){
       } else if(error.code==='auth/wrong-password'){
         toast('Contraseña incorrecta','err');
       } else if(error.code==='auth/invalid-email'){
-        toast('Email inválido','err');
+        toast('Usuario inválido','err');
+      } else if(error.code==='auth/too-many-requests'){
+        toast('Demasiados intentos, espera un momento','err');
       } else {
         toast('Error: '+error.message,'err');
       }
@@ -2303,9 +2275,8 @@ function logout(){
 
 // ScriptURLs hardcodeadas por email — se asignan automáticamente al login
 var SCRIPT_URLS={
-  'moy.delao.07@gmail.com':'https://script.google.com/macros/s/AKfycbwZeZMXPvE0QoCvDgx3rvGf0LUT8irrb7Kr4TSGmuzLW0AUO7sfmIjKvoV3SDr7TuJO/exec',
-  'moises.delaomurillo@gmail.com':'https://script.google.com/macros/s/AKfycbwZeZMXPvE0QoCvDgx3rvGf0LUT8irrb7Kr4TSGmuzLW0AUO7sfmIjKvoV3SDr7TuJO/exec',
-  'lucero@misfinanzas.com':'https://script.google.com/macros/s/AKfycbwA6_JevD-NIWTrEPXim8cCb4rYuxvdqfkFep9zkigfMA74YotxN3_qi_j8I95r90HM/exec'
+  'moises.delaomurillo@hotmail.com':'https://script.google.com/macros/s/AKfycbwZeZMXPvE0QoCvDgx3rvGf0LUT8irrb7Kr4TSGmuzLW0AUO7sfmIjKvoV3SDr7TuJO/exec',
+  'lualma6698.la@gmail.com':'https://script.google.com/macros/s/AKfycbwA6_JevD-NIWTrEPXim8cCb4rYuxvdqfkFep9zkigfMA74YotxN3_qi_j8I95r90HM/exec'
 };
 
 function loadConfigFromFirestore(uid){
@@ -4869,27 +4840,6 @@ function renderPerfilNuevo(){
       '</div>'+
     '</div>'+
 
-    '<div class="setup-card" style="margin-bottom:12px;">'+
-      '<div class="setup-card-title"><i data-lucide="user"></i> Tu nombre</div>'+
-      '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;">'+
-        '<span style="font-size:16px;font-weight:700;color:var(--text);flex:1;">'+(DB.config.nombre||'Moises')+'</span>'+
-        '<button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="editarNombre()"><i data-lucide="pencil"></i> Editar</button>'+
-      '</div>'+
-    '</div>'+
-
-    '<div class="setup-card">'+
-      '<div class="setup-card-title"><i data-lucide="cloud"></i> Sincronización con Google Sheets</div>'+
-      '<div class="setup-card-desc">'+
-        (connected
-          ? 'Conectado. Tus datos se sincronizan automáticamente.'
-          : 'Sin conexión. Configura tu URL de Apps Script para sincronizar entre dispositivos.')+
-      '</div>'+
-      '<div class="setup-card-actions">'+
-        '<button class="btn-primary" onclick="setupConnection()"><i data-lucide="'+(connected?'edit':'link')+'"></i> '+(connected?'Cambiar URL':'Conectar')+'</button>'+
-        (connected?'<button class="btn-secondary" onclick="syncNow()">Sincronizar ahora</button>':'')+
-      '</div>'+
-    '</div>'+
-
     '<div class="config-tabs">'+tabsBar+'</div>'+
     tabBodies+
 
@@ -5044,6 +4994,39 @@ function renderAnual(){
 
   // Ajustar td padding inline para tbody
   page.innerHTML='<div style="padding:0 20px;">'+html+'</div>';
+}
+
+function editarNombreInline(){
+  var nameEl=document.getElementById('greeting-name');
+  if(!nameEl) return;
+  var currentName=nameEl.textContent.trim();
+  nameEl.contentEditable='true';
+  nameEl.focus();
+  nameEl.style.outline='2px solid var(--accent)';
+  nameEl.style.borderRadius='4px';
+  nameEl.style.padding='2px 6px';
+  
+  function guardarNombre(){
+    var newName=nameEl.textContent.trim();
+    nameEl.contentEditable='false';
+    nameEl.style.outline='';
+    nameEl.style.padding='';
+    if(newName && newName!==currentName){
+      DB.config.nombre=newName;
+      saveLocal();
+      toast('Nombre actualizado ✓');
+    } else {
+      nameEl.textContent=currentName;
+    }
+  }
+  
+  nameEl.addEventListener('blur',guardarNombre,{once:true});
+  nameEl.addEventListener('keypress',function(e){
+    if(e.key==='Enter'){
+      e.preventDefault();
+      nameEl.blur();
+    }
+  },{once:true});
 }
 
 function editarNombre(){
