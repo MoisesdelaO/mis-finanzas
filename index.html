@@ -2286,6 +2286,7 @@ function loadConfigFromFirestore(uid){
     if(hardcodedURL && hardcodedURL.trim()){
       DB.config.scriptURL=hardcodedURL;
       saveLocal();
+      console.log('✓ Script asignado para',_currentUser.email);
       return Promise.resolve();
     }
   }
@@ -2297,6 +2298,7 @@ function loadConfigFromFirestore(uid){
         if(userData.scriptURL && userData.scriptURL.trim()){
           DB.config.scriptURL=userData.scriptURL;
           saveLocal();
+          console.log('✓ Script cargado desde Firestore');
         }
       }
     })
@@ -2390,14 +2392,24 @@ async function pullFromSheets(){
 }
 
 async function pushSheets(sheet,row){
-  if(!DB.config.scriptURL)return false;
+  console.log('pushSheets llamado:',sheet,row);
+  console.log('scriptURL actual:',DB.config.scriptURL);
+  if(!DB.config.scriptURL){
+    console.error('❌ No hay scriptURL configurado');
+    return false;
+  }
   try{
+    console.log('Enviando a Sheets...');
     var res=await fetch(DB.config.scriptURL,{
       method:'POST',
       body:JSON.stringify({action:'add',sheet:sheet,row:row})
     });
+    console.log('Respuesta Sheets:',res.ok,res.status);
     return res.ok;
-  }catch(e){return false;}
+  }catch(e){
+    console.error('Error pushSheets:',e);
+    return false;
+  }
 }
 
 async function syncSheetDelete(sheet,rows){
@@ -2839,6 +2851,7 @@ function agregarIngresoCore(i){
   };
   DB.ingresos.push(row);
   save();
+  console.log('✓ Ingreso guardado localmente:',row);
   pushSheets('ingresos',row);
 }
 
