@@ -1693,19 +1693,37 @@ body.no-scroll .app{overflow:hidden;}
 </head>
 <body data-theme="light">
 
-<!-- PANEL DE LOGIN CON GOOGLE -->
-<div id="auth-panel" style="display:flex;align-items:center;justify-content:center;width:100%;height:100vh;background:var(--bg);flex-direction:column;gap:20px;">
-  <div style="text-align:center;gap:20px;display:flex;flex-direction:column;align-items:center;">
+<!-- PANEL DE LOGIN CON GOOGLE Y EMAIL/PASSWORD -->
+<div id="auth-panel" style="display:flex;align-items:center;justify-content:center;width:100%;height:100vh;background:var(--bg);flex-direction:column;gap:30px;">
+  <div style="text-align:center;gap:20px;display:flex;flex-direction:column;align-items:center;max-width:380px;">
     <div style="font-size:32px;font-weight:800;color:var(--text);">Mis Finanzas</div>
-    <div style="font-size:14px;color:var(--text-2);max-width:300px;">Accede con tu cuenta Google para sincronizar tus datos en todos tus dispositivos.</div>
-    <button id="btn-google-login" onclick="loginWithGoogle()" style="padding:12px 24px;background:linear-gradient(135deg,#4285f4,#357ae8);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <path d="M12 2v20M2 12h20"></path>
-      </svg>
-      Entrar con Google
-    </button>
-    <div style="font-size:11px;color:var(--text-3);margin-top:20px;max-width:280px;">
+    <div style="font-size:14px;color:var(--text-2);">Accede con tu cuenta para sincronizar tus datos en todos tus dispositivos.</div>
+    
+    <!-- LOGIN CON GOOGLE -->
+    <div style="width:100%;display:flex;flex-direction:column;gap:10px;">
+      <button id="btn-google-login" onclick="loginWithGoogle()" style="padding:12px 24px;background:linear-gradient(135deg,#4285f4,#357ae8);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2v20M2 12h20"></path></svg>
+        Entrar con Google
+      </button>
+    </div>
+
+    <!-- DIVIDER -->
+    <div style="width:100%;display:flex;align-items:center;gap:12px;margin:10px 0;">
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+      <span style="font-size:12px;color:var(--text-3);">O</span>
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+    </div>
+
+    <!-- LOGIN CON EMAIL/PASSWORD -->
+    <div style="width:100%;display:flex;flex-direction:column;gap:8px;">
+      <input type="email" id="auth-email" placeholder="Correo electrónico" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;">
+      <input type="password" id="auth-password" placeholder="Contraseña" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;" onkeypress="if(event.key==='Enter') loginWithEmailPassword();">
+      <button id="btn-email-login" onclick="loginWithEmailPassword()" style="padding:12px 24px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">
+        Entrar
+      </button>
+    </div>
+
+    <div style="font-size:11px;color:var(--text-3);margin-top:10px;text-align:center;max-width:320px;">
       Tu configuración se guardará automáticamente en la nube y podrás acceder desde cualquier dispositivo.
     </div>
   </div>
@@ -2008,6 +2026,8 @@ let _patHidden=false;
 let _mesFiltro=null; // 'YYYY-MM' o null para mes actual
 let _formMode=null;  // 'gasto' | 'ingreso' | 'pago' | null
 let _formEditId=null;
+var _movsRef=[];  // referencias directas para onclick por índice
+var _editObj=null;
 
 // ══════════════════════════════════════════════════════════
 // LOGOS DE BANCOS — mapeo de TDC → CSS class + URL del logo
@@ -2204,10 +2224,17 @@ function mostrarApp(user){
     : Promise.resolve();
   p.then(function(){
     renderAll();
-    // Sync con Sheets en background
+    // Auto-sync con Sheets al abrir
     if(DB.config.scriptURL && DB.config.scriptURL.trim()){
       pullFromSheets().then(function(ok){if(ok) renderAll();});
     }
+    // Auto-sync cada 5 minutos mientras la app está abierta
+    if(window._autoSyncInterval) clearInterval(window._autoSyncInterval);
+    window._autoSyncInterval=setInterval(function(){
+      if(DB.config.scriptURL && DB.config.scriptURL.trim()){
+        pullFromSheets().then(function(ok){if(ok) renderAll();});
+      }
+    }, 5*60*1000);
   });
 }
 
@@ -2234,6 +2261,39 @@ function loginWithGoogle(){
     });
 }
 
+function loginWithEmailPassword(){
+  var email=document.getElementById('auth-email').value.trim();
+  var password=document.getElementById('auth-password').value;
+  var btn=document.getElementById('btn-email-login');
+  
+  if(!email||!password){
+    toast('Completa email y contraseña','err');
+    return;
+  }
+  
+  if(btn){ btn.disabled=true; btn.textContent='Conectando...'; }
+  
+  firebaseAuth.signInWithEmailAndPassword(email, password)
+    .then(function(result){
+      document.getElementById('auth-email').value='';
+      document.getElementById('auth-password').value='';
+      toast('¡Bienvenido! 👋');
+    })
+    .catch(function(error){
+      console.error('Login error:', error);
+      if(btn){ btn.disabled=false; btn.textContent='Entrar'; }
+      if(error.code==='auth/user-not-found'){
+        toast('Usuario no encontrado','err');
+      } else if(error.code==='auth/wrong-password'){
+        toast('Contraseña incorrecta','err');
+      } else if(error.code==='auth/invalid-email'){
+        toast('Email inválido','err');
+      } else {
+        toast('Error: '+error.message,'err');
+      }
+    });
+}
+
 function logout(){
   firebaseAuth.signOut().then(function(){
     _currentUser=null;
@@ -2241,7 +2301,24 @@ function logout(){
   });
 }
 
+// ScriptURLs hardcodeadas por email — se asignan automáticamente al login
+var SCRIPT_URLS={
+  'moy.delao.07@gmail.com':'https://script.google.com/macros/s/AKfycbwZeZMXPvE0QoCvDgx3rvGf0LUT8irrb7Kr4TSGmuzLW0AUO7sfmIjKvoV3SDr7TuJO/exec',
+  'moises.delaomurillo@gmail.com':'https://script.google.com/macros/s/AKfycbwZeZMXPvE0QoCvDgx3rvGf0LUT8irrb7Kr4TSGmuzLW0AUO7sfmIjKvoV3SDr7TuJO/exec',
+  'lucero@misfinanzas.com':'https://script.google.com/macros/s/AKfycbwA6_JevD-NIWTrEPXim8cCb4rYuxvdqfkFep9zkigfMA74YotxN3_qi_j8I95r90HM/exec'
+};
+
 function loadConfigFromFirestore(uid){
+  // Primero verificar si hay URL hardcodeada para este email
+  if(_currentUser && _currentUser.email && SCRIPT_URLS[_currentUser.email]){
+    var hardcodedURL=SCRIPT_URLS[_currentUser.email];
+    if(hardcodedURL && hardcodedURL.trim()){
+      DB.config.scriptURL=hardcodedURL;
+      saveLocal();
+      return Promise.resolve();
+    }
+  }
+  // Si no hay hardcodeada, buscar en Firestore
   return firebaseDB.collection('users').doc(uid).get()
     .then(function(doc){
       if(doc.exists){
@@ -3387,6 +3464,69 @@ function verDetallePago(id){
     onResult:function(r){
       if(r==='edit') setTimeout(function(){editarPago(id);},250);
       else if(r==='del') eliminarPagoById(id);
+    }
+  });
+}
+
+// ──── verMovRef: router central por índice en _movsRef ────
+function verMovRef(idx){
+  var ref=_movsRef[idx];
+  if(!ref) return;
+  if(ref.type==='ingreso') verDetalleIngreso_obj(ref.obj);
+  else if(ref.type==='pago') verDetallePago_obj(ref.obj);
+  else verDetalleGasto_obj(ref.obj);
+}
+
+function verDetalleGasto_obj(g){
+  var bodyHTML=
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Monto</span><span class="tdc-detail-value" style="color:var(--danger);font-size:15px;">'+fmt(g.monto)+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value">'+String(g.fecha||'').split('T')[0]+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Descripción</span><span class="tdc-detail-value">'+(g.desc||'—')+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Categoría</span><span class="tdc-detail-value">'+(g.cat||'—')+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">TDC / Efectivo</span><span class="tdc-detail-value">'+(g.tdc||'—')+'</span></div>'+
+    (g.msi==='Si'?'<div class="tdc-detail-row"><span class="tdc-detail-label">MSI</span><span class="tdc-detail-value">'+(g.meses||'?')+' meses · '+fmt(g.monto/(parseInt(g.meses)||1))+'/mes</span></div>':'')+
+    (g.notas?'<div class="tdc-detail-row"><span class="tdc-detail-label">Notas</span><span class="tdc-detail-value">'+g.notas+'</span></div>':'');
+  var gastoRef=g;
+  appModalOpen({
+    title:'Gasto',subtitle:String(g.fecha||'').split('T')[0],bodyHTML:bodyHTML,
+    actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
+    onResult:function(r){
+      if(r==='edit') setTimeout(function(){_editObj=gastoRef;editarGasto(gastoRef.id);},250);
+      else if(r==='del') eliminarGastoById(String(gastoRef.id));
+    }
+  });
+}
+
+function verDetalleIngreso_obj(i){
+  var bodyHTML=
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Monto</span><span class="tdc-detail-value" style="color:var(--success);font-size:15px;">'+fmt(i.monto)+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value">'+String(i.fecha||'').split('T')[0]+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Tipo</span><span class="tdc-detail-value">'+(i.tipo||'—')+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Descripción</span><span class="tdc-detail-value">'+(i.desc||'—')+'</span></div>';
+  var ingRef=i;
+  appModalOpen({
+    title:'Ingreso',subtitle:String(i.fecha||'').split('T')[0],bodyHTML:bodyHTML,
+    actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
+    onResult:function(r){
+      if(r==='edit') setTimeout(function(){_editObj=ingRef;editarIngreso(ingRef.id);},250);
+      else if(r==='del') eliminarIngresoById(String(ingRef.id));
+    }
+  });
+}
+
+function verDetallePago_obj(p){
+  var bodyHTML=
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Monto</span><span class="tdc-detail-value" style="color:var(--info);font-size:15px;">'+fmt(p.monto)+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value">'+String(p.fecha||'').split('T')[0]+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">TDC</span><span class="tdc-detail-value">'+(p.tdc||'—')+'</span></div>'+
+    (p.notas?'<div class="tdc-detail-row"><span class="tdc-detail-label">Notas</span><span class="tdc-detail-value">'+p.notas+'</span></div>':'');
+  var pagoRef=p;
+  appModalOpen({
+    title:'Pago a TDC',subtitle:String(p.fecha||'').split('T')[0],bodyHTML:bodyHTML,
+    actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
+    onResult:function(r){
+      if(r==='edit') setTimeout(function(){_editObj=pagoRef;editarPago(pagoRef.id);},250);
+      else if(r==='del') eliminarPagoById(String(pagoRef.id));
     }
   });
 }
