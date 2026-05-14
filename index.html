@@ -2398,11 +2398,15 @@ async function pushSheets(sheet,row){
     console.error('❌ No hay scriptURL configurado');
     return false;
   }
+  
+  // Convertir objeto a array en el orden correcto
+  var rowArray=objToSheetRow(sheet,row);
+  
   try{
-    console.log('Enviando a Sheets...');
+    console.log('Enviando a Sheets...',rowArray);
     var res=await fetch(DB.config.scriptURL,{
       method:'POST',
-      body:JSON.stringify({action:'add',sheet:sheet,row:row})
+      body:JSON.stringify({action:'append',sheet:sheet,row:rowArray})
     });
     console.log('Respuesta Sheets:',res.ok,res.status);
     return res.ok;
@@ -2410,6 +2414,17 @@ async function pushSheets(sheet,row){
     console.error('Error pushSheets:',e);
     return false;
   }
+}
+
+// Convertir objeto a array según headers del sheet
+function objToSheetRow(sheetName,obj){
+  var headers={
+    'gastos':['fecha','desc','cat','monto','tdc','mes','msi','meses','notas','ciclo','id'],
+    'ingresos':['fecha','tipo','desc','monto','mes','id'],
+    'pagosTDC':['fecha','tdc','mes','consumo','monto','dif','estado','notas','ciclo','id']
+  };
+  var h=headers[sheetName]||[];
+  return h.map(function(k){return obj[k]!==undefined?obj[k]:'';});
 }
 
 async function syncSheetDelete(sheet,rows){
