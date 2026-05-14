@@ -2287,15 +2287,23 @@ function loadConfigFromFirestore(uid){
       DB.config.scriptURL=hardcodedURL;
       saveLocal();
       console.log('✓ Script asignado para',_currentUser.email);
-      return Promise.resolve();
     }
   }
-  // Si no hay hardcodeada, buscar en Firestore
+  
+  // Cargar datos del usuario desde Firestore (nombre, etc)
   return firebaseDB.collection('users').doc(uid).get()
     .then(function(doc){
       if(doc.exists){
         var userData=doc.data();
-        if(userData.scriptURL && userData.scriptURL.trim()){
+        // Cargar nombre si existe
+        if(userData.nombre){
+          DB.config.nombre=userData.nombre;
+          var nameEl=document.getElementById('greeting-name');
+          if(nameEl) nameEl.textContent=userData.nombre;
+          saveLocal();
+        }
+        // Cargar scriptURL si no está hardcodeada
+        if(!SCRIPT_URLS[_currentUser.email] && userData.scriptURL && userData.scriptURL.trim()){
           DB.config.scriptURL=userData.scriptURL;
           saveLocal();
           console.log('✓ Script cargado desde Firestore');
@@ -5042,6 +5050,14 @@ function editarNombreInline(){
     if(newName && newName!==currentName){
       DB.config.nombre=newName;
       saveLocal();
+      // Sync nombre a Firestore
+      if(_currentUser && firebaseDB){
+        firebaseDB.collection('users').doc(_currentUser.uid).set({
+          nombre: newName
+        }, {merge: true}).catch(function(e){
+          console.error('Error saving nombre to Firestore:',e);
+        });
+      }
       toast('Nombre actualizado ✓');
     } else {
       nameEl.textContent=currentName;
