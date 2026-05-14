@@ -3986,18 +3986,29 @@ function onTdcClick(nombreTdc){
 // Desglose completo de movimientos de una TDC
 function verDesgloseTDC(nombreTdc){
   var hoy=new Date();
+  var cicloActKey=cicloDeGastoCorrecto(hoy.toISOString().split('T')[0],nombreTdc);
   var cicloAntKey=obtenerCicloAnterior(nombreTdc);
-  var ant=DB.gastos.filter(function(g){
+  
+  // Gastos del ciclo ACTUAL (lo que se está acumulando ahora)
+  var actual=DB.gastos.filter(function(g){
+    if(g.tdc!==nombreTdc) return false;
+    return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloActKey;
+  }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+
+  // Gastos del ciclo ANTERIOR (pendientes de pago)
+  var anterior=DB.gastos.filter(function(g){
     if(g.tdc!==nombreTdc) return false;
     return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloAntKey;
   }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
 
   var calc=calcularSaldoPendiente(nombreTdc);
+  var totalMostrado=calc.consumoCicloAct+calc.pendiente; // lo que muestra la tarjeta
 
-  // Orden: 1) Lista de conceptos → 2) Suma final
-  var listaHTML='';
-  if(ant.length){
-    var rows=ant.map(function(g){
+  var bodyParts=[];
+
+  // Pendiente del ciclo anterior (si hay)
+  if(calc.pendiente>0 && anterior.length>0){
+    var rowsAnt=anterior.map(function(g){
       var fc=String(g.fecha).substring(8,10)+'/'+String(g.fecha).substring(5,7);
       var msi=g.msi==='Si'?' · MSI '+(g.meses||'?')+'m':'';
       return '<div class="tdc-detail-row" style="cursor:pointer;" onclick="appModalClose();setTimeout(function(){verDetalleGasto(\''+String(g.id)+'\');},250);">'+
@@ -4005,58 +4016,67 @@ function verDesgloseTDC(nombreTdc){
         '<span class="tdc-detail-value">'+fmt(g.monto)+'</span>'+
       '</div>';
     }).join('');
-    listaHTML='<div class="tdc-detail-section">'+
-      '<div class="tdc-detail-section-title">Ciclo anterior ('+ant.length+')</div>'+
-      '<div style="max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rows+'</div>'+
-    '</div>';
-  }
-  
-  // Si no hay gastos directos pero sí hay consumo (MSI activos), mostrar resumen
-  if(ant.length===0 && calc.consumoCicloAnt>0){
-    listaHTML='<div class="tdc-detail-section">'+
-      '<div class="tdc-detail-section-title">Consumo del ciclo</div>'+
-      '<div class="tdc-detail-row">'+
-        '<span class="tdc-detail-label">Parcialidades MSI activas</span>'+
-        '<span class="tdc-detail-value">'+fmt(calc.consumoCicloAnt)+'</span>'+
-      '</div>'+
-    '</div>';
+    bodyParts.push(
+      '<div class="tdc-detail-section">'+
+        '<div class="tdc-detail-section-title" style="color:var(--danger);">Pendiente de pago ('+anterior.length+')</div>'+
+        '<div style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rowsAnt+'</div>'+
+      '</div>'
+    );
+  } else if(calc.pendiente>0){
+    // Hay pendiente pero sin gastos listados (MSI o adeudo)
+    bodyParts.push(
+      '<div class="tdc-detail-section">'+
+        '<div class="tdc-detail-row">'+
+          '<span class="tdc-detail-label">Saldo pendiente del ciclo anterior</span>'+
+          '<span class="tdc-detail-value" style="color:var(--danger);">'+fmt(calc.pendiente)+'</span>'+
+        '</div>'+
+      '</div>'
+    );
   }
 
-  // Pagos dentro del ciclo anterior
-  var pagosAnt=DB.pagosTDC.filter(function(p){
-    return p.tdc===nombreTdc && p.fecha && (p.ciclo||p.fecha.substring(0,7))===cicloAntKey;
-  });
-  var pagosHTML='';
-  if(pagosAnt.length){
-    var pagosRows=pagosAnt.map(function(p){
-      var fc=String(p.fecha).substring(8,10)+'/'+String(p.fecha).substring(5,7);
-      return '<div class="tdc-detail-row">'+
-        '<span class="tdc-detail-label" style="color:var(--success);">'+fc+' · Pago registrado</span>'+
-        '<span class="tdc-detail-value" style="color:var(--success);">-'+fmt(p.monto)+'</span>'+
+  // Ciclo actual
+  if(actual.length>0){
+    var rowsAct=actual.map(function(g){
+      var fc=String(g.fecha).substring(8,10)+'/'+String(g.fecha).substring(5,7);
+      var msi=g.msi==='Si'?' · MSI '+(g.meses||'?')+'m':'';
+      return '<div class="tdc-detail-row" style="cursor:pointer;" onclick="appModalClose();setTimeout(function(){verDetalleGasto(\''+String(g.id)+'\');},250);">'+
+        '<span class="tdc-detail-label">'+fc+' · '+(g.desc||g.cat)+'<span style="color:var(--text-3);font-size:10px;">'+msi+'</span></span>'+
+        '<span class="tdc-detail-value">'+fmt(g.monto)+'</span>'+
       '</div>';
     }).join('');
-    pagosHTML='<div class="tdc-detail-section">'+
-      '<div class="tdc-detail-section-title">Pagos del ciclo</div>'+
-      pagosRows+
-    '</div>';
+    bodyParts.push(
+      '<div class="tdc-detail-section">'+
+        '<div class="tdc-detail-section-title">Ciclo actual ('+actual.length+')</div>'+
+        '<div style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rowsAct+'</div>'+
+      '</div>'
+    );
+  } else if(calc.consumoCicloAct>0){
+    // Hay consumo actual pero sin gastos (MSI)
+    bodyParts.push(
+      '<div class="tdc-detail-section">'+
+        '<div class="tdc-detail-row">'+
+          '<span class="tdc-detail-label">Consumo del ciclo actual</span>'+
+          '<span class="tdc-detail-value">'+fmt(calc.consumoCicloAct)+'</span>'+
+        '</div>'+
+      '</div>'
+    );
   }
 
-  // Total al final
-  var totalHTML=
-    '<div class="tdc-detail-section" style="margin-top:4px;">'+
-      (calc.adeudo>0?'<div class="tdc-detail-row"><span class="tdc-detail-label">Adeudo previo</span><span class="tdc-detail-value">'+fmt(calc.adeudo)+'</span></div>':'')+
-      (calc.pagado>0?'<div class="tdc-detail-row"><span class="tdc-detail-label">Pagado</span><span class="tdc-detail-value" style="color:var(--success);">-'+fmt(calc.pagado)+'</span></div>':'')+
-      '<div class="tdc-detail-row" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px;">'+
-        '<span class="tdc-detail-label" style="font-weight:700;">Total a pagar</span>'+
-        '<span class="tdc-detail-value" style="color:'+(calc.pendiente>0?'var(--danger)':'var(--success)')+';font-size:16px;font-weight:700;">'+fmt(calc.pendiente)+'</span>'+
+  // Total
+  bodyParts.push(
+    '<div class="tdc-detail-section" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
+      '<div class="tdc-detail-row">'+
+        '<span class="tdc-detail-label" style="font-weight:700;">Total acumulado</span>'+
+        '<span class="tdc-detail-value" style="color:var(--accent);font-size:16px;font-weight:700;">'+fmt(totalMostrado)+'</span>'+
       '</div>'+
-    '</div>';
+    '</div>'
+  );
 
-  var bodyHTML=listaHTML+pagosHTML+totalHTML;
+  var bodyHTML=bodyParts.join('');
 
   appModalOpen({
     title:nombreTdc+' · Desglose',
-    subtitle:'Lo que toca pagar',
+    subtitle:'Saldo total de la tarjeta',
     bodyHTML:bodyHTML||'<div style="padding:20px;text-align:center;color:var(--text-3);">Sin movimientos registrados.</div>',
     actions:[
       {label:'← Regresar',style:'secondary',value:'back'},
