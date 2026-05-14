@@ -5641,7 +5641,29 @@ function toggleTheme(){
 // ══════════════════════════════════════════════════════════
 // RENDER ALL — repinta todo
 // ══════════════════════════════════════════════════════════
+function limpiarConfig(){
+  // Filtrar TDCs inválidas (números, vacíos, NaN)
+  if(DB.config.tdcs){
+    DB.config.tdcs=DB.config.tdcs.filter(function(x){
+      return x && typeof x==='string' && x.trim() && x!=='NaN' && isNaN(Number(x));
+    });
+  }
+  // Filtrar cuentas inválidas
+  if(DB.config.cuentas){
+    DB.config.cuentas=DB.config.cuentas.filter(function(x){
+      return x && typeof x==='string' && x.trim() && x!=='NaN' && isNaN(Number(x));
+    });
+  }
+  // Filtrar categorías inválidas
+  if(DB.config.categorias){
+    DB.config.categorias=DB.config.categorias.filter(function(x){
+      return x && typeof x==='string' && x.trim() && x!=='NaN';
+    });
+  }
+}
+
 function renderAll(){
+  limpiarConfig();
   renderDashboard();
   // Re-render la página activa actual
   var act=document.querySelector('.page.active');
