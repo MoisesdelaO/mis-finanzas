@@ -4010,6 +4010,17 @@ function verDesgloseTDC(nombreTdc){
       '<div style="max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rows+'</div>'+
     '</div>';
   }
+  
+  // Si no hay gastos directos pero sí hay consumo (MSI activos), mostrar resumen
+  if(ant.length===0 && calc.consumoCicloAnt>0){
+    listaHTML='<div class="tdc-detail-section">'+
+      '<div class="tdc-detail-section-title">Consumo del ciclo</div>'+
+      '<div class="tdc-detail-row">'+
+        '<span class="tdc-detail-label">Parcialidades MSI activas</span>'+
+        '<span class="tdc-detail-value">'+fmt(calc.consumoCicloAnt)+'</span>'+
+      '</div>'+
+    '</div>';
+  }
 
   // Pagos dentro del ciclo anterior
   var pagosAnt=DB.pagosTDC.filter(function(p){
