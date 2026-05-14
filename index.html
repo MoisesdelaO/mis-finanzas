@@ -947,12 +947,14 @@ input,select,textarea{font-family:inherit;font-size:15px;color:inherit;}
   border-color:color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .tdc-meta{
-  font-size:12px;
+  font-size:11px;
   color:var(--text-2);
-  margin-top:2px;
+  margin-top:3px;
   display:flex;
   align-items:center;
-  gap:6px;
+  gap:4px;
+  flex-wrap:wrap;
+  line-height:1.3;
 }
 .tdc-meta .dot{width:3px;height:3px;border-radius:50%;background:var(--text-3);}
 
@@ -3759,7 +3761,9 @@ function setOrHide(id,realValue){
 function renderTdcList(){
   var cont=document.getElementById('tdc-list-container');
   if(!cont) return;
-  var tdcs=(DB.config.tdcs||[]).filter(function(t){return t!=='Efectivo';});
+  var tdcs=(DB.config.tdcs||[]).filter(function(t){
+    return t && t!=='Efectivo' && typeof t==='string' && t.trim() && t!=='NaN' && isNaN(Number(t));
+  });
   if(tdcs.length===0){
     cont.innerHTML='<div class="empty-state"><div class="empty-state-icon"><i data-lucide="credit-card"></i></div><div class="empty-state-text">Sin tarjetas configuradas. Ve a Perfil para agregar.</div></div>';
     renderIcons();
@@ -3777,21 +3781,23 @@ function renderTdcList(){
     if(pct>70) fillCls='danger';
     else if(pct>40) fillCls='warn';
     var fp=fechaPagoReal(cfg.corte,cfg.diasPago);
-    var metaTxt='';
+    var metaCorte='';
+    var metaVence='';
     if(cfg.corte){
-      metaTxt='Corte día '+cfg.corte;
+      metaCorte='Corte día '+cfg.corte;
       if(fp){
         if(calc.pendiente>0 && fp.diasRestantes>0){
-          metaTxt+=' · Vence el '+fechaLegible(fp.fechaPago);
+          metaVence='Vence el '+fechaLegible(fp.fechaPago);
         } else if(calc.pendiente===0 && calc.totalAPagar>0){
-          metaTxt+=' · Pagada ✓';
+          metaVence='Pagada ✓';
         } else if(calc.pendiente===0){
-          metaTxt+=' · Al corriente';
+          metaVence='Al corriente';
         } else if(fp.diasRestantes<=0){
-          metaTxt+=' · Vencida';
+          metaVence='Vencida';
         }
       }
     }
+    var metaTxt=(metaCorte?metaCorte:'')+(metaVence?' · '+metaVence:'');
     var msiBadge=calc.msiActivos>0
       ? '<span class="tdc-badge-msi has-msi">'+calc.msiActivos+' MSI</span>'
       : '';
@@ -3809,9 +3815,8 @@ function renderTdcList(){
           '<div class="tdc-name-row">'+
             '<span class="tdc-name">'+tdc+'</span>'+
             msiBadge+
-            +
           '</div>'+
-          '<div class="tdc-meta"><span>'+metaTxt+'</span></div>'+
+          '<div class="tdc-meta">'+metaTxt+'</div>'+
         '</div>'+
         '<div class="tdc-amount">'+
           '<div class="saldo mono">'+saldoStr+'</div>'+
