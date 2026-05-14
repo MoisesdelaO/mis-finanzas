@@ -2196,30 +2196,34 @@ function initFirebase(){
 function mostrarApp(user){
   document.getElementById('auth-panel').style.display='none';
   document.getElementById('app-main').style.display='block';
-  // Actualizar nombre con la primera parte del email
-  if(user && user.email){
-    var nombreUsuario=user.email.split('@')[0];
-    DB.config.nombre=nombreUsuario;
-    var nameEl=document.getElementById('greeting-name');
-    if(nameEl) nameEl.textContent=nombreUsuario;
-  }
-  // Cargar config de Firestore y luego render
+  
+  // Cargar config de Firestore primero
   var p = (user && firebaseDB)
     ? loadConfigFromFirestore(user.uid)
     : Promise.resolve();
+  
   p.then(function(){
+    // Solo asignar nombre desde email si no hay nombre guardado
+    if(user && user.email && !DB.config.nombre){
+      var nombreUsuario=user.email.split('@')[0];
+      DB.config.nombre=nombreUsuario;
+      var nameEl=document.getElementById('greeting-name');
+      if(nameEl) nameEl.textContent=nombreUsuario;
+      saveLocal();
+    }
+    
     renderAll();
     // Auto-sync con Sheets al abrir
     if(DB.config.scriptURL && DB.config.scriptURL.trim()){
       pullFromSheets().then(function(ok){if(ok) renderAll();});
     }
-    // Auto-sync cada 5 minutos mientras la app está abierta
+    // Auto-sync cada 30 segundos
     if(window._autoSyncInterval) clearInterval(window._autoSyncInterval);
     window._autoSyncInterval=setInterval(function(){
       if(DB.config.scriptURL && DB.config.scriptURL.trim()){
         pullFromSheets().then(function(ok){if(ok) renderAll();});
       }
-    }, 30*1000); // sync cada 30 segundos
+    }, 30*1000);
   });
 }
 
@@ -2957,7 +2961,20 @@ function eliminarPagoById(id){
 // ══════════════════════════════════════════════════════════
 // NAVEGACIÓN ENTRE PÁGINAS
 // ══════════════════════════════════════════════════════════
+var _navHistory=[];  // Historial de navegación
+
 function navigate(pageId){
+  // Guardar página actual antes de cambiar
+  var currentPage=document.querySelector('.page.active');
+  if(currentPage && currentPage.id){
+    var currentId=currentPage.id.replace('page-','');
+    if(currentId && currentId!==pageId){
+      _navHistory.push(currentId);
+      // Mantener historial limitado (últimas 10 páginas)
+      if(_navHistory.length>10) _navHistory.shift();
+    }
+  }
+  
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   var page=document.getElementById('page-'+pageId);
@@ -2976,6 +2993,19 @@ function navigate(pageId){
   if(pageId==='movs') renderMovsPage();
   if(pageId==='ingresos') renderIngresosPage();
   if(pageId==='pagos-tdc') renderPagosTDCPage();
+}
+
+function goBack(){
+  var prevPage=_navHistory.pop();
+  if(prevPage){
+    // Navegar sin agregar al historial
+    navigate(prevPage);
+    _navHistory.pop(); // Remover la que acabamos de agregar
+  } else {
+    // Si no hay historial, ir a inicio
+    navigate('inicio');
+    _navHistory=[];
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -3056,7 +3086,7 @@ function renderMovsPage(){
 
   var html=''+
     '<div class="page-header-bar">'+
-      '<button class="icon-btn" onclick="navigate(\'stats\')" aria-label="Volver"><i data-lucide="arrow-left"></i></button>'+
+      '<button class="icon-btn" onclick="goBack()" aria-label="Volver"><i data-lucide="arrow-left"></i></button>'+
       '<div class="title">Movimientos</div>'+
       '<button class="icon-btn" onclick="exportarMovsCSV()" aria-label="Exportar CSV"><i data-lucide="download"></i></button>'+
     '</div>'+
@@ -3210,7 +3240,7 @@ function renderIngresosPage(){
   }
 
   var html=
-    '<div class="page-header-bar"><button class="icon-btn" onclick="navigate(\'stats\')" aria-label="Volver"><i data-lucide="arrow-left"></i></button><div class="title">Ingresos</div><div></div></div>'+
+    '<div class="page-header-bar"><button class="icon-btn" onclick="goBack()" aria-label="Volver"><i data-lucide="arrow-left"></i></button><div class="title">Ingresos</div><div></div></div>'+
     '<div style="background:linear-gradient(135deg,#1ba472,#22c55e);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:16px;color:#fff;">'+
       '<div style="font-size:11px;font-weight:600;opacity:0.85;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Total ingresos</div>'+
       '<div style="font-size:28px;font-weight:800;letter-spacing:-0.02em;">'+fmtK(totalMonto)+'</div>'+
@@ -3296,7 +3326,7 @@ function renderPagosTDCPage(){
   }
 
   var html=
-    '<div class="page-header-bar"><button class="icon-btn" onclick="navigate(\'stats\')" aria-label="Volver"><i data-lucide="arrow-left"></i></button><div class="title">Pagos a TDC</div><div></div></div>'+
+    '<div class="page-header-bar"><button class="icon-btn" onclick="goBack()" aria-label="Volver"><i data-lucide="arrow-left"></i></button><div class="title">Pagos a TDC</div><div></div></div>'+
     '<div style="background:linear-gradient(135deg,#1e293b,#334155);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:16px;">'+
       '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Total pagado</div>'+
       '<div style="font-size:28px;font-weight:800;color:#fff;">'+fmtK(totalMonto)+'</div>'+
