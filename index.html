@@ -1928,7 +1928,7 @@ body.no-scroll .app{overflow:hidden;}
   </button>
   <button class="nav-item" data-page="stats" onclick="navigate('stats')">
     <i data-lucide="bar-chart-3"></i>
-    <span class="nav-label">Stats</span>
+    <span class="nav-label">Estadísticas</span>
   </button>
   <button class="nav-item" data-page="anual" onclick="navigate('anual')">
     <i data-lucide="calendar-days"></i>
@@ -1996,13 +1996,13 @@ let DB={
   config:{
     scriptURL:'',
     categorias:['Comida','Transporte','Salud','Entretenimiento','Ropa y cuidado personal','Deudas / creditos / TDC','Ahorro / inversion','Otros'],
-    tdcs:['Nu','BBVA Azul','Banamex Joy','Efectivo'],
+    tdcs:['Nu','BBVA Azul','Banamex Joy','BBVA Oro','Cimaco','Efectivo'],
     cuentas:['Openbank','Nu Cajita','DiDi Cuenta','Revolut'],
     tiposIngreso:['Sueldo'],
     presupuesto:{Comida:5000,Transporte:3000,Salud:1500,Entretenimiento:1000,'Ropa y cuidado personal':1000,'Deudas / creditos / TDC':4000,'Ahorro / inversion':3000,Otros:500},
-    cortesTDC:{Nu:{corte:5,diasPago:20},'BBVA Azul':{corte:10,diasPago:20},'Banamex Joy':{corte:20,diasPago:20}},
-    limitesTDC:{Nu:15000,'BBVA Azul':47400,'Banamex Joy':42500},
-    adeudosPendientes:{'Banamex Joy':0,'BBVA Azul':0,'Nu':0}
+    cortesTDC:{Nu:{corte:12,diasPago:20},'BBVA Azul':{corte:10,diasPago:20},'Banamex Joy':{corte:20,diasPago:20},'BBVA Oro':{corte:10,diasPago:20},Cimaco:{corte:15,diasPago:20}},
+    limitesTDC:{Nu:15000,'BBVA Azul':47400,'Banamex Joy':42500,'BBVA Oro':50000,Cimaco:10000},
+    adeudosPendientes:{'Banamex Joy':0,'BBVA Azul':0,'Nu':0,'BBVA Oro':0,'Cimaco':0}
   }
 };
 let connected=false;
@@ -2023,13 +2023,27 @@ const BANK_MAP={
   'banamex costco':{cls:'banamex-costco',img:'assets/banks/banamex-costco.png',ini:'BC'},
   'bbva azul':{cls:'bbva',img:'assets/banks/bbva.png',ini:'BBVA'},
   'bbva':{cls:'bbva',img:'assets/banks/bbva.png',ini:'BBVA'},
+  'bbva oro':{cls:'bbva-oro',img:'assets/banks/bbva-oro.png',ini:'BO'},
   'nu':{cls:'nu',img:'assets/banks/nu.png',ini:'nu'},
   'cimaco':{cls:'cimaco',img:'assets/banks/cimaco.png',ini:'C'},
   'efectivo':{cls:'efectivo',img:'',ini:'$'}
 };
+
+// Logos para cuentas de inversión
+const INVESTMENT_LOGOS={
+  'didi cuenta':{cls:'didi',img:'assets/banks/didi.png',ini:'D'},
+  'didi':{cls:'didi',img:'assets/banks/didi.png',ini:'D'},
+  'revolut':{cls:'revolut',img:'assets/banks/revolut.png',ini:'R'},
+  'openbank':{cls:'openbank',img:'assets/banks/openbank.png',ini:'O'},
+  'nu cajita':{cls:'nu',img:'assets/banks/nu.png',ini:'N'}
+};
 function bankInfo(tdc){
   var k=String(tdc||'').trim().toLowerCase();
   return BANK_MAP[k] || {cls:'',img:'',ini:String(tdc||'?').substring(0,2).toUpperCase()};
+}
+function inversionInfo(cuenta){
+  var k=String(cuenta||'').trim().toLowerCase();
+  return INVESTMENT_LOGOS[k] || {cls:'',img:'',ini:String(cuenta||'?').substring(0,2).toUpperCase()};
 }
 
 // ══════════════════════════════════════════════════════════
@@ -4338,9 +4352,10 @@ function renderInversionesNuevo(){
         histHTML='<div style="font-size:12px;color:var(--text-3);padding:8px 0;">Sin historial aún. Se generará al cerrar cada mes.</div>';
       }
 
+      var invInfo=inversionInfo(nombre);
       html+='<div class="cuenta-card" id="cc-'+safeN+'">'+
         '<div class="cuenta-card-header" onclick="toggleCuenta(\''+safeN+'\')">'+
-          '<div class="cuenta-card-logo"><i data-lucide="piggy-bank"></i></div>'+
+          '<div class="cuenta-card-logo bank-logo '+invInfo.cls+'" style="width:40px;height:40px;font-size:12px;">'+(invInfo.img?'<img src="'+invInfo.img+'" onerror="this.parentElement.innerHTML=\'<i data-lucide=&quot;piggy-bank&quot;></i>\';">':'<i data-lucide="piggy-bank"></i>')+'</div>'+
           '<div class="cuenta-card-info">'+
             '<div class="cuenta-card-name">'+nombre+'</div>'+
             '<div class="cuenta-card-tasa">'+tasaEfec.toFixed(2)+'% ef. · '+tramos.length+' tramo'+(tramos.length>1?'s':'')+'</div>'+
@@ -4833,6 +4848,7 @@ function renderPerfilNuevo(){
         '<div class="item-title">'+t+'</div>'+
         '<div class="item-meta">Corte día '+(cfg.corte||'?')+' · Pago a '+(cfg.diasPago||'?')+' días · Límite '+fmtK(lim)+'</div>'+
       '</div>'+
+      '<button class="row-action-btn" onclick="event.stopPropagation();editarTDC(\''+safeT+'\')" aria-label="Editar" style="margin-right:4px;"><i data-lucide="pencil"></i></button>'+
       '<button class="row-action-btn" onclick="event.stopPropagation();eliminarTDC(\''+safeT+'\')" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>'+
     '</div>';
   }).join('');
