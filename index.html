@@ -2035,7 +2035,10 @@ const INVESTMENT_LOGOS={
   'didi':{cls:'didi',img:'assets/banks/didi.png',ini:'D'},
   'revolut':{cls:'revolut',img:'assets/banks/revolut.png',ini:'R'},
   'openbank':{cls:'openbank',img:'assets/banks/openbank.png',ini:'O'},
-  'nu cajita':{cls:'nu',img:'assets/banks/nu.png',ini:'N'}
+  'nu cajita':{cls:'nu',img:'assets/banks/nu.png',ini:'N'},
+  'cajita nu':{cls:'nu',img:'assets/banks/nu.png',ini:'N'},
+  'cajita de nu':{cls:'nu',img:'assets/banks/nu.png',ini:'N'},
+  'nu':{cls:'nu',img:'assets/banks/nu.png',ini:'N'}
 };
 function bankInfo(tdc){
   var k=String(tdc||'').trim().toLowerCase();
@@ -4877,13 +4880,15 @@ function renderPerfilNuevo(){
     '</div>';
   }).join('');
 
-  // === CUENTAS DE INVERSIÓN (solo agregar/quitar) ===
+  // === CUENTAS DE INVERSIÓN ===
   var ctasHTML=(DB.config.cuentas||[]).map(function(c){
     var safeC=c.replace(/'/g,"\\'");
-    return '<div class="item-row">'+
-      '<div class="item-icon" style="background:var(--accent-soft);"><i data-lucide="piggy-bank" style="color:var(--accent);"></i></div>'+
+    var invInfo=inversionInfo(c);
+    return '<div class="item-row clickable" onclick="editarNombreCuenta(\''+safeC+'\')">'+
+      '<div class="bank-logo '+invInfo.cls+'" style="width:36px;height:36px;font-size:11px;">'+(invInfo.img?'<img src="'+invInfo.img+'" onerror="this.parentElement.innerHTML=\'<i data-lucide=&quot;piggy-bank&quot;></i>\';">':'<i data-lucide="piggy-bank"></i>')+'</div>'+
       '<div class="item-info"><div class="item-title">'+c+'</div><div class="item-meta">Gestiona tramos en Inversiones</div></div>'+
-      '<button class="row-action-btn" onclick="eliminarCuenta(\''+safeC+'\')" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>'+
+      '<button class="row-action-btn" onclick="event.stopPropagation();editarNombreCuenta(\''+safeC+'\')" aria-label="Editar" style="margin-right:4px;"><i data-lucide="pencil"></i></button>'+
+      '<button class="row-action-btn" onclick="event.stopPropagation();eliminarCuenta(\''+safeC+'\')" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>'+
     '</div>';
   }).join('');
 
@@ -5420,6 +5425,43 @@ function agregarCuenta(){
       pushCuentasInv();
       toast('Cuenta agregada ✓');
       renderPerfilNuevo();
+    }
+  });
+}
+
+function editarNombreCuenta(cuentaActual){
+  appModalOpen({
+    title:'Editar nombre de cuenta',
+    subtitle:cuentaActual,
+    bodyHTML:'<div class="field"><label class="field-label">Nuevo nombre</label>'+
+      '<input type="text" id="enc-nombre" class="field-input" value="'+cuentaActual+'" placeholder="Ej: DiDi Cuenta" autofocus maxlength="50"></div>',
+    actions:[
+      {label:'Cancelar',style:'secondary',value:null},
+      {label:'Guardar',style:'primary',value:true}
+    ],
+    onResult:function(ok){
+      if(!ok) return;
+      var nuevoNombre=(document.getElementById('enc-nombre').value||'').trim();
+      if(!nuevoNombre || nuevoNombre===cuentaActual) return;
+      // Verificar que no exista ya
+      if((DB.config.cuentas||[]).includes(nuevoNombre)){
+        toast('Ya existe una cuenta con ese nombre','err');
+        return;
+      }
+      // Renombrar en lista de cuentas
+      var idx=DB.config.cuentas.indexOf(cuentaActual);
+      if(idx>=0) DB.config.cuentas[idx]=nuevoNombre;
+      // Renombrar en cuentasInv
+      if(DB.cuentasInv[cuentaActual]){
+        DB.cuentasInv[nuevoNombre]=DB.cuentasInv[cuentaActual];
+        delete DB.cuentasInv[cuentaActual];
+      }
+      save();
+      pushConfigToSheets();
+      pushCuentasInv();
+      toast('Nombre actualizado ✓');
+      renderPerfilNuevo();
+      renderInversionesNuevo();
     }
   });
 }
