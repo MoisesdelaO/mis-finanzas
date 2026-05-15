@@ -2759,25 +2759,43 @@ function obtenerCicloAnterior(tdc){
   return year+'-'+String(mes+1).padStart(2,'0');
 }
 
-// Cálculo unificado de saldo pendiente por TDC (importado v3.0)
 function calcularSaldoPendiente(tdc){
   var cfg=DB.config.cortesTDC[tdc];
-  if(!cfg||!cfg.corte) return {pendiente:0,consumoCicloAnt:0,pagado:0,adeudo:0,consumoCicloAct:0,msiActivos:0};
+  var vacio={saldoAlCorte:0,pendiente:0,consumoCicloAnt:0,pagado:0,adeudo:0,
+    consumoCicloAct:0,msiActivos:0,totalAPagar:0,saldoActual:0,
+    fechaCorte:null,fechaLimitePago:null,fechaProxCorte:null,
+    diasRestantes:null,estado:'al_corriente',enPeriodoPago:false,
+    msiEnCorte:0,msiEnCicloAct:0};
+  if(!cfg||!cfg.corte) return vacio;
   var diaCorte=parseInt(cfg.corte);
+  var diasPago=parseInt(cfg.diasPago)||20;
   var hoy=new Date();
-  var cicloAnt=obtenerCicloAnterior(tdc);
-  var cicloAct=cicloDeGastoCorrecto(hoy.toISOString().split('T')[0],tdc);
-  var fechaCorte;
-  if(hoy.getDate()>diaCorte){
-    fechaCorte=new Date(hoy.getFullYear(),hoy.getMonth(),diaCorte);
-  } else {
-    fechaCorte=new Date(hoy.getFullYear(),hoy.getMonth()-1,diaCorte);
-  }
-  var fechaCorteAntAnt=new Date(fechaCorte.getFullYear(),fechaCorte.getMonth()-1,diaCorte);
-  var fechaProxCorte=new Date(fechaCorte.getFullYear(),fechaCorte.getMonth()+1,diaCorte);
+  hoy.setHours(12,0,0,0);
 
-  // Ciclo anterior (lo que toca pagar)
-  var consumoRegulares=0,consumoMSI=0;
+  // Fecha del último corte y próximo corte
+  var fechaCorte,fechaProxCorte;
+  if(hoy.getDate()>diaCorte){
+    fechaCorte=new Date(hoy.getFullYear(),hoy.getMonth(),diaCorte,12,0,0);
+    fechaProxCorte=new Date(hoy.getFullYear(),hoy.getMonth()+1,diaCorte,12,0,0);
+  } else {
+    fechaCorte=new Date(hoy.getFullYear(),hoy.getMonth()-1,diaCorte,12,0,0);
+    fechaProxCorte=new Date(hoy.getFullYear(),hoy.getMonth(),diaCorte,12,0,0);
+  }
+
+  // Fecha límite de pago = fecha de corte + días de pago
+  var fechaLimitePago=new Date(fechaCorte);
+  fechaLimitePago.setDate(fechaLimitePago.getDate()+diasPago);
+
+  // ¿Estamos en periodo de pago? (entre corte y fecha límite)
+  var enPeriodoPago=(hoy>=fechaCorte && hoy<=fechaLimitePago);
+
+  // Etiquetas de ciclo
+  var cicloCorte=cicloDeGastoCorrecto(fechaCorte.toISOString().split('T')[0],tdc);
+  var cicloAct=cicloDeGastoCorrecto(hoy.toISOString().split('T')[0],tdc);
+
+  // ── SALDO AL CORTE ──
+  // Gastos regulares que pertenecen al ciclo que acaba de cerrar
+  var consumoRegulares=0,msiEnCorte=0,montoMsiCorte=0;
   DB.gastos.forEach(function(g){
     if(g.tdc!==tdc) return;
     if(g.msi==='Si'){
@@ -2785,30 +2803,38 @@ function calcularSaldoPendiente(tdc){
       if(cuotas<=0) return;
       var fc=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
       if(isNaN(fc.getTime())) return;
+      // ¿Cuántos meses han pasado desde la compra hasta este corte?
       var md=(fechaCorte.getFullYear()-fc.getFullYear())*12+(fechaCorte.getMonth()-fc.getMonth());
       if(fc.getDate()>diaCorte) md--;
-      if(md>=0 && md<cuotas) consumoMSI += g.monto/cuotas;
+      if(md>=0 && md<cuotas){
+        montoMsiCorte+=g.monto/cuotas;
+        msiEnCorte++;
+      }
     } else {
-      var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha,tdc);
-      if(cicloG===cicloAnt) consumoRegulares += g.monto;
+      var cicloG=g.ciclo||cicloDeGastoCorrecto(g.fecha,tdc);
+      if(cicloG===cicloCorte) consumoRegulares+=g.monto;
     }
   });
-  var consumoCicloAnt=consumoRegulares+consumoMSI;
-  var adeudo=(DB.config.adeudosPendientes && DB.config.adeudosPendientes[tdc]) || 0;
-  var pagadoCicloAnt=0;
+  var saldoAlCorte=consumoRegulares+montoMsiCorte;
+  var adeudo=(DB.config.adeudosPendientes&&DB.config.adeudosPendientes[tdc])||0;
+  var totalAPagar=saldoAlCorte+adeudo;
+
+  // ── PAGOS EN EL PERIODO ──
+  // Pagos que cubren el saldo al corte: realizados desde el corte anterior hasta la fecha límite
+  var fechaCorteAnterior=new Date(fechaCorte.getFullYear(),fechaCorte.getMonth()-1,diaCorte,12,0,0);
+  var pagado=0;
   DB.pagosTDC.forEach(function(p){
     if(p.tdc!==tdc) return;
-    if(p.ciclo===cicloAnt){pagadoCicloAnt+=p.monto;}
-    else if(!p.ciclo){
+    if(p.ciclo===cicloCorte){pagado+=p.monto;return;}
+    if(!p.ciclo){
       var fp=new Date(String(p.fecha).split('T')[0]+'T12:00:00');
-      if(!isNaN(fp.getTime())&&fp>=fechaCorteAntAnt&&fp<=fechaCorte) pagadoCicloAnt+=p.monto;
+      if(!isNaN(fp.getTime())&&fp>fechaCorteAnterior&&fp<=fechaLimitePago) pagado+=p.monto;
     }
   });
-  var totalAPagar=consumoCicloAnt+adeudo;
-  var pendiente=Math.max(0,totalAPagar-pagadoCicloAnt);
+  var pendiente=Math.max(0,totalAPagar-pagado);
 
-  // Ciclo actual (en curso)
-  var consumoCicloAct=0;
+  // ── NUEVAS COMPRAS (ciclo actual, se pagarán en el próximo corte) ──
+  var consumoCicloAct=0,msiEnCicloAct=0;
   DB.gastos.forEach(function(g){
     if(g.tdc!==tdc) return;
     if(g.msi==='Si'){
@@ -2818,27 +2844,57 @@ function calcularSaldoPendiente(tdc){
       if(isNaN(fc.getTime())) return;
       var md=(fechaProxCorte.getFullYear()-fc.getFullYear())*12+(fechaProxCorte.getMonth()-fc.getMonth());
       if(fc.getDate()>diaCorte) md--;
-      if(md>=0 && md<cuotas) consumoCicloAct += g.monto/cuotas;
+      if(md>=0 && md<cuotas){consumoCicloAct+=g.monto/cuotas;msiEnCicloAct++;}
     } else {
-      var cicloG=g.ciclo || cicloDeGastoCorrecto(g.fecha,tdc);
-      if(cicloG===cicloAct) consumoCicloAct += g.monto;
+      var cicloG=g.ciclo||cicloDeGastoCorrecto(g.fecha,tdc);
+      if(cicloG===cicloAct && cicloAct!==cicloCorte) consumoCicloAct+=g.monto;
     }
   });
 
-  // MSI activos (compras MSI con cuotas pendientes en el ciclo actual)
+  // MSI activos totales (compras con cuotas aún pendientes)
   var msiActivos=0;
   DB.gastos.forEach(function(g){
-    if(g.tdc!==tdc || g.msi!=='Si') return;
+    if(g.tdc!==tdc||g.msi!=='Si') return;
     var cuotas=g.meses?parseInt(g.meses):1;
     if(cuotas<=0) return;
     var fc=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
     if(isNaN(fc.getTime())) return;
-    var md=(fechaProxCorte.getFullYear()-fc.getFullYear())*12+(fechaProxCorte.getMonth()-fc.getMonth());
-    if(fc.getDate()>diaCorte) md--;
-    if(md>=0 && md<cuotas) msiActivos++;
+    var mesDesdeCompra=(hoy.getFullYear()-fc.getFullYear())*12+(hoy.getMonth()-fc.getMonth());
+    if(fc.getDate()>diaCorte) mesDesdeCompra--;
+    if(mesDesdeCompra<cuotas) msiActivos++;
   });
 
-  return {pendiente:pendiente,consumoCicloAnt:consumoCicloAnt,pagado:pagadoCicloAnt,adeudo:adeudo,consumoCicloAct:consumoCicloAct,msiActivos:msiActivos,totalAPagar:totalAPagar};
+  // Saldo actual en tiempo real = lo que realmente debes
+  var saldoActual=pendiente+consumoCicloAct;
+
+  // Días restantes para pagar
+  var diasRestantes=Math.ceil((fechaLimitePago-hoy)/(1000*60*60*24));
+
+  // Estado de la tarjeta
+  var estado='al_corriente';
+  if(totalAPagar>0 && pendiente===0) estado='pagada';
+  else if(pendiente>0 && diasRestantes>=0) estado='pendiente';
+  else if(pendiente>0 && diasRestantes<0) estado='vencida';
+
+  return {
+    saldoAlCorte:saldoAlCorte,
+    pendiente:pendiente,
+    consumoCicloAnt:saldoAlCorte,
+    pagado:pagado,
+    adeudo:adeudo,
+    consumoCicloAct:consumoCicloAct,
+    msiActivos:msiActivos,
+    msiEnCorte:msiEnCorte,
+    msiEnCicloAct:msiEnCicloAct,
+    totalAPagar:totalAPagar,
+    saldoActual:saldoActual,
+    fechaCorte:fechaCorte,
+    fechaLimitePago:fechaLimitePago,
+    fechaProxCorte:fechaProxCorte,
+    diasRestantes:diasRestantes,
+    estado:estado,
+    enPeriodoPago:enPeriodoPago
+  };
 }
 
 function saldoProyectado(c){
@@ -2942,20 +2998,21 @@ function agregarPagoTDCCore(p){
 }
 
 function cicloDelPago(fechaPagoStr,tdc){
+  // Un pago cubre el saldo al corte del ciclo más reciente que cerró antes de la fecha del pago.
+  // Si el pago es después del día de corte → cubre el ciclo que cortó este mes.
+  // Si el pago es antes o igual al día de corte → cubre el ciclo que cortó el mes anterior.
   var cfg=DB.config.cortesTDC[tdc];
   if(!cfg||!cfg.corte) return '';
   var diaCorte=parseInt(cfg.corte);
   var d=new Date(String(fechaPagoStr).split('T')[0]+'T12:00:00');
   if(isNaN(d.getTime())) return '';
-  // Si el pago es después del corte → ciclo del mes anterior
-  // Si el pago es antes del corte → ciclo de hace 2 meses
-  var year=d.getFullYear();
-  var mes=d.getMonth();
-  if(d.getDate()<=diaCorte){
-    mes--;
-    if(mes<0){mes=11;year--;}
+  var fechaCorteRef;
+  if(d.getDate()>diaCorte){
+    fechaCorteRef=new Date(d.getFullYear(),d.getMonth(),diaCorte,12,0,0);
+  } else {
+    fechaCorteRef=new Date(d.getFullYear(),d.getMonth()-1,diaCorte,12,0,0);
   }
-  return year+'-'+String(mes+1).padStart(2,'0');
+  return cicloDeGastoCorrecto(fechaCorteRef.toISOString().split('T')[0],tdc);
 }
 
 function eliminarGastoById(id){
@@ -3777,41 +3834,28 @@ function renderTdcList(){
     return;
   }
   var html=tdcs.map(function(tdc){
-    if(!tdc || typeof tdc !== 'string') return ''; // skip invalid
+    if(!tdc || typeof tdc !== 'string') return '';
     var b=bankInfo(tdc);
     var calc=calcularSaldoPendiente(tdc);
     var cfg=DB.config.cortesTDC[tdc]||{};
     var limite=DB.config.limitesTDC&&DB.config.limitesTDC[tdc]||0;
-    var saldo=calc.consumoCicloAct+calc.pendiente; // saldo total visible
+    var saldo=calc.saldoActual;
     var pct=limite>0?Math.min(100,(saldo/limite)*100):0;
-    var fillCls='';
-    if(pct>70) fillCls='danger';
-    else if(pct>40) fillCls='warn';
-    var fp=fechaPagoReal(cfg.corte,cfg.diasPago);
-    var metaCorte='';
+    var fillCls=pct>70?'danger':pct>40?'warn':'';
+
+    var metaCorte=cfg.corte?'Corte día '+cfg.corte:'';
     var metaVence='';
-    if(cfg.corte){
-      metaCorte='Corte día '+cfg.corte;
-      if(fp){
-        if(calc.pendiente>0 && fp.diasRestantes>0){
-          metaVence='Vence el '+fechaLegible(fp.fechaPago);
-        } else if(calc.pendiente===0 && calc.totalAPagar>0){
-          metaVence='Pagada ✓';
-        } else if(calc.pendiente===0){
-          metaVence='Al corriente';
-        } else if(fp.diasRestantes<=0){
-          metaVence='Vencida';
-        }
-      }
-    }
+    if(calc.estado==='pagada') metaVence='Pagada ✓';
+    else if(calc.estado==='vencida') metaVence='Vencida';
+    else if(calc.estado==='pendiente' && calc.fechaLimitePago){
+      metaVence='Pagar antes del '+fechaLegible(calc.fechaLimitePago);
+    } else metaVence='Al corriente';
     var metaTxt=(metaCorte?metaCorte:'')+(metaVence?' · '+metaVence:'');
+
     var msiBadge=calc.msiActivos>0
-      ? '<span class="tdc-badge-msi has-msi">'+calc.msiActivos+' MSI</span>'
-      : '';
+      ? '<span class="tdc-badge-msi has-msi">'+calc.msiActivos+' MSI</span>':'';
     var saldoStr=fmtK(saldo);
     var limStr=limite>0?'de '+fmtK(limite):'';
-    // Siguiente corte: consumo del ciclo actual
-    var siguienteCorte=fmtK(calc.consumoCicloAct);
     var imgFallback=b.img
       ? '<img src="'+b.img+'" alt="'+tdc+'" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\''+b.ini+'\';">'
       : b.ini;
@@ -3903,77 +3947,115 @@ function togglePatrimonio(){
 // ══════════════════════════════════════════════════════════
 function onTdcClick(nombreTdc){
   var calc=calcularSaldoPendiente(nombreTdc);
-  var cfg=DB.config.cortesTDC[nombreTdc]||{};
-  var fp=fechaPagoReal(cfg.corte,cfg.diasPago);
-  var pagoSinIntereses=calc.pendiente+calc.consumoCicloAct;
   var limite=DB.config.limitesTDC&&DB.config.limitesTDC[nombreTdc]||0;
-  var pct=limite>0?Math.min(100,(pagoSinIntereses/limite)*100):0;
+  var pctUso=limite>0?Math.min(100,(calc.saldoActual/limite)*100):0;
   var b=bankInfo(nombreTdc);
+  var fillCls=pctUso>70?'danger':pctUso>40?'warn':'';
 
-  // Días restantes
-  var diasRestStr='';
-  var diasUrgente=false;
-  if(fp){
-    diasRestStr=fp.diasRestantes>0?'Vence el '+fechaLegible(fp.fechaPago):(fp.diasRestantes===0?'Vence hoy':'Venció el '+fechaLegible(fp.fechaPago));
-    diasUrgente=fp.diasRestantes<=3;
+  // Fechas legibles
+  var fechaCorteStr=calc.fechaCorte?calc.fechaCorte.toLocaleDateString('es-MX',{day:'numeric',month:'long'}):'';
+  var fechaLimiteStr=calc.fechaLimitePago?calc.fechaLimitePago.toLocaleDateString('es-MX',{day:'numeric',month:'long'}):'';
+  var fechaProxCorteStr=calc.fechaProxCorte?calc.fechaProxCorte.toLocaleDateString('es-MX',{day:'numeric',month:'long'}):'';
+  var diasUrgente=calc.diasRestantes!==null&&calc.diasRestantes<=3;
+
+  // Texto de estado del periodo de pago
+  var estadoPagoTxt='';
+  if(calc.estado==='pagada') estadoPagoTxt='<span style="color:var(--success);font-weight:600;">Pagada ✓</span>';
+  else if(calc.estado==='vencida') estadoPagoTxt='<span style="color:var(--danger);font-weight:600;">Fecha límite vencida</span>';
+  else if(calc.estado==='pendiente'){
+    var diasTxt=calc.diasRestantes===0?'Vence hoy':calc.diasRestantes===1?'Vence mañana':calc.diasRestantes+' días restantes';
+    estadoPagoTxt='<span style="color:'+(diasUrgente?'var(--danger)':'var(--text-2)')+';">'+diasTxt+'</span>';
+  } else estadoPagoTxt='<span style="color:var(--success);">Al corriente</span>';
+
+  var bodyHTML='';
+
+  // ── SALDO AL CORTE (lo que debes pagar en este periodo) ──
+  if(calc.totalAPagar>0){
+    bodyHTML+=
+      '<div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;">'+
+        '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Saldo al corte'+(fechaCorteStr?' · '+fechaCorteStr:'')+'</div>'+
+        '<div style="font-size:26px;font-weight:700;color:var(--text);letter-spacing:-0.02em;font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.totalAPagar)+'</div>'+
+        (calc.pagado>0?'<div style="font-size:12px;color:var(--success);margin-top:4px;">Pagado: '+fmt(calc.pagado)+'</div>':'')+
+        (calc.pendiente>0?
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--accent) 15%,transparent);">'+
+            '<span style="font-size:12px;font-weight:600;color:var(--text);">Para no generar intereses</span>'+
+            '<span style="font-size:18px;font-weight:700;color:'+(diasUrgente?'var(--danger)':'var(--accent)')+';font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.pendiente)+'</span>'+
+          '</div>'+
+          (calc.fechaLimitePago?'<div style="font-size:12px;color:var(--text-2);margin-top:4px;">Pagar antes del '+fechaLimiteStr+' · '+estadoPagoTxt+'</div>':'')
+        :'<div style="margin-top:6px;">'+estadoPagoTxt+'</div>')+
+      '</div>';
+  } else {
+    bodyHTML+=
+      '<div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;text-align:center;">'+
+        '<div style="font-size:13px;font-weight:600;color:var(--success);">Sin saldo al corte</div>'+
+        '<div style="font-size:12px;color:var(--text-3);margin-top:2px;">No tienes nada pendiente de pago</div>'+
+      '</div>';
   }
-  var pagadoStr=calc.pendiente===0&&calc.consumoCicloAnt>0?'Pagada ✓':'';
 
-  var fillCls=pct>70?'danger':pct>40?'warn':'';
-  var imgFallback=b.img?'<img src="'+b.img+'" alt="'+nombreTdc+'" style="width:100%;height:100%;object-fit:contain;" onerror="this.style.display=\'none\';this.parentElement.textContent=\''+b.ini+'\';">':b.ini;
-
-  // Vista minimalista inspirada en foto7
-  var bodyHTML=
-    // Card principal con pago sugerido
-    '<div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;">'+
-      '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Para no generar intereses</div>'+
-      '<div style="font-size:28px;font-weight:700;color:var(--text);letter-spacing:-0.02em;font-family:\'JetBrains Mono\',monospace;">'+fmt(pagoSinIntereses)+'</div>'+
-      (fp?'<div style="font-size:12px;color:var(--text-2);margin-top:4px;">Pagar antes del '+fp.fechaPago.toLocaleDateString('es-MX',{day:'numeric',month:'long'})+
-        '<span style="color:'+(diasUrgente?'var(--danger)':'var(--text-3)')+';margin-left:8px;">'+(diasRestStr)+'</span>'+
-      '</div>':'')+
-    '</div>'+
-
-    // Fila ciclo actual → siguiente corte
+  // ── NUEVAS COMPRAS (ciclo actual, se pagarán en el próximo corte) ──
+  bodyHTML+=
     '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">'+
       '<div>'+
-        '<div style="font-size:13px;font-weight:600;color:var(--text);">Siguiente corte</div>'+
-        '<div style="font-size:11px;color:var(--text-3);">Acumulado del ciclo actual</div>'+
+        '<div style="font-size:13px;font-weight:600;color:var(--text);">Nuevas compras</div>'+
+        '<div style="font-size:11px;color:var(--text-3);">Se pagarán en el próximo corte'+(fechaProxCorteStr?' ('+fechaProxCorteStr+')':'')+'</div>'+
       '</div>'+
       '<div style="font-size:15px;font-weight:700;color:var(--accent);font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.consumoCicloAct)+'</div>'+
-    '</div>'+
+    '</div>';
 
-    // Crédito disponible
-    (limite>0?
+  // ── SALDO ACTUAL (deuda total en tiempo real) ──
+  bodyHTML+=
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">'+
+      '<div>'+
+        '<div style="font-size:13px;font-weight:600;color:var(--text);">Saldo actual</div>'+
+        '<div style="font-size:11px;color:var(--text-3);">Deuda total en tiempo real</div>'+
+      '</div>'+
+      '<div style="font-size:15px;font-weight:700;color:var(--text);font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.saldoActual)+'</div>'+
+    '</div>';
+
+  // ── CRÉDITO DISPONIBLE ──
+  if(limite>0){
+    bodyHTML+=
       '<div style="padding:10px 0;border-bottom:1px solid var(--border);">'+
         '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">'+
           '<span style="font-size:12px;color:var(--text-2);">Crédito disponible</span>'+
-          '<span style="font-size:12px;font-weight:600;color:var(--text-2);">'+fmtK(Math.max(0,limite-pagoSinIntereses))+' / '+fmtK(limite)+'</span>'+
+          '<span style="font-size:12px;font-weight:600;color:var(--text-2);">'+fmtK(Math.max(0,limite-calc.saldoActual))+' / '+fmtK(limite)+'</span>'+
         '</div>'+
         '<div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">'+
-          '<div style="height:100%;width:'+pct+'%;background:'+(fillCls==='danger'?'var(--danger)':fillCls==='warn'?'var(--warning)':'var(--accent)')+';border-radius:2px;transition:width 0.4s ease;"></div>'+
+          '<div style="height:100%;width:'+pctUso+'%;background:'+(fillCls==='danger'?'var(--danger)':fillCls==='warn'?'var(--warning)':'var(--accent)')+';border-radius:2px;transition:width 0.4s ease;"></div>'+
         '</div>'+
-        '<div style="font-size:11px;color:var(--text-3);margin-top:4px;">'+Math.round(pct)+'% utilizado</div>'+
-      '</div>':'')+
+        '<div style="font-size:11px;color:var(--text-3);margin-top:4px;">'+Math.round(pctUso)+'% utilizado</div>'+
+      '</div>';
+  }
 
-    // Pendiente ciclo anterior (si hay)
-    (calc.pendiente>0?
+  // ── MSI ACTIVOS ──
+  if(calc.msiActivos>0){
+    bodyHTML+=
       '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">'+
-        '<div style="font-size:13px;font-weight:600;color:var(--danger);">⚠ Pendiente anterior</div>'+
-        '<div style="font-size:15px;font-weight:700;color:var(--danger);font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.pendiente)+'</div>'+
-      '</div>':'')+
+        '<div style="font-size:13px;font-weight:600;color:var(--text);">MSI activos</div>'+
+        '<span class="tdc-badge-msi has-msi" style="font-size:12px;">'+calc.msiActivos+' compra'+(calc.msiActivos>1?'s':'')+'</span>'+
+      '</div>';
+  }
 
-    // Botón ver desglose completo
+  // ── BOTÓN DESGLOSE ──
+  bodyHTML+=
     '<button onclick="appModalClose();setTimeout(function(){verDesgloseTDC(\''+nombreTdc.replace(/'/g,"\\'")+'\');},250);" style="width:100%;margin-top:14px;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:600;color:var(--text-2);display:flex;align-items:center;justify-content:center;gap:6px;">'+
-      '<i data-lucide="list" style="width:14px;height:14px;"></i> Ver todos los movimientos del ciclo'+
+      '<i data-lucide="list" style="width:14px;height:14px;"></i> Ver movimientos del ciclo'+
     '</button>';
+
+  // Subtítulo del modal
+  var subtitleParts=[];
+  if(calc.msiActivos>0) subtitleParts.push(calc.msiActivos+' MSI');
+  if(calc.estado==='pagada') subtitleParts.push('Pagada ✓');
+  else if(fechaLimiteStr) subtitleParts.push('Límite: '+fechaLimiteStr);
+  var subtitle=subtitleParts.join(' · ');
 
   appModalOpen({
     title:nombreTdc,
-    subtitle:(calc.msiActivos>0?calc.msiActivos+' MSI · ':'')+( pagadoStr||( fp?fp.fechaPago.toLocaleDateString('es-MX',{day:'numeric',month:'long'}):'') ),
+    subtitle:subtitle,
     bodyHTML:bodyHTML,
     actions:[
       {label:'Cerrar',style:'secondary',value:true},
-      {label:'Pagar',style:'primary',value:'pago'}
+      {label:'Registrar pago',style:'primary',value:'pago'}
     ],
     onResult:function(r){
       if(r==='pago'){
@@ -3995,86 +4077,97 @@ function verDesgloseTDC(nombreTdc){
   var hoy=new Date();
   var cicloActKey=cicloDeGastoCorrecto(hoy.toISOString().split('T')[0],nombreTdc);
   var cicloAntKey=obtenerCicloAnterior(nombreTdc);
-  
-  // Gastos del ciclo ACTUAL (lo que se está acumulando ahora)
-  var actual=DB.gastos.filter(function(g){
-    if(g.tdc!==nombreTdc) return false;
-    return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloActKey;
-  }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+  var calc=calcularSaldoPendiente(nombreTdc);
 
-  // Gastos del ciclo ANTERIOR (pendientes de pago)
-  var anterior=DB.gastos.filter(function(g){
+  // Gastos del saldo al corte (ciclo que cerró)
+  var gastosCorte=DB.gastos.filter(function(g){
     if(g.tdc!==nombreTdc) return false;
     return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloAntKey;
   }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
 
-  var calc=calcularSaldoPendiente(nombreTdc);
-  var totalMostrado=calc.consumoCicloAct+calc.pendiente; // lo que muestra la tarjeta
+  // Nuevas compras (ciclo actual, se pagarán en el próximo corte)
+  var gastosNuevos=DB.gastos.filter(function(g){
+    if(g.tdc!==nombreTdc) return false;
+    return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloActKey;
+  }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+
+  // Pagos realizados en este periodo
+  var pagosDelPeriodo=DB.pagosTDC.filter(function(p){
+    if(p.tdc!==nombreTdc) return false;
+    var cicloP=p.ciclo||cicloDelPago(p.fecha,nombreTdc);
+    return cicloP===cicloAntKey;
+  }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+
+  function buildGastoRow(g){
+    var fc=String(g.fecha).substring(8,10)+'/'+String(g.fecha).substring(5,7);
+    var msi=g.msi==='Si'?' · MSI '+(g.meses||'?')+'m':'';
+    return '<div class="tdc-detail-row" style="cursor:pointer;" onclick="appModalClose();setTimeout(function(){verDetalleGasto(\''+String(g.id)+'\');},250);">'+
+      '<span class="tdc-detail-label">'+fc+' · '+(g.desc||g.cat)+'<span style="color:var(--text-3);font-size:10px;">'+msi+'</span></span>'+
+      '<span class="tdc-detail-value">'+fmt(g.monto)+'</span>'+
+    '</div>';
+  }
 
   var bodyParts=[];
+  var fechaCorteStr=calc.fechaCorte?calc.fechaCorte.toLocaleDateString('es-MX',{day:'numeric',month:'short'}):'';
+  var fechaProxStr=calc.fechaProxCorte?calc.fechaProxCorte.toLocaleDateString('es-MX',{day:'numeric',month:'short'}):'';
 
-  // Pendiente del ciclo anterior (si hay)
-  if(calc.pendiente>0 && anterior.length>0){
-    var rowsAnt=anterior.map(function(g){
-      var fc=String(g.fecha).substring(8,10)+'/'+String(g.fecha).substring(5,7);
-      var msi=g.msi==='Si'?' · MSI '+(g.meses||'?')+'m':'';
-      return '<div class="tdc-detail-row" style="cursor:pointer;" onclick="appModalClose();setTimeout(function(){verDetalleGasto(\''+String(g.id)+'\');},250);">'+
-        '<span class="tdc-detail-label">'+fc+' · '+(g.desc||g.cat)+'<span style="color:var(--text-3);font-size:10px;">'+msi+'</span></span>'+
-        '<span class="tdc-detail-value">'+fmt(g.monto)+'</span>'+
-      '</div>';
-    }).join('');
+  // ── SALDO AL CORTE ──
+  if(calc.totalAPagar>0 || gastosCorte.length>0){
+    var secTitle='Saldo al corte'+(fechaCorteStr?' ('+fechaCorteStr+')':'');
+    var estadoColor=calc.estado==='pagada'?'var(--success)':calc.pendiente>0?'var(--danger)':'var(--text)';
+    var estadoTxt=calc.estado==='pagada'?' · Pagada ✓':calc.pendiente>0?' · Pendiente: '+fmt(calc.pendiente):'';
+    var rowsCorte=gastosCorte.map(buildGastoRow).join('');
     bodyParts.push(
       '<div class="tdc-detail-section">'+
-        '<div class="tdc-detail-section-title" style="color:var(--danger);">Pendiente de pago ('+anterior.length+')</div>'+
-        '<div style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rowsAnt+'</div>'+
-      '</div>'
-    );
-  } else if(calc.pendiente>0){
-    // Hay pendiente pero sin gastos listados (MSI o adeudo)
-    bodyParts.push(
-      '<div class="tdc-detail-section">'+
-        '<div class="tdc-detail-row">'+
-          '<span class="tdc-detail-label">Saldo pendiente del ciclo anterior</span>'+
-          '<span class="tdc-detail-value" style="color:var(--danger);">'+fmt(calc.pendiente)+'</span>'+
+        '<div class="tdc-detail-section-title"><span>'+secTitle+'</span><span style="color:'+estadoColor+';font-size:11px;font-weight:600;">'+estadoTxt+'</span></div>'+
+        (rowsCorte?'<div style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rowsCorte+'</div>':'')+
+        '<div class="tdc-detail-row" style="border-top:1px solid var(--border);padding-top:6px;margin-top:4px;">'+
+          '<span class="tdc-detail-label" style="font-weight:600;">Total saldo al corte</span>'+
+          '<span class="tdc-detail-value" style="font-weight:700;">'+fmt(calc.totalAPagar)+'</span>'+
         '</div>'+
       '</div>'
     );
   }
 
-  // Ciclo actual
-  if(actual.length>0){
-    var rowsAct=actual.map(function(g){
-      var fc=String(g.fecha).substring(8,10)+'/'+String(g.fecha).substring(5,7);
-      var msi=g.msi==='Si'?' · MSI '+(g.meses||'?')+'m':'';
-      return '<div class="tdc-detail-row" style="cursor:pointer;" onclick="appModalClose();setTimeout(function(){verDetalleGasto(\''+String(g.id)+'\');},250);">'+
-        '<span class="tdc-detail-label">'+fc+' · '+(g.desc||g.cat)+'<span style="color:var(--text-3);font-size:10px;">'+msi+'</span></span>'+
-        '<span class="tdc-detail-value">'+fmt(g.monto)+'</span>'+
+  // ── PAGOS REALIZADOS ──
+  if(pagosDelPeriodo.length>0){
+    var rowsPago=pagosDelPeriodo.map(function(p){
+      var fc=String(p.fecha).substring(8,10)+'/'+String(p.fecha).substring(5,7);
+      return '<div class="tdc-detail-row">'+
+        '<span class="tdc-detail-label">'+fc+(p.notas?' · '+p.notas:'')+'</span>'+
+        '<span class="tdc-detail-value" style="color:var(--success);">-'+fmt(p.monto)+'</span>'+
       '</div>';
     }).join('');
     bodyParts.push(
       '<div class="tdc-detail-section">'+
-        '<div class="tdc-detail-section-title">Ciclo actual ('+actual.length+')</div>'+
-        '<div style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rowsAct+'</div>'+
+        '<div class="tdc-detail-section-title" style="color:var(--success);">Pagos realizados ('+pagosDelPeriodo.length+')</div>'+
+        rowsPago+
       '</div>'
     );
-  } else if(calc.consumoCicloAct>0){
-    // Hay consumo actual pero sin gastos (MSI)
+  }
+
+  // ── NUEVAS COMPRAS (ciclo actual) ──
+  if(gastosNuevos.length>0 || calc.consumoCicloAct>0){
+    var secTitleAct='Nuevas compras'+(fechaProxStr?' (corte '+fechaProxStr+')':'');
+    var rowsAct=gastosNuevos.map(buildGastoRow).join('');
     bodyParts.push(
       '<div class="tdc-detail-section">'+
-        '<div class="tdc-detail-row">'+
-          '<span class="tdc-detail-label">Consumo del ciclo actual</span>'+
-          '<span class="tdc-detail-value">'+fmt(calc.consumoCicloAct)+'</span>'+
+        '<div class="tdc-detail-section-title">'+secTitleAct+'</div>'+
+        (rowsAct?'<div style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rowsAct+'</div>':'')+
+        '<div class="tdc-detail-row" style="border-top:1px solid var(--border);padding-top:6px;margin-top:4px;">'+
+          '<span class="tdc-detail-label" style="font-weight:600;">Acumulado ciclo actual</span>'+
+          '<span class="tdc-detail-value" style="font-weight:700;color:var(--accent);">'+fmt(calc.consumoCicloAct)+'</span>'+
         '</div>'+
       '</div>'
     );
   }
 
-  // Total
+  // ── SALDO ACTUAL (total) ──
   bodyParts.push(
     '<div class="tdc-detail-section" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
       '<div class="tdc-detail-row">'+
-        '<span class="tdc-detail-label" style="font-weight:700;">Total acumulado</span>'+
-        '<span class="tdc-detail-value" style="color:var(--accent);font-size:16px;font-weight:700;">'+fmt(totalMostrado)+'</span>'+
+        '<span class="tdc-detail-label" style="font-weight:700;">Saldo actual</span>'+
+        '<span class="tdc-detail-value" style="color:var(--accent);font-size:16px;font-weight:700;">'+fmt(calc.saldoActual)+'</span>'+
       '</div>'+
     '</div>'
   );
@@ -4083,7 +4176,7 @@ function verDesgloseTDC(nombreTdc){
 
   appModalOpen({
     title:nombreTdc+' · Desglose',
-    subtitle:'Saldo total de la tarjeta',
+    subtitle:'Detalle por ciclo de facturación',
     bodyHTML:bodyHTML||'<div style="padding:20px;text-align:center;color:var(--text-3);">Sin movimientos registrados.</div>',
     actions:[
       {label:'← Regresar',style:'secondary',value:'back'},
@@ -4247,12 +4340,17 @@ function updatePagoSugerido(){
   var hint=document.getElementById('pago-hint');
   if(!tdcSel||!hint) return;
   var calc=calcularSaldoPendiente(tdcSel.value);
-  var msg='Pendiente del ciclo anterior: '+fmt(calc.pendiente);
-  if(calc.consumoCicloAct>0){
-    msg+=' · Consumo del ciclo actual: '+fmt(calc.consumoCicloAct);
-    msg+=' · Pago para no generar intereses: '+fmt(calc.pendiente+calc.consumoCicloAct);
+  var parts=[];
+  if(calc.totalAPagar>0){
+    parts.push('Saldo al corte: '+fmt(calc.totalAPagar));
+    if(calc.pagado>0) parts.push('Pagado: '+fmt(calc.pagado));
+    if(calc.pendiente>0) parts.push('Para no generar intereses: '+fmt(calc.pendiente));
+    else parts.push('✓ Saldo al corte cubierto');
+  } else {
+    parts.push('Sin saldo al corte pendiente');
   }
-  hint.textContent=msg;
+  if(calc.consumoCicloAct>0) parts.push('Nuevas compras (próximo corte): '+fmt(calc.consumoCicloAct));
+  hint.textContent=parts.join(' · ');
 }
 
 function submitForm(){
