@@ -1524,6 +1524,8 @@ body.no-scroll .app{overflow:hidden;}
   background:var(--surface);
 }
 .field-input.mono{font-family:'JetBrains Mono', monospace;font-variant-numeric:tabular-nums;font-size:18px;font-weight:700;}
+.field-input[type="date"]{color:var(--text);-webkit-text-fill-color:var(--text);color-scheme:light;}
+[data-theme="dark"] .field-input[type="date"]{color-scheme:dark;}
 .field-textarea{min-height:60px;resize:vertical;}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .field-hint{font-size:11px;color:var(--text-3);margin-top:4px;}
@@ -3016,10 +3018,11 @@ function cicloDelPago(fechaPagoStr,tdc){
 }
 
 function eliminarGastoById(id){
-  var idx=DB.gastos.findIndex(function(g){return String(g.id)===String(id);});
-  if(idx<0) return;
+  if(DB.gastos.findIndex(function(g){return String(g.id)===String(id);})<0) return;
   appConfirm('¿Eliminar gasto?','Esta acción no se puede deshacer.',{okLabel:'Eliminar',danger:true}).then(function(ok){
     if(!ok) return;
+    var idx=DB.gastos.findIndex(function(g){return String(g.id)===String(id);});
+    if(idx<0) return;
     DB.gastos.splice(idx,1);
     save();
     syncSheetDelete('gastos',[id]);
@@ -3028,10 +3031,11 @@ function eliminarGastoById(id){
   });
 }
 function eliminarIngresoById(id){
-  var idx=DB.ingresos.findIndex(function(i){return String(i.id)===String(id);});
-  if(idx<0) return;
+  if(DB.ingresos.findIndex(function(i){return String(i.id)===String(id);})<0) return;
   appConfirm('¿Eliminar ingreso?','Esta acción no se puede deshacer.',{okLabel:'Eliminar',danger:true}).then(function(ok){
     if(!ok) return;
+    var idx=DB.ingresos.findIndex(function(i){return String(i.id)===String(id);});
+    if(idx<0) return;
     DB.ingresos.splice(idx,1);
     save();
     syncSheetDelete('ingresos',[id]);
@@ -3040,10 +3044,11 @@ function eliminarIngresoById(id){
   });
 }
 function eliminarPagoById(id){
-  var idx=DB.pagosTDC.findIndex(function(p){return String(p.id)===String(id);});
-  if(idx<0) return;
+  if(DB.pagosTDC.findIndex(function(p){return String(p.id)===String(id);})<0) return;
   appConfirm('¿Eliminar pago?','Esta acción no se puede deshacer.',{okLabel:'Eliminar',danger:true}).then(function(ok){
     if(!ok) return;
+    var idx=DB.pagosTDC.findIndex(function(p){return String(p.id)===String(id);});
+    if(idx<0) return;
     DB.pagosTDC.splice(idx,1);
     save();
     syncSheetDelete('pagosTDC',[id]);
@@ -3589,7 +3594,7 @@ function verDetallePago(id){
     ],
     onResult:function(r){
       if(r==='edit') setTimeout(function(){editarPago(id);},250);
-      else if(r==='del') eliminarPagoById(id);
+      else if(r==='del') setTimeout(function(){eliminarPagoById(id);},250);
     }
   });
 }
@@ -3618,7 +3623,7 @@ function verDetalleGasto_obj(g){
     actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
     onResult:function(r){
       if(r==='edit') setTimeout(function(){_editObj=gastoRef;editarGasto(gastoRef.id);},250);
-      else if(r==='del') eliminarGastoById(String(gastoRef.id));
+      else if(r==='del') setTimeout(function(){eliminarGastoById(String(gastoRef.id));},250);
     }
   });
 }
@@ -3635,7 +3640,7 @@ function verDetalleIngreso_obj(i){
     actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
     onResult:function(r){
       if(r==='edit') setTimeout(function(){_editObj=ingRef;editarIngreso(ingRef.id);},250);
-      else if(r==='del') eliminarIngresoById(String(ingRef.id));
+      else if(r==='del') setTimeout(function(){eliminarIngresoById(String(ingRef.id));},250);
     }
   });
 }
@@ -3652,7 +3657,7 @@ function verDetallePago_obj(p){
     actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
     onResult:function(r){
       if(r==='edit') setTimeout(function(){_editObj=pagoRef;editarPago(pagoRef.id);},250);
-      else if(r==='del') eliminarPagoById(String(pagoRef.id));
+      else if(r==='del') setTimeout(function(){eliminarPagoById(String(pagoRef.id));},250);
     }
   });
 }
@@ -4072,31 +4077,18 @@ function onTdcClick(nombreTdc){
   renderIcons();
 }
 
-// Desglose completo de movimientos de una TDC
 function verDesgloseTDC(nombreTdc){
   var hoy=new Date();
   var cicloActKey=cicloDeGastoCorrecto(hoy.toISOString().split('T')[0],nombreTdc);
-  var cicloAntKey=obtenerCicloAnterior(nombreTdc);
   var calc=calcularSaldoPendiente(nombreTdc);
 
-  // Gastos del saldo al corte (ciclo que cerró)
-  var gastosCorte=DB.gastos.filter(function(g){
-    if(g.tdc!==nombreTdc) return false;
-    return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloAntKey;
-  }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
-
-  // Nuevas compras (ciclo actual, se pagarán en el próximo corte)
-  var gastosNuevos=DB.gastos.filter(function(g){
+  // Solo movimientos del ciclo actual (saldo actual)
+  var gastosCiclo=DB.gastos.filter(function(g){
     if(g.tdc!==nombreTdc) return false;
     return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloActKey;
   }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
 
-  // Pagos realizados en este periodo
-  var pagosDelPeriodo=DB.pagosTDC.filter(function(p){
-    if(p.tdc!==nombreTdc) return false;
-    var cicloP=p.ciclo||cicloDelPago(p.fecha,nombreTdc);
-    return cicloP===cicloAntKey;
-  }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+  var totalGastos=gastosCiclo.reduce(function(s,g){return s+g.monto;},0);
 
   function buildGastoRow(g){
     var fc=String(g.fecha).substring(8,10)+'/'+String(g.fecha).substring(5,7);
@@ -4107,62 +4099,37 @@ function verDesgloseTDC(nombreTdc){
     '</div>';
   }
 
+  var fechaProxStr=calc.fechaProxCorte?calc.fechaProxCorte.toLocaleDateString('es-MX',{day:'numeric',month:'long'}):'';
   var bodyParts=[];
-  var fechaCorteStr=calc.fechaCorte?calc.fechaCorte.toLocaleDateString('es-MX',{day:'numeric',month:'short'}):'';
-  var fechaProxStr=calc.fechaProxCorte?calc.fechaProxCorte.toLocaleDateString('es-MX',{day:'numeric',month:'short'}):'';
 
-  // ── SALDO AL CORTE ──
-  if(calc.totalAPagar>0 || gastosCorte.length>0){
-    var secTitle='Saldo al corte'+(fechaCorteStr?' ('+fechaCorteStr+')':'');
-    var estadoColor=calc.estado==='pagada'?'var(--success)':calc.pendiente>0?'var(--danger)':'var(--text)';
-    var estadoTxt=calc.estado==='pagada'?' · Pagada ✓':calc.pendiente>0?' · Pendiente: '+fmt(calc.pendiente):'';
-    var rowsCorte=gastosCorte.map(buildGastoRow).join('');
+  // Info del ciclo
+  bodyParts.push(
+    '<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">'+
+      'Compras desde el último corte'+(fechaProxStr?' · Próximo corte: '+fechaProxStr:'')+
+    '</div>'
+  );
+
+  // Lista de gastos del ciclo actual
+  if(gastosCiclo.length>0){
+    var rows=gastosCiclo.map(buildGastoRow).join('');
     bodyParts.push(
       '<div class="tdc-detail-section">'+
-        '<div class="tdc-detail-section-title"><span>'+secTitle+'</span><span style="color:'+estadoColor+';font-size:11px;font-weight:600;">'+estadoTxt+'</span></div>'+
-        (rowsCorte?'<div style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rowsCorte+'</div>':'')+
-        '<div class="tdc-detail-row" style="border-top:1px solid var(--border);padding-top:6px;margin-top:4px;">'+
-          '<span class="tdc-detail-label" style="font-weight:600;">Total saldo al corte</span>'+
-          '<span class="tdc-detail-value" style="font-weight:700;">'+fmt(calc.totalAPagar)+'</span>'+
+        '<div style="max-height:320px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rows+'</div>'+
+        '<div class="tdc-detail-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:6px;">'+
+          '<span class="tdc-detail-label" style="font-weight:700;">Total del ciclo</span>'+
+          '<span class="tdc-detail-value" style="font-weight:700;color:var(--accent);font-size:15px;">'+fmt(totalGastos)+'</span>'+
         '</div>'+
       '</div>'
     );
-  }
-
-  // ── PAGOS REALIZADOS ──
-  if(pagosDelPeriodo.length>0){
-    var rowsPago=pagosDelPeriodo.map(function(p){
-      var fc=String(p.fecha).substring(8,10)+'/'+String(p.fecha).substring(5,7);
-      return '<div class="tdc-detail-row">'+
-        '<span class="tdc-detail-label">'+fc+(p.notas?' · '+p.notas:'')+'</span>'+
-        '<span class="tdc-detail-value" style="color:var(--success);">-'+fmt(p.monto)+'</span>'+
-      '</div>';
-    }).join('');
+  } else {
     bodyParts.push(
-      '<div class="tdc-detail-section">'+
-        '<div class="tdc-detail-section-title" style="color:var(--success);">Pagos realizados ('+pagosDelPeriodo.length+')</div>'+
-        rowsPago+
+      '<div style="padding:24px 0;text-align:center;color:var(--text-3);">'+
+        '<div style="font-size:13px;">Sin compras en este ciclo</div>'+
       '</div>'
     );
   }
 
-  // ── NUEVAS COMPRAS (ciclo actual) ──
-  if(gastosNuevos.length>0 || calc.consumoCicloAct>0){
-    var secTitleAct='Nuevas compras'+(fechaProxStr?' (corte '+fechaProxStr+')':'');
-    var rowsAct=gastosNuevos.map(buildGastoRow).join('');
-    bodyParts.push(
-      '<div class="tdc-detail-section">'+
-        '<div class="tdc-detail-section-title">'+secTitleAct+'</div>'+
-        (rowsAct?'<div style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rowsAct+'</div>':'')+
-        '<div class="tdc-detail-row" style="border-top:1px solid var(--border);padding-top:6px;margin-top:4px;">'+
-          '<span class="tdc-detail-label" style="font-weight:600;">Acumulado ciclo actual</span>'+
-          '<span class="tdc-detail-value" style="font-weight:700;color:var(--accent);">'+fmt(calc.consumoCicloAct)+'</span>'+
-        '</div>'+
-      '</div>'
-    );
-  }
-
-  // ── SALDO ACTUAL (total) ──
+  // Saldo actual (resumen)
   bodyParts.push(
     '<div class="tdc-detail-section" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
       '<div class="tdc-detail-row">'+
@@ -4175,9 +4142,9 @@ function verDesgloseTDC(nombreTdc){
   var bodyHTML=bodyParts.join('');
 
   appModalOpen({
-    title:nombreTdc+' · Desglose',
-    subtitle:'Detalle por ciclo de facturación',
-    bodyHTML:bodyHTML||'<div style="padding:20px;text-align:center;color:var(--text-3);">Sin movimientos registrados.</div>',
+    title:nombreTdc+' · Movimientos',
+    subtitle:gastosCiclo.length+' compra'+(gastosCiclo.length===1?'':'s')+' en el ciclo actual',
+    bodyHTML:bodyHTML,
     actions:[
       {label:'← Regresar',style:'secondary',value:'back'},
       {label:'Cerrar',style:'primary',value:true}
