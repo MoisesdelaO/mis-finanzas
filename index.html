@@ -1,5 +1,8 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
 <meta charset="UTF-8">
-<!-- Mis Finanzas v5.1 build:20260506 -->
+<!-- Mis Finanzas v5.2 build:20260514 -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0a">
@@ -118,7 +121,8 @@ body{
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
 }
-button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;touch-action:manipulation;}
+a,input,select,textarea,label{touch-action:manipulation;}
 input,select,textarea{font-family:inherit;font-size:15px;color:inherit;}
 .mono{font-family:'JetBrains Mono', monospace;font-variant-numeric:tabular-nums;}
 
@@ -199,8 +203,8 @@ input,select,textarea{font-family:inherit;font-size:15px;color:inherit;}
 .greeting .name{font-size:18px;font-weight:700;letter-spacing:-0.01em;}
 .header-actions{display:flex;gap:8px;}
 .icon-btn{
-  width:40px;
-  height:40px;
+  width:44px;
+  height:44px;
   border-radius:50%;
   background:var(--surface);
   display:flex;
@@ -433,7 +437,7 @@ input,select,textarea{font-family:inherit;font-size:15px;color:inherit;}
 
 /* Botón "+" para agregar items en secciones de Perfil */
 .add-btn{
-  width:30px;height:30px;
+  width:44px;height:44px;
   border-radius:50%;
   background:var(--accent);
   display:flex;
@@ -442,11 +446,11 @@ input,select,textarea{font-family:inherit;font-size:15px;color:inherit;}
   transition:transform 0.15s ease, background 0.15s ease;
 }
 .add-btn:active{transform:scale(0.9);}
-.add-btn .lucide{width:16px;height:16px;color:#fff;stroke-width:2.5;}
+.add-btn .lucide{width:20px;height:20px;color:#fff;stroke-width:2.5;}
 
 /* Botón eliminar dentro de filas (icono basurero) */
 .row-action-btn{
-  width:32px;height:32px;
+  width:44px;height:44px;
   border-radius:50%;
   display:flex;
   align-items:center;
@@ -457,7 +461,7 @@ input,select,textarea{font-family:inherit;font-size:15px;color:inherit;}
 }
 .row-action-btn:hover{background:var(--danger-soft);}
 .row-action-btn:active{transform:scale(0.9);}
-.row-action-btn .lucide{width:14px;height:14px;color:var(--text-3);transition:color 0.15s ease;}
+.row-action-btn .lucide{width:18px;height:18px;color:var(--text-3);transition:color 0.15s ease;}
 .row-action-btn:hover .lucide{color:var(--danger);}
 
 .item-row.clickable{cursor:pointer;}
@@ -1691,6 +1695,12 @@ body.no-scroll .app{overflow:hidden;}
 .item-amount.gasto{color:var(--danger);}
 .item-amount.ingreso{color:var(--success);}
 .item-amount.pago{color:var(--info);}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.field-input:focus-visible,.field-select:focus-visible,.field-textarea:focus-visible,.app-modal-input:focus-visible{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent);}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important;}
+}
 </style>
 </head>
 <body data-theme="light">
@@ -1703,8 +1713,10 @@ body.no-scroll .app{overflow:hidden;}
     
     <!-- LOGIN CON USUARIO/PASSWORD -->
     <div style="width:100%;display:flex;flex-direction:column;gap:8px;">
-      <input type="text" id="auth-username" placeholder="Usuario" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;">
-      <input type="password" id="auth-password" placeholder="Contraseña" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);font-family:inherit;" onkeypress="if(event.key==='Enter') loginWithEmailPassword();">
+      <label for="auth-username" class="sr-only">Usuario</label>
+      <input type="text" id="auth-username" placeholder="Usuario" autocomplete="username" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:16px;background:var(--surface);color:var(--text);font-family:inherit;">
+      <label for="auth-password" class="sr-only">Contraseña</label>
+      <input type="password" id="auth-password" placeholder="Contraseña" autocomplete="current-password" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:16px;background:var(--surface);color:var(--text);font-family:inherit;" onkeydown="if(event.key==='Enter') loginWithEmailPassword();">
       <button id="btn-email-login" onclick="loginWithEmailPassword()" style="padding:12px 24px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">
         Entrar
       </button>
@@ -1901,7 +1913,7 @@ body.no-scroll .app{overflow:hidden;}
      MODAL DE FORMULARIOS (Gasto/Ingreso/Pago TDC)
      ═══════════════════════════════════════════════════════════════════════ -->
 <div class="form-backdrop" id="form-backdrop" onclick="closeForm(event)"></div>
-<div class="form-modal" id="form-modal">
+<div class="form-modal" id="form-modal" role="dialog" aria-modal="true" aria-labelledby="form-title">
   <div class="form-header">
     <button class="form-back" onclick="closeForm()" aria-label="Cerrar">
       <i data-lucide="x"></i>
@@ -1942,7 +1954,7 @@ body.no-scroll .app{overflow:hidden;}
      BOTTOM SHEET - Registro
      ═══════════════════════════════════════════════════════════════════════ -->
 <div class="sheet-backdrop" id="sheet-backdrop" onclick="closeSheet()"></div>
-<div class="sheet" id="sheet">
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Registrar movimiento">
   <div class="sheet-handle"></div>
   <div class="sheet-title">Registrar movimiento</div>
   <div class="sheet-subtitle">¿Qué quieres registrar hoy?</div>
@@ -2988,28 +3000,26 @@ function eliminarPagoById(id){
 // ══════════════════════════════════════════════════════════
 var _navHistory=[];  // Historial de navegación
 
-function navigate(pageId){
-  // Guardar página actual antes de cambiar
-  var currentPage=document.querySelector('.page.active');
-  if(currentPage && currentPage.id){
-    var currentId=currentPage.id.replace('page-','');
-    if(currentId && currentId!==pageId){
-      _navHistory.push(currentId);
-      // Mantener historial limitado (últimas 10 páginas)
-      if(_navHistory.length>10) _navHistory.shift();
+function navigate(pageId, skipHistory){
+  if(!skipHistory){
+    var currentPage=document.querySelector('.page.active');
+    if(currentPage && currentPage.id){
+      var currentId=currentPage.id.replace('page-','');
+      if(currentId && currentId!==pageId){
+        _navHistory.push(currentId);
+        if(_navHistory.length>10) _navHistory.shift();
+      }
     }
   }
-  
+
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   var page=document.getElementById('page-'+pageId);
   if(page) page.classList.add('active');
-  // Solo marcar nav activo si es una de las 5 secciones principales
   var navBtn=document.querySelector('.nav-item[data-page="'+pageId+'"]');
   if(navBtn) navBtn.classList.add('active');
   var app=document.querySelector('.app');
   if(app) app.scrollTop=0;
-  // Re-render página al entrar
   if(pageId==='inicio') renderDashboard();
   if(pageId==='inversiones') renderInversionesNuevo();
   if(pageId==='stats') renderStatsNuevo();
@@ -3023,12 +3033,9 @@ function navigate(pageId){
 function goBack(){
   var prevPage=_navHistory.pop();
   if(prevPage){
-    // Navegar sin agregar al historial
-    navigate(prevPage);
-    _navHistory.pop(); // Remover la que acabamos de agregar
+    navigate(prevPage, true);
   } else {
-    // Si no hay historial, ir a inicio
-    navigate('inicio');
+    navigate('inicio', true);
     _navHistory=[];
   }
 }
@@ -5776,7 +5783,7 @@ function cargarDatosDemo(){
     if(!ok) return;
     DB.gastos=[{"id": 1, "fecha": "2026-04-26", "desc": "Presa Memo", "cat": "Deporte", "monto": 300.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 2, "fecha": "2026-04-05", "desc": "Walmart", "cat": "Regalos", "monto": 188.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 3, "fecha": "2026-04-16", "desc": "Oxxo", "cat": "Oxxo", "monto": 31.5, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 4, "fecha": "2026-04-09", "desc": "Pizza Costco", "cat": "Comida", "monto": 117.61, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 5, "fecha": "2026-04-16", "desc": "Uber", "cat": "Uber", "monto": 59.96, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 6, "fecha": "2026-04-13", "desc": "Uber", "cat": "Uber", "monto": 60.57, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 7, "fecha": "2026-03-20", "desc": "Netflix", "cat": "Suscripciones", "monto": 119.0, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 8, "fecha": "2026-04-21", "desc": "Heroes Gym", "cat": "Deporte", "monto": 783.75, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 9, "fecha": "2026-04-20", "desc": "Corte Pelo", "cat": "Corte Pelo", "monto": 200.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 10, "fecha": "2026-04-20", "desc": "Cafe Pots", "cat": "Cafe", "monto": 145.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 11, "fecha": "2026-04-19", "desc": "Desayuno Monterreal", "cat": "Viaje", "monto": 330.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 12, "fecha": "2026-04-17", "desc": "Macarius", "cat": "Comida", "monto": 60.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 13, "fecha": "2026-04-12", "desc": "Oxxo", "cat": "Oxxo", "monto": 133.5, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 14, "fecha": "2026-04-12", "desc": "Comida China", "cat": "Comida", "monto": 175.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 15, "fecha": "2026-04-12", "desc": "Tim Hortons", "cat": "Cafe", "monto": 27.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 16, "fecha": "2026-04-12", "desc": "Tim Hortons", "cat": "Cafe", "monto": 27.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 17, "fecha": "2026-04-18", "desc": "Bar Monterreal", "cat": "Viaje", "monto": 175.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 18, "fecha": "2026-04-17", "desc": "Cerveza Monterreal", "cat": "Viaje", "monto": 244.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 19, "fecha": "2026-04-08", "desc": "Servicio Bici", "cat": "Deporte", "monto": 400.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 20, "fecha": "2025-12-28", "desc": "Iphone", "cat": "Celular", "monto": 16963.93, "tdc": "Banamex Joy", "msi": "Si", "meses": 12, "notas": ""}, {"id": 21, "fecha": "2025-06-04", "desc": "Airpods", "cat": "Regalos", "monto": 5799.0, "tdc": "BBVA Azul", "msi": "Si", "meses": 12, "notas": ""}, {"id": 22, "fecha": "2026-04-02", "desc": "Uber", "cat": "Viaje", "monto": 89.95, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 23, "fecha": "2026-02-21", "desc": "Uber", "cat": "Uber", "monto": 73.0, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 24, "fecha": "2026-03-23", "desc": "Uber", "cat": "Uber", "monto": 59.95, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 25, "fecha": "2026-03-13", "desc": "Uber", "cat": "Uber", "monto": 59.94, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 26, "fecha": "2026-02-24", "desc": "Uber", "cat": "Uber", "monto": 59.48, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 27, "fecha": "2026-04-01", "desc": "Uber", "cat": "Uber", "monto": 49.96, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 28, "fecha": "2026-02-13", "desc": "Uber", "cat": "Uber", "monto": 49.94, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 29, "fecha": "2026-03-26", "desc": "Uber", "cat": "Uber", "monto": 37.8, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 30, "fecha": "2026-04-02", "desc": "Uber", "cat": "Viaje", "monto": 189.99, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 31, "fecha": "2026-03-15", "desc": "Uber", "cat": "Uber", "monto": 154.95, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 32, "fecha": "2026-03-10", "desc": "Uber", "cat": "Uber", "monto": 140.64, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 33, "fecha": "2026-02-18", "desc": "Tortillas", "cat": "Otros", "monto": 30.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 34, "fecha": "2026-02-23", "desc": "Tacostao", "cat": "Comida", "monto": 199.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 35, "fecha": "2026-03-08", "desc": "Tacos Bonita", "cat": "Comida", "monto": 390.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 36, "fecha": "2026-04-02", "desc": "Tacos Atarantados", "cat": "Viaje", "monto": 525.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 37, "fecha": "2026-03-05", "desc": "Servicio Bici", "cat": "Deporte", "monto": 399.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 38, "fecha": "2026-03-14", "desc": "Restaurante Mty", "cat": "Comida", "monto": 453.2, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 39, "fecha": "2026-03-14", "desc": "Promanuez", "cat": "Comida", "monto": 88.8, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 40, "fecha": "2026-02-27", "desc": "Pollo Loco", "cat": "Comida", "monto": 120.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 41, "fecha": "2026-02-28", "desc": "Pokemon", "cat": "Nintendo", "monto": 49.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 42, "fecha": "2026-04-03", "desc": "PizzaHut", "cat": "Viaje", "monto": 328.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 43, "fecha": "2026-03-06", "desc": "Papa Brothers", "cat": "Comida", "monto": 178.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 44, "fecha": "2026-03-30", "desc": "Oxxo", "cat": "Oxxo", "monto": 82.0, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 45, "fecha": "2026-03-06", "desc": "Oxxo", "cat": "Oxxo", "monto": 79.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 46, "fecha": "2026-03-06", "desc": "Oxxo", "cat": "Oxxo", "monto": 59.5, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 47, "fecha": "2026-03-31", "desc": "Oxxo", "cat": "Oxxo", "monto": 42.5, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 48, "fecha": "2026-03-04", "desc": "Oxxo", "cat": "Oxxo", "monto": 386.5, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 49, "fecha": "2026-03-29", "desc": "Oxxo", "cat": "Oxxo", "monto": 35.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 50, "fecha": "2026-02-23", "desc": "Oxxo", "cat": "Oxxo", "monto": 31.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 51, "fecha": "2026-04-02", "desc": "Oxxo", "cat": "Viaje", "monto": 23.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 52, "fecha": "2026-02-21", "desc": "Oxxo", "cat": "Oxxo", "monto": 167.5, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 53, "fecha": "2026-03-14", "desc": "Oxxo Mty", "cat": "Oxxo", "monto": 133.5, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 54, "fecha": "2026-03-13", "desc": "Oxxo Carretera", "cat": "Oxxo", "monto": 385.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 55, "fecha": "2026-02-21", "desc": "Otros", "cat": "Otros", "monto": 210.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 56, "fecha": "2026-02-20", "desc": "Netflix", "cat": "Suscripciones", "monto": 119.0, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 57, "fecha": "2026-02-12", "desc": "Mercado Pago", "cat": "Otros", "monto": 193.44, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 58, "fecha": "2026-02-12", "desc": "Mercado Pago", "cat": "Otros", "monto": 156.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 59, "fecha": "2026-02-19", "desc": "Macarius", "cat": "Comida", "monto": 48.5, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 60, "fecha": "2026-03-28", "desc": "La Perla", "cat": "Alcohol", "monto": 255.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 61, "fecha": "2026-03-12", "desc": "Krispy Kreme", "cat": "Comida", "monto": 33.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 62, "fecha": "2026-03-25", "desc": "Heroes Gym", "cat": "Deporte", "monto": 783.75, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 63, "fecha": "2026-02-28", "desc": "Gasolina", "cat": "Gasolina", "monto": 200.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 64, "fecha": "2026-03-13", "desc": "Gasolina Mty", "cat": "Gasolina", "monto": 589.36, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 65, "fecha": "2026-02-23", "desc": "Fisiotens", "cat": "Deporte", "monto": 400.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 66, "fecha": "2026-03-20", "desc": "Dominos Pizza", "cat": "Comida", "monto": 368.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 67, "fecha": "2026-02-27", "desc": "Dominos Pizza", "cat": "Comida", "monto": 289.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 68, "fecha": "2026-03-13", "desc": "Dairy Queen", "cat": "Comida", "monto": 37.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 69, "fecha": "2026-03-22", "desc": "Dairy Queen", "cat": "Comida", "monto": 102.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 70, "fecha": "2026-03-11", "desc": "Consulta Dr. Trauma", "cat": "Deporte", "monto": 1900.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 71, "fecha": "2026-03-21", "desc": "Comida Cine - Hail Mary", "cat": "Cine", "monto": 301.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 72, "fecha": "2026-03-25", "desc": "Claude", "cat": "Suscripciones", "monto": 355.56, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 73, "fecha": "2026-04-03", "desc": "Chipinque", "cat": "Viaje", "monto": 204.0, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 74, "fecha": "2026-03-29", "desc": "Carls Jr", "cat": "Comida", "monto": 370.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 75, "fecha": "2026-03-21", "desc": "Cafe Pots", "cat": "Cafe", "monto": 65.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 76, "fecha": "2026-02-21", "desc": "Cafe Pots", "cat": "Cafe", "monto": 280.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 77, "fecha": "2026-03-18", "desc": "Cafe Pots", "cat": "Cafe", "monto": 225.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 78, "fecha": "2026-04-03", "desc": "Cafe Chipinque", "cat": "Viaje", "monto": 230.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 79, "fecha": "2026-02-28", "desc": "Burger King", "cat": "Comida", "monto": 343.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 80, "fecha": "2026-03-12", "desc": "Boletos Cine - Jucio del Siglo", "cat": "Cine", "monto": 171.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 81, "fecha": "2026-02-21", "desc": "Barberia", "cat": "Corte Pelo", "monto": 200.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 82, "fecha": "2026-03-12", "desc": "App - Finanzas", "cat": "Suscripciones", "monto": 125.98, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 83, "fecha": "2026-02-12", "desc": "App - Finanzas", "cat": "Suscripciones", "monto": 122.06, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 84, "fecha": "2026-02-23", "desc": "American Eagle", "cat": "Ropa", "monto": 1848.5, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 85, "fecha": "2026-03-10", "desc": "Amazon", "cat": "Otros", "monto": 159.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 86, "fecha": "2026-04-02", "desc": "Bizcocho", "cat": "Alcohol", "monto": 300.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 87, "fecha": "2026-04-02", "desc": "Basket", "cat": "Alcohol", "monto": 300.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 88, "fecha": "2026-04-06", "desc": "Starbucks Mty", "cat": "Viaje", "monto": 174.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 89, "fecha": "2026-03-31", "desc": "Gorditas Clarios", "cat": "Comida", "monto": 123.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 90, "fecha": "2026-03-06", "desc": "Pollo Loco", "cat": "Comida", "monto": 120.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 91, "fecha": "2026-04-06", "desc": "Cafe Starbucks", "cat": "Viaje", "monto": 0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 92, "fecha": "2026-04-06", "desc": "Miniso", "cat": "Otros", "monto": 259.8, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 93, "fecha": "2026-04-10", "desc": "Monterreal", "cat": "Viaje", "monto": 1600.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 94, "fecha": "2026-04-04", "desc": "Tim Hortons", "cat": "Cafe", "monto": 33.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 95, "fecha": "2026-04-05", "desc": "Papa Brothers", "cat": "Comida", "monto": 89.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 96, "fecha": "2026-04-06", "desc": "Barrita Gym", "cat": "Oxxo", "monto": 16.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 97, "fecha": "2026-04-07", "desc": "Oxxo", "cat": "Oxxo", "monto": 70.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 98, "fecha": "2026-04-12", "desc": "Fiesta Yanes", "cat": "Alcohol", "monto": 210.5, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 99, "fecha": "2026-04-24", "desc": "Pollo Kike", "cat": "Comida", "monto": 89.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 100, "fecha": "2026-04-24", "desc": "Patel Moni", "cat": "Otros", "monto": 65.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 101, "fecha": "2026-04-22", "desc": "Oxxo", "cat": "Oxxo", "monto": 25.5, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 102, "fecha": "2026-04-24", "desc": "Kekas Arleth", "cat": "Comida", "monto": 190.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 103, "fecha": "2026-04-25", "desc": "Oxxo", "cat": "Oxxo", "monto": 55.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 104, "fecha": "2026-04-25", "desc": "Oxxo", "cat": "Oxxo", "monto": 26.5, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 105, "fecha": "2026-04-25", "desc": "Oxxo", "cat": "Oxxo", "monto": 178.5, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 106, "fecha": "2026-04-26", "desc": "Gorditas Cisne", "cat": "Comida", "monto": 240.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 107, "fecha": "2026-04-26", "desc": "Dairy Queen", "cat": "Comida", "monto": 107.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 108, "fecha": "2026-04-25", "desc": "Claude", "cat": "Suscripciones", "monto": 347.17, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 109, "fecha": "2026-04-27", "desc": "Uber", "cat": "Uber", "monto": 63.02, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 110, "fecha": "2026-05-01", "desc": "Oxxo", "cat": "Oxxo", "monto": 27.5, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 111, "fecha": "2026-05-01", "desc": "Playera Lucero", "cat": "Regalos", "monto": 482.4, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 112, "fecha": "2026-05-02", "desc": "Gasolina", "cat": "Gasolina", "monto": 100.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 113, "fecha": "2026-05-03", "desc": "Oxxo", "cat": "Oxxo", "monto": 78.0, "tdc": "BBVA Azul", "msi": "No", "meses": 0, "notas": ""}, {"id": 114, "fecha": "2026-04-27", "desc": "GM Pizza", "cat": "Comida", "monto": 400.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 115, "fecha": "2026-04-29", "desc": "Oxxo", "cat": "Oxxo", "monto": 13.5, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 116, "fecha": "2026-04-30", "desc": "Oxxo", "cat": "Oxxo", "monto": 76.5, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 117, "fecha": "2026-04-30", "desc": "Bar Pub 57", "cat": "Alcohol", "monto": 200.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 118, "fecha": "2026-05-01", "desc": "Cine Palomitas", "cat": "Cine", "monto": 357.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 119, "fecha": "2026-05-01", "desc": "Playera Liverpool", "cat": "Ropa", "monto": 399.2, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 120, "fecha": "2026-05-03", "desc": "Gasolina", "cat": "Gasolina", "monto": 150.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 121, "fecha": "2026-05-03", "desc": "Baby Panda", "cat": "Comida", "monto": 175.0, "tdc": "Banamex Joy", "msi": "No", "meses": 0, "notas": ""}, {"id": 122, "fecha": "2026-05-01", "desc": "Oxxo", "cat": "Oxxo", "monto": 86.5, "tdc": "Nu", "msi": "No", "meses": 0, "notas": ""}, {"id": 123, "fecha": "2026-05-04", "desc": "Ajuste Bici Kike", "cat": "Deporte", "monto": 300.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 124, "fecha": "2026-05-04", "desc": "Carls Jr", "cat": "Comida", "monto": 149.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 125, "fecha": "2026-04-22", "desc": "Bici Nueva", "cat": "Deporte", "monto": 41500.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}, {"id": 126, "fecha": "2026-04-30", "desc": "Prestamo Lucero", "cat": "Otros", "monto": 10000.0, "tdc": "Efectivo", "msi": "No", "meses": 0, "notas": ""}];
     DB.ingresos=[{"id": 1, "fecha": "2026-02-13", "tipo": "Sueldo", "desc": "Sem #7", "monto": 4737.17}, {"id": 2, "fecha": "2026-02-20", "tipo": "Sueldo", "desc": "Sem #8", "monto": 4694.67}, {"id": 3, "fecha": "2026-02-27", "tipo": "Sueldo", "desc": "Sem #9", "monto": 4676.36}, {"id": 4, "fecha": "2026-03-06", "tipo": "Sueldo", "desc": "Sem #10", "monto": 4776.07}, {"id": 5, "fecha": "2026-03-13", "tipo": "Sueldo", "desc": "Sem #11", "monto": 4776.07}, {"id": 6, "fecha": "2026-03-20", "tipo": "Sueldo", "desc": "Sem #12", "monto": 4776.07}, {"id": 7, "fecha": "2026-03-27", "tipo": "Sueldo", "desc": "Sem #13", "monto": 4757.76}, {"id": 8, "fecha": "2026-04-01", "tipo": "Sueldo", "desc": "Sem #14", "monto": 4733.57}, {"id": 9, "fecha": "2026-04-10", "tipo": "Sueldo", "desc": "Sem #15", "monto": 4776.07}, {"id": 10, "fecha": "2026-04-17", "tipo": "Sueldo", "desc": "Sem #16", "monto": 4776.07}, {"id": 11, "fecha": "2026-04-24", "tipo": "Sueldo", "desc": "Sem #17", "monto": 4758.76}, {"id": 12, "fecha": "2026-04-30", "tipo": "Sueldo", "desc": "Sem #18", "monto": 4622.55}, {"id": 13, "fecha": "2026-04-29", "tipo": "PTU", "desc": "PTU 2025", "monto": 54006.14}];
-    DB.pagos=[{"id": 1, "fecha": "2026-03-16", "tdc": "BBVA Azul", "monto": 300.0, "desc": ""}, {"id": 2, "fecha": "2026-03-21", "tdc": "Nu", "monto": 839.62, "desc": ""}, {"id": 3, "fecha": "2026-03-02", "tdc": "Banamex Joy", "monto": 1000.0, "desc": ""}, {"id": 4, "fecha": "2026-03-13", "tdc": "Banamex Joy", "monto": 1365.16, "desc": ""}, {"id": 5, "fecha": "2026-03-30", "tdc": "BBVA Azul", "monto": 2879.94, "desc": ""}, {"id": 6, "fecha": "2026-04-06", "tdc": "Banamex Joy", "monto": 3135.9, "desc": ""}, {"id": 7, "fecha": "2026-04-10", "tdc": "Banamex Joy", "monto": 2079.26, "desc": ""}, {"id": 8, "fecha": "2026-04-09", "tdc": "Banamex Joy", "monto": 2079.26, "desc": ""}, {"id": 9, "fecha": "2026-04-20", "tdc": "Nu", "monto": 1529.08, "desc": ""}, {"id": 10, "fecha": "2026-04-29", "tdc": "BBVA Azul", "monto": 6056.11, "desc": ""}];
+    DB.pagosTDC=[{"id": 1, "fecha": "2026-03-16", "tdc": "BBVA Azul", "mes": "Marzo", "consumo": 0, "monto": 300.0, "dif": 0, "estado": "", "notas": "", "ciclo": ""}, {"id": 2, "fecha": "2026-03-21", "tdc": "Nu", "mes": "Marzo", "consumo": 0, "monto": 839.62, "dif": 0, "estado": "", "notas": "", "ciclo": ""}, {"id": 3, "fecha": "2026-03-02", "tdc": "Banamex Joy", "mes": "Marzo", "consumo": 0, "monto": 1000.0, "dif": 0, "estado": "", "notas": "", "ciclo": ""}, {"id": 4, "fecha": "2026-03-13", "tdc": "Banamex Joy", "mes": "Marzo", "consumo": 0, "monto": 1365.16, "dif": 0, "estado": "", "notas": "", "ciclo": ""}, {"id": 5, "fecha": "2026-03-30", "tdc": "BBVA Azul", "mes": "Marzo", "consumo": 0, "monto": 2879.94, "dif": 0, "estado": "", "notas": "", "ciclo": ""}, {"id": 6, "fecha": "2026-04-06", "tdc": "Banamex Joy", "mes": "Abril", "consumo": 0, "monto": 3135.9, "dif": 0, "estado": "", "notas": "", "ciclo": ""}, {"id": 7, "fecha": "2026-04-10", "tdc": "Banamex Joy", "mes": "Abril", "consumo": 0, "monto": 2079.26, "dif": 0, "estado": "", "notas": "", "ciclo": ""}, {"id": 8, "fecha": "2026-04-09", "tdc": "Banamex Joy", "mes": "Abril", "consumo": 0, "monto": 2079.26, "dif": 0, "estado": "", "notas": "", "ciclo": ""}, {"id": 9, "fecha": "2026-04-20", "tdc": "Nu", "mes": "Abril", "consumo": 0, "monto": 1529.08, "dif": 0, "estado": "", "notas": "", "ciclo": ""}, {"id": 10, "fecha": "2026-04-29", "tdc": "BBVA Azul", "mes": "Abril", "consumo": 0, "monto": 6056.11, "dif": 0, "estado": "", "notas": "", "ciclo": ""}];
     DB.cuentasInv={"Openbank": {"saldo": 231627.61, "ultimaAct": "2026-05-05", "tramos": [{"limite": 40000, "tasa": 13}, {"limite": null, "tasa": 7.3}], "historico": []}, "Nu Cajita": {"saldo": 25126.68, "ultimaAct": "2026-05-05", "tramos": [{"limite": 25000, "tasa": 13}, {"limite": null, "tasa": 0}], "historico": []}, "DiDi Cuenta": {"saldo": 10310.23, "ultimaAct": "2026-05-05", "tramos": [{"limite": 10000, "tasa": 15}, {"limite": null, "tasa": 7.5}], "historico": []}, "Revolut": {"saldo": 25719.5, "ultimaAct": "2026-05-05", "tramos": [{"limite": 25000, "tasa": 14.9}, {"limite": null, "tasa": 0}], "historico": []}};
     var cfg={"cortesTDC": {"Nu": {"corte": 11, "diasPago": 12}, "BBVA Azul": {"corte": 10, "diasPago": 20}, "Banamex Joy": {"corte": 20, "diasPago": 21}}, "limitesTDC": {"Nu": 15000, "BBVA Azul": 85000, "Banamex Joy": 42500}, "adeudosPendientes": {"Banamex Joy": 2365.16, "BBVA Azul": 0, "Nu": 0}, "presupuesto": {"Comida": 2000, "Transporte": 3000, "Salud": 1500, "Entretenimiento": 1000, "Ropa y cuidado personal": 1000, "Deudas / creditos / TDC": 4000, "Ahorro / inversion": 3000, "Otros": 2000, "Oxxo": 1500, "Uber": 1000, "Alcohol": 2000, "Suscripciones": 500, "Deporte": 2000, "Ropa": 1000, "Cine": 1000, "Gasolina": 1000, "Nintendo": 500, "Cafe": 800, "Regalos": 5000, "Corte Pelo": 500, "Celular": 1500, "Viaje": 5000}, "categorias": ["Comida", "Oxxo", "Uber", "Alcohol", "Suscripciones", "Deporte", "Ropa", "Cine", "Gasolina", "Nintendo", "Otros", "Cafe", "Regalos", "Corte Pelo", "Celular", "Viaje"], "tdcs": ["Nu", "BBVA Azul", "Banamex Joy", "Efectivo"], "cuentas": ["Openbank", "DiDi Cuenta", "Revolut", "Nu Cajita"], "tiposIngreso": ["Sueldo", "PTU", "Bono", "Fondo Ahorro", "Aguinaldo", "Otro"]};
     if(DB.config.scriptURL) cfg.scriptURL=DB.config.scriptURL;
@@ -5791,3 +5798,4 @@ function cargarDatosDemo(){
 
 </body>
 </html>
+
