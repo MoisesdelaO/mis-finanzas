@@ -2192,6 +2192,7 @@ let DB={
     adeudosPendientes:{'Banamex Joy':0,'BBVA Azul':0,'Nu':0,'BBVA Oro':0,'Cimaco':0}
   }
 };
+var _pendingDeletes={gastos:[],ingresos:[],pagosTDC:[],inversiones:[]};
 let connected=false;
 let syncing=false;
 let _patHidden=false;
@@ -2602,6 +2603,11 @@ async function pullFromSheets(){
         if(!cuentasValidas.includes(n)) delete DB.cuentasInv[n];
       });
     }
+    // Filtrar items con eliminación pendiente para que no reaparezcan
+    if(_pendingDeletes.gastos.length) DB.gastos=DB.gastos.filter(function(g){return _pendingDeletes.gastos.indexOf(String(g.id))===-1;});
+    if(_pendingDeletes.ingresos.length) DB.ingresos=DB.ingresos.filter(function(i){return _pendingDeletes.ingresos.indexOf(String(i.id))===-1;});
+    if(_pendingDeletes.pagosTDC.length) DB.pagosTDC=DB.pagosTDC.filter(function(p){return _pendingDeletes.pagosTDC.indexOf(String(p.id))===-1;});
+    if(_pendingDeletes.inversiones.length) DB.inversiones=DB.inversiones.filter(function(v){return _pendingDeletes.inversiones.indexOf(String(v.id))===-1;});
     save();
     return true;
   }catch(e){return false;}
@@ -3189,6 +3195,7 @@ function eliminarGastoById(id){
   var idx=DB.gastos.findIndex(function(g){return String(g.id)===String(id);});
   if(idx<0) return;
   DB.gastos.splice(idx,1);
+  _pendingDeletes.gastos.push(String(id));
   save();
   syncSheetDelete('gastos',[id]);
   renderAll();
@@ -3198,6 +3205,7 @@ function eliminarIngresoById(id){
   var idx=DB.ingresos.findIndex(function(i){return String(i.id)===String(id);});
   if(idx<0) return;
   DB.ingresos.splice(idx,1);
+  _pendingDeletes.ingresos.push(String(id));
   save();
   syncSheetDelete('ingresos',[id]);
   renderAll();
@@ -3207,6 +3215,7 @@ function eliminarPagoById(id){
   var idx=DB.pagosTDC.findIndex(function(p){return String(p.id)===String(id);});
   if(idx<0) return;
   DB.pagosTDC.splice(idx,1);
+  _pendingDeletes.pagosTDC.push(String(id));
   save();
   syncSheetDelete('pagosTDC',[id]);
   renderAll();
