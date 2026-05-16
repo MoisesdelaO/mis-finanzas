@@ -1524,8 +1524,9 @@ body.no-scroll .app{overflow:hidden;}
   background:var(--surface);
 }
 .field-input.mono{font-family:'JetBrains Mono', monospace;font-variant-numeric:tabular-nums;font-size:18px;font-weight:700;}
-.field-input[type="date"]{color:var(--text);-webkit-text-fill-color:var(--text);color-scheme:light;}
-[data-theme="dark"] .field-input[type="date"]{color-scheme:dark;}
+.field-input[type="date"],input[type="date"]{color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;color-scheme:light;opacity:1;}
+[data-theme="dark"] .field-input[type="date"],[data-theme="dark"] input[type="date"]{color-scheme:dark;}
+input[type="date"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-edit-fields-wrapper,input[type="date"]::-webkit-datetime-edit-text,input[type="date"]::-webkit-datetime-edit-month-field,input[type="date"]::-webkit-datetime-edit-day-field,input[type="date"]::-webkit-datetime-edit-year-field{color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;opacity:1!important;}
 .field-textarea{min-height:60px;resize:vertical;}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .field-hint{font-size:11px;color:var(--text-3);margin-top:4px;}
@@ -3015,43 +3016,31 @@ function cicloDelPago(fechaPagoStr,tdc){
 }
 
 function eliminarGastoById(id){
-  if(DB.gastos.findIndex(function(g){return String(g.id)===String(id);})<0) return;
-  appConfirm('¿Eliminar gasto?','Esta acción no se puede deshacer.',{okLabel:'Eliminar',danger:true}).then(function(ok){
-    if(!ok) return;
-    var idx=DB.gastos.findIndex(function(g){return String(g.id)===String(id);});
-    if(idx<0) return;
-    DB.gastos.splice(idx,1);
-    save();
-    syncSheetDelete('gastos',[id]);
-    renderAll();
-    toast('Gasto eliminado');
-  });
+  var idx=DB.gastos.findIndex(function(g){return String(g.id)===String(id);});
+  if(idx<0) return;
+  DB.gastos.splice(idx,1);
+  save();
+  syncSheetDelete('gastos',[id]);
+  renderAll();
+  toast('Gasto eliminado');
 }
 function eliminarIngresoById(id){
-  if(DB.ingresos.findIndex(function(i){return String(i.id)===String(id);})<0) return;
-  appConfirm('¿Eliminar ingreso?','Esta acción no se puede deshacer.',{okLabel:'Eliminar',danger:true}).then(function(ok){
-    if(!ok) return;
-    var idx=DB.ingresos.findIndex(function(i){return String(i.id)===String(id);});
-    if(idx<0) return;
-    DB.ingresos.splice(idx,1);
-    save();
-    syncSheetDelete('ingresos',[id]);
-    renderAll();
-    toast('Ingreso eliminado');
-  });
+  var idx=DB.ingresos.findIndex(function(i){return String(i.id)===String(id);});
+  if(idx<0) return;
+  DB.ingresos.splice(idx,1);
+  save();
+  syncSheetDelete('ingresos',[id]);
+  renderAll();
+  toast('Ingreso eliminado');
 }
 function eliminarPagoById(id){
-  if(DB.pagosTDC.findIndex(function(p){return String(p.id)===String(id);})<0) return;
-  appConfirm('¿Eliminar pago?','Esta acción no se puede deshacer.',{okLabel:'Eliminar',danger:true}).then(function(ok){
-    if(!ok) return;
-    var idx=DB.pagosTDC.findIndex(function(p){return String(p.id)===String(id);});
-    if(idx<0) return;
-    DB.pagosTDC.splice(idx,1);
-    save();
-    syncSheetDelete('pagosTDC',[id]);
-    renderAll();
-    toast('Pago eliminado');
-  });
+  var idx=DB.pagosTDC.findIndex(function(p){return String(p.id)===String(id);});
+  if(idx<0) return;
+  DB.pagosTDC.splice(idx,1);
+  save();
+  syncSheetDelete('pagosTDC',[id]);
+  renderAll();
+  toast('Pago eliminado');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -3969,47 +3958,29 @@ function onTdcClick(nombreTdc){
 
   var bodyHTML='';
 
-  // ── SALDO AL CORTE (lo que debes pagar en este periodo) ──
+  // ── SALDO AL CORTE ──
   if(calc.totalAPagar>0){
     bodyHTML+=
       '<div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;">'+
         '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Saldo al corte'+(fechaCorteStr?' · '+fechaCorteStr:'')+'</div>'+
         '<div style="font-size:26px;font-weight:700;color:var(--text);letter-spacing:-0.02em;font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.totalAPagar)+'</div>'+
-        (calc.pagado>0?'<div style="font-size:12px;color:var(--success);margin-top:4px;">Pagado: '+fmt(calc.pagado)+'</div>':'')+
-        (calc.pendiente>0?
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--accent) 15%,transparent);">'+
-            '<span style="font-size:12px;font-weight:600;color:var(--text);">Para no generar intereses</span>'+
-            '<span style="font-size:18px;font-weight:700;color:'+(diasUrgente?'var(--danger)':'var(--accent)')+';font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.pendiente)+'</span>'+
-          '</div>'+
-          (calc.fechaLimitePago?'<div style="font-size:12px;color:var(--text-2);margin-top:4px;">Pagar antes del '+fechaLimiteStr+' · '+estadoPagoTxt+'</div>':'')
-        :'<div style="margin-top:6px;">'+estadoPagoTxt+'</div>')+
+        (calc.fechaLimitePago?'<div style="font-size:12px;color:var(--text-2);margin-top:6px;">Pagar antes del '+fechaLimiteStr+' · '+estadoPagoTxt+'</div>':'')+
       '</div>';
   } else {
     bodyHTML+=
       '<div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;text-align:center;">'+
         '<div style="font-size:13px;font-weight:600;color:var(--success);">Sin saldo al corte</div>'+
-        '<div style="font-size:12px;color:var(--text-3);margin-top:2px;">No tienes nada pendiente de pago</div>'+
       '</div>';
   }
 
-  // ── NUEVAS COMPRAS (ciclo actual, se pagarán en el próximo corte) ──
+  // ── NUEVAS COMPRAS ──
   bodyHTML+=
     '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">'+
       '<div>'+
         '<div style="font-size:13px;font-weight:600;color:var(--text);">Nuevas compras</div>'+
-        '<div style="font-size:11px;color:var(--text-3);">Se pagarán en el próximo corte'+(fechaProxCorteStr?' ('+fechaProxCorteStr+')':'')+'</div>'+
+        '<div style="font-size:11px;color:var(--text-3);">Próximo corte'+(fechaProxCorteStr?' '+fechaProxCorteStr:'')+'</div>'+
       '</div>'+
       '<div style="font-size:15px;font-weight:700;color:var(--accent);font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.consumoCicloAct)+'</div>'+
-    '</div>';
-
-  // ── SALDO ACTUAL (deuda total en tiempo real) ──
-  bodyHTML+=
-    '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">'+
-      '<div>'+
-        '<div style="font-size:13px;font-weight:600;color:var(--text);">Saldo actual</div>'+
-        '<div style="font-size:11px;color:var(--text-3);">Deuda total en tiempo real</div>'+
-      '</div>'+
-      '<div style="font-size:15px;font-weight:700;color:var(--text);font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.saldoActual)+'</div>'+
     '</div>';
 
   // ── CRÉDITO DISPONIBLE ──
@@ -4042,16 +4013,9 @@ function onTdcClick(nombreTdc){
       '<i data-lucide="list" style="width:14px;height:14px;"></i> Ver movimientos del ciclo'+
     '</button>';
 
-  // Subtítulo del modal
-  var subtitleParts=[];
-  if(calc.msiActivos>0) subtitleParts.push(calc.msiActivos+' MSI');
-  if(calc.estado==='pagada') subtitleParts.push('Pagada ✓');
-  else if(fechaLimiteStr) subtitleParts.push('Límite: '+fechaLimiteStr);
-  var subtitle=subtitleParts.join(' · ');
-
   appModalOpen({
     title:nombreTdc,
-    subtitle:subtitle,
+    subtitle:'',
     bodyHTML:bodyHTML,
     actions:[
       {label:'Cerrar',style:'secondary',value:true},
@@ -4073,45 +4037,44 @@ function onTdcClick(nombreTdc){
 }
 
 function verDesgloseTDC(nombreTdc){
-  var hoy=new Date();
-  var cicloActKey=cicloDeGastoCorrecto(hoy.toISOString().split('T')[0],nombreTdc);
   var calc=calcularSaldoPendiente(nombreTdc);
+  var cfg=DB.config.cortesTDC[nombreTdc]||{};
+  var diaCorte=parseInt(cfg.corte)||0;
 
-  // Solo movimientos del ciclo actual (saldo actual)
-  var gastosCiclo=DB.gastos.filter(function(g){
+  var cicloCorteKey=calc.fechaCorte?cicloDeGastoCorrecto(calc.fechaCorte.toISOString().split('T')[0],nombreTdc):'';
+  var fechaCorteStr=calc.fechaCorte?calc.fechaCorte.toLocaleDateString('es-MX',{day:'numeric',month:'long'}):'';
+
+  var gastosCorte=DB.gastos.filter(function(g){
     if(g.tdc!==nombreTdc) return false;
-    return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloActKey;
+    if(g.msi==='Si') return false;
+    return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloCorteKey;
   }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
 
-  var totalGastos=gastosCiclo.reduce(function(s,g){return s+g.monto;},0);
+  var totalGastos=gastosCorte.reduce(function(s,g){return s+g.monto;},0);
 
   function buildGastoRow(g){
     var fc=String(g.fecha).substring(8,10)+'/'+String(g.fecha).substring(5,7);
-    var msi=g.msi==='Si'?' · MSI '+(g.meses||'?')+'m':'';
     return '<div class="tdc-detail-row" style="cursor:pointer;" onclick="appModalClose();setTimeout(function(){verDetalleGasto(\''+String(g.id)+'\');},250);">'+
-      '<span class="tdc-detail-label">'+fc+' · '+(g.desc||g.cat)+'<span style="color:var(--text-3);font-size:10px;">'+msi+'</span></span>'+
+      '<span class="tdc-detail-label">'+fc+' · '+(g.desc||g.cat)+'</span>'+
       '<span class="tdc-detail-value">'+fmt(g.monto)+'</span>'+
     '</div>';
   }
 
-  var fechaProxStr=calc.fechaProxCorte?calc.fechaProxCorte.toLocaleDateString('es-MX',{day:'numeric',month:'long'}):'';
   var bodyParts=[];
 
-  // Info del ciclo
   bodyParts.push(
     '<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">'+
-      'Compras desde el último corte'+(fechaProxStr?' · Próximo corte: '+fechaProxStr:'')+
+      'Compras del corte'+(fechaCorteStr?' del '+fechaCorteStr:'')+
     '</div>'
   );
 
-  // Lista de gastos del ciclo actual
-  if(gastosCiclo.length>0){
-    var rows=gastosCiclo.map(buildGastoRow).join('');
+  if(gastosCorte.length>0){
+    var rows=gastosCorte.map(buildGastoRow).join('');
     bodyParts.push(
       '<div class="tdc-detail-section">'+
         '<div style="max-height:320px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rows+'</div>'+
         '<div class="tdc-detail-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:6px;">'+
-          '<span class="tdc-detail-label" style="font-weight:700;">Total del ciclo</span>'+
+          '<span class="tdc-detail-label" style="font-weight:700;">Total compras</span>'+
           '<span class="tdc-detail-value" style="font-weight:700;color:var(--accent);font-size:15px;">'+fmt(totalGastos)+'</span>'+
         '</div>'+
       '</div>'
@@ -4119,17 +4082,25 @@ function verDesgloseTDC(nombreTdc){
   } else {
     bodyParts.push(
       '<div style="padding:24px 0;text-align:center;color:var(--text-3);">'+
-        '<div style="font-size:13px;">Sin compras en este ciclo</div>'+
+        '<div style="font-size:13px;">Sin compras en este corte</div>'+
       '</div>'
     );
   }
 
-  // Saldo actual (resumen)
+  if(calc.adeudo>0){
+    bodyParts.push(
+      '<div class="tdc-detail-row" style="margin-top:6px;">'+
+        '<span class="tdc-detail-label" style="font-weight:600;">Adeudo anterior</span>'+
+        '<span class="tdc-detail-value" style="color:var(--danger);">'+fmt(calc.adeudo)+'</span>'+
+      '</div>'
+    );
+  }
+
   bodyParts.push(
     '<div class="tdc-detail-section" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
       '<div class="tdc-detail-row">'+
-        '<span class="tdc-detail-label" style="font-weight:700;">Saldo actual</span>'+
-        '<span class="tdc-detail-value" style="color:var(--accent);font-size:16px;font-weight:700;">'+fmt(calc.saldoActual)+'</span>'+
+        '<span class="tdc-detail-label" style="font-weight:700;">Saldo al corte</span>'+
+        '<span class="tdc-detail-value" style="color:var(--accent);font-size:16px;font-weight:700;">'+fmt(calc.totalAPagar)+'</span>'+
       '</div>'+
     '</div>'
   );
@@ -4138,7 +4109,7 @@ function verDesgloseTDC(nombreTdc){
 
   appModalOpen({
     title:nombreTdc+' · Movimientos',
-    subtitle:gastosCiclo.length+' compra'+(gastosCiclo.length===1?'':'s')+' en el ciclo actual',
+    subtitle:gastosCorte.length+' compra'+(gastosCorte.length===1?'':'s')+' en el corte',
     bodyHTML:bodyHTML,
     actions:[
       {label:'← Regresar',style:'secondary',value:'back'},
