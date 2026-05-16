@@ -4044,21 +4044,40 @@ function verDesgloseTDC(nombreTdc){
   var cicloCorteKey=calc.fechaCorte?cicloDeGastoCorrecto(calc.fechaCorte.toISOString().split('T')[0],nombreTdc):'';
   var fechaCorteStr=calc.fechaCorte?calc.fechaCorte.toLocaleDateString('es-MX',{day:'numeric',month:'long'}):'';
 
+  // Compras regulares del ciclo del corte
   var gastosCorte=DB.gastos.filter(function(g){
     if(g.tdc!==nombreTdc) return false;
     if(g.msi==='Si') return false;
     return (g.ciclo||cicloDeGastoCorrecto(g.fecha,nombreTdc))===cicloCorteKey;
   }).sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
 
-  var totalGastos=gastosCorte.reduce(function(s,g){return s+g.monto;},0);
+  // MSI activos con cuota en este corte
+  var msiCorte=[];
+  DB.gastos.forEach(function(g){
+    if(g.tdc!==nombreTdc||g.msi!=='Si') return;
+    var cuotas=g.meses?parseInt(g.meses):1;
+    if(cuotas<=0) return;
+    var fc=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
+    if(isNaN(fc.getTime())) return;
+    var md=(calc.fechaCorte.getFullYear()-fc.getFullYear())*12+(calc.fechaCorte.getMonth()-fc.getMonth());
+    if(fc.getDate()>diaCorte) md--;
+    if(md>=0&&md<cuotas){
+      msiCorte.push({desc:(g.desc||g.cat)+' (MSI '+(md+1)+'/'+cuotas+')',monto:g.monto/cuotas,fecha:g.fecha,id:g.id});
+    }
+  });
 
-  function buildGastoRow(g){
-    var fc=String(g.fecha).substring(8,10)+'/'+String(g.fecha).substring(5,7);
-    return '<div class="tdc-detail-row" style="cursor:pointer;" onclick="appModalClose();setTimeout(function(){verDetalleGasto(\''+String(g.id)+'\');},250);">'+
-      '<span class="tdc-detail-label">'+fc+' · '+(g.desc||g.cat)+'</span>'+
-      '<span class="tdc-detail-value">'+fmt(g.monto)+'</span>'+
+  function buildRow(desc,monto,fecha,id){
+    var fc=String(fecha).substring(8,10)+'/'+String(fecha).substring(5,7);
+    var onclick=id?'onclick="appModalClose();setTimeout(function(){verDetalleGasto(\''+String(id)+'\');},250);" style="cursor:pointer;"':'';
+    return '<div class="tdc-detail-row" '+onclick+'>'+
+      '<span class="tdc-detail-label">'+fc+' · '+desc+'</span>'+
+      '<span class="tdc-detail-value">'+fmt(monto)+'</span>'+
     '</div>';
   }
+
+  var allRows=[];
+  gastosCorte.forEach(function(g){allRows.push(buildRow(g.desc||g.cat,g.monto,g.fecha,g.id));});
+  msiCorte.forEach(function(m){allRows.push(buildRow(m.desc,m.monto,m.fecha,m.id));});
 
   var bodyParts=[];
 
@@ -4068,15 +4087,10 @@ function verDesgloseTDC(nombreTdc){
     '</div>'
   );
 
-  if(gastosCorte.length>0){
-    var rows=gastosCorte.map(buildGastoRow).join('');
+  if(allRows.length>0){
     bodyParts.push(
       '<div class="tdc-detail-section">'+
-        '<div style="max-height:320px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+rows+'</div>'+
-        '<div class="tdc-detail-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:6px;">'+
-          '<span class="tdc-detail-label" style="font-weight:700;">Total compras</span>'+
-          '<span class="tdc-detail-value" style="font-weight:700;color:var(--accent);font-size:15px;">'+fmt(totalGastos)+'</span>'+
-        '</div>'+
+        '<div style="max-height:320px;overflow-y:auto;-webkit-overflow-scrolling:touch;">'+allRows.join('')+'</div>'+
       '</div>'
     );
   } else {
@@ -4105,11 +4119,12 @@ function verDesgloseTDC(nombreTdc){
     '</div>'
   );
 
+  var totalItems=gastosCorte.length+msiCorte.length;
   var bodyHTML=bodyParts.join('');
 
   appModalOpen({
     title:nombreTdc+' · Movimientos',
-    subtitle:gastosCorte.length+' compra'+(gastosCorte.length===1?'':'s')+' en el corte',
+    subtitle:totalItems+' movimiento'+(totalItems===1?'':'s')+' en el corte',
     bodyHTML:bodyHTML,
     actions:[
       {label:'← Regresar',style:'secondary',value:'back'},
