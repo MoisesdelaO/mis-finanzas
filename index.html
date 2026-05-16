@@ -240,12 +240,8 @@ input,select,textarea{font-family:inherit;font-size:15px;color:inherit;}
 /* ═══════════════════════════════════════════════════════════════════════
    PAGES
    ═══════════════════════════════════════════════════════════════════════ */
-.page{display:none;padding:0 20px;animation:fadeUp 0.35s ease;}
-.page.active{display:block;}
-@keyframes fadeUp{
-  from{opacity:0;transform:translateY(8px);}
-  to{opacity:1;transform:translateY(0);}
-}
+.page{display:none;padding:0 20px;}
+.page.active{display:block;animation:pageIn 0.4s cubic-bezier(0.34,1.56,0.64,1);}
 
 /* ═══════════════════════════════════════════════════════════════════════
    HERO BALANCE CARD (estilo foto 4)
@@ -1718,6 +1714,163 @@ input[type="date"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-e
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 .field-input:focus-visible,.field-select:focus-visible,.field-textarea:focus-visible,.app-modal-input:focus-visible{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent);}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   2026 MODERN ANIMATIONS & MICRO-INTERACTIONS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Spring-physics page transition */
+@keyframes pageIn{
+  0%{opacity:0;transform:translateY(12px) scale(0.98);}
+  60%{opacity:1;transform:translateY(-2px) scale(1.005);}
+  100%{opacity:1;transform:translateY(0) scale(1);}
+}
+
+/* Staggered list items entrance */
+@keyframes listItemIn{
+  from{opacity:0;transform:translateY(10px);}
+  to{opacity:1;transform:translateY(0);}
+}
+.item-row,.tdc-row,.cat-tile,.patr-card{
+  animation:listItemIn 0.35s cubic-bezier(0.25,1,0.5,1) both;
+}
+.item-row:nth-child(1),.tdc-row:nth-child(1),.cat-tile:nth-child(1){animation-delay:0ms;}
+.item-row:nth-child(2),.tdc-row:nth-child(2),.cat-tile:nth-child(2){animation-delay:35ms;}
+.item-row:nth-child(3),.tdc-row:nth-child(3),.cat-tile:nth-child(3){animation-delay:70ms;}
+.item-row:nth-child(4),.tdc-row:nth-child(4),.cat-tile:nth-child(4){animation-delay:105ms;}
+.item-row:nth-child(5),.tdc-row:nth-child(5),.cat-tile:nth-child(5){animation-delay:140ms;}
+.item-row:nth-child(6),.tdc-row:nth-child(6),.cat-tile:nth-child(6){animation-delay:175ms;}
+.item-row:nth-child(7){animation-delay:210ms;}
+.item-row:nth-child(8){animation-delay:245ms;}
+.item-row:nth-child(9){animation-delay:280ms;}
+.item-row:nth-child(10){animation-delay:315ms;}
+
+/* Hero card entrance with scale spring */
+@keyframes heroIn{
+  0%{opacity:0;transform:scale(0.95) translateY(8px);}
+  70%{transform:scale(1.01) translateY(-1px);}
+  100%{opacity:1;transform:scale(1) translateY(0);}
+}
+.hero-card{animation:heroIn 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.05s both;}
+
+/* Patrimonio cards stagger */
+.patr-card:nth-child(1){animation-delay:120ms;}
+.patr-card:nth-child(2){animation-delay:170ms;}
+.patr-card:nth-child(3){animation-delay:220ms;}
+
+/* Enhanced press feedback with spring bounce-back */
+.item-row.clickable{transition:transform 0.2s cubic-bezier(0.34,1.56,0.64,1), background 0.15s ease;}
+.item-row.clickable:active{transform:scale(0.975);}
+.tdc-row{transition:transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease, border-color 0.15s ease;}
+.tdc-row:active{transform:scale(0.975);}
+.patr-card.clickable{transition:transform 0.2s cubic-bezier(0.34,1.56,0.64,1);}
+.patr-card.clickable:active{transform:scale(0.96);}
+
+/* FAB pulse glow on idle + spring press */
+@keyframes fabGlow{
+  0%,100%{box-shadow:var(--shadow-fab);}
+  50%{box-shadow:0 6px 20px rgba(108,93,211,0.5), 0 2px 8px rgba(108,93,211,0.3);}
+}
+.fab{animation:fabGlow 3s ease-in-out infinite;transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1);}
+.fab:active{transform:translateX(-50%) scale(0.88);animation:none;}
+
+/* Nav indicator dot for active item */
+.nav-item::after{
+  content:'';
+  position:absolute;
+  bottom:8px;
+  left:50%;
+  width:4px;height:4px;
+  border-radius:50%;
+  background:var(--accent);
+  transform:translateX(-50%) scale(0);
+  transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.nav-item.active::after{transform:translateX(-50%) scale(1);}
+.nav-item.active .lucide{transform:scale(1.08);}
+
+/* Form modal spring entrance (bottom sheet) */
+.form-modal{transition:transform 0.38s cubic-bezier(0.32,0.72,0,1);}
+
+/* Modal dialog spring */
+.app-modal{transition:opacity 0.2s ease, transform 0.35s cubic-bezier(0.34,1.56,0.64,1);}
+.app-modal.open{transform:translate(-50%, -50%) scale(1);}
+
+/* Toast slide-up spring */
+.toast{transition:opacity 0.3s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);}
+.toast.show{transform:translateX(-50%) translateY(-4px);}
+
+/* Button hover lift (desktop) */
+@media(hover:hover){
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);}
+  .form-submit:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm);}
+  .tdc-row:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm);}
+  .item-row.clickable:hover{background:var(--surface-2);transform:translateY(-1px);}
+  .cat-tile:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);}
+}
+.btn-primary{transition:transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease;}
+.cat-tile{transition:transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease;}
+
+/* Shimmer loading skeleton */
+@keyframes shimmer{
+  0%{background-position:-200% 0;}
+  100%{background-position:200% 0;}
+}
+.skeleton{
+  background:linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
+  background-size:200% 100%;
+  animation:shimmer 1.5s ease-in-out infinite;
+  border-radius:var(--r-sm);
+}
+
+/* Smooth number counter transition */
+.hero-amount .mono,.patr-value,.item-amount{
+  transition:opacity 0.2s ease;
+}
+
+/* Icon buttons press spring */
+.icon-btn{transition:transform 0.2s cubic-bezier(0.34,1.56,0.64,1), background 0.15s ease;}
+.icon-btn:active{transform:scale(0.85);}
+
+/* Add button spring */
+.add-btn{transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1), background 0.15s ease;}
+.add-btn:active{transform:scale(0.82) rotate(-90deg);}
+
+/* Delete row action - danger pulse on press */
+.row-action-btn{transition:transform 0.2s cubic-bezier(0.34,1.56,0.64,1), background 0.15s ease;}
+.row-action-btn:active{transform:scale(0.82);}
+
+/* Smooth backdrop blur transition */
+.form-backdrop,.app-modal-backdrop{transition:opacity 0.3s ease;}
+
+/* Config tabs indicator slide */
+.config-tab{transition:background 0.2s ease, color 0.2s ease, transform 0.2s cubic-bezier(0.34,1.56,0.64,1);}
+.config-tab.active{transform:scale(1.02);}
+
+/* Toggle button active state morph */
+.field-toggle-btn{transition:background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;}
+.field-toggle-btn.active{transform:scale(1.02);}
+
+/* Month nav arrows tap spring */
+.month-nav-btn{transition:background 0.15s ease, transform 0.2s cubic-bezier(0.34,1.56,0.64,1);}
+.month-nav-btn:active{transform:scale(0.85);}
+
+/* Section header entrance */
+@keyframes sectionIn{
+  from{opacity:0;transform:translateX(-8px);}
+  to{opacity:1;transform:translateX(0);}
+}
+.section-head{animation:sectionIn 0.3s ease 0.15s both;}
+
+/* Smooth item delete exit */
+@keyframes itemOut{
+  to{opacity:0;transform:translateX(40px) scale(0.95);height:0;padding:0;margin:0;border:0;overflow:hidden;}
+}
+.item-row.removing{animation:itemOut 0.3s cubic-bezier(0.4,0,1,1) forwards;}
+
+/* Filter/sheet entrance overshoot */
+.filter-sheet,.sheet{transition:transform 0.38s cubic-bezier(0.34,1.56,0.64,1);}
+
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important;}
 }
@@ -3182,7 +3335,7 @@ function renderMovsPage(){
   var html=''+
     '<div class="page-header-bar">'+
       '<button class="icon-btn" onclick="goBack()" aria-label="Volver"><i data-lucide="arrow-left"></i></button>'+
-      '<div class="title">Movimientos</div>'+
+      '<div class="title">Gastos</div>'+
       '<button class="icon-btn" onclick="exportarMovsCSV()" aria-label="Exportar CSV"><i data-lucide="download"></i></button>'+
     '</div>'+
 
