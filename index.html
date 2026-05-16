@@ -6,8 +6,25 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mis Finanzas">
+<link rel="manifest" href="manifest.json">
 <title>Mis Finanzas</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%231a1a1a'/><rect x='8' y='22' width='84' height='56' rx='10' fill='%2371b8e8' stroke='%231a1a1a' stroke-width='3'/><rect x='8' y='34' width='84' height='14' fill='%234a7fa8'/><rect x='58' y='52' width='22' height='16' rx='4' fill='%23f0c030' stroke='%231a1a1a' stroke-width='2'/></svg>">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<script>
+(function(){
+  var c=document.createElement('canvas');c.width=180;c.height=180;
+  var x=c.getContext('2d');
+  x.fillStyle='#1a1a1a';x.beginPath();x.roundRect(0,0,180,180,32);x.fill();
+  x.fillStyle='#71b8e8';x.beginPath();x.roundRect(14,40,152,100,18);x.fill();
+  x.fillStyle='#4a7fa8';x.fillRect(14,61,152,25);
+  x.fillStyle='#f0c030';x.beginPath();x.roundRect(104,93,40,29,7);x.fill();
+  var link=document.querySelector('link[rel="apple-touch-icon"]');
+  if(link) link.href=c.toDataURL('image/png');
+})();
+</script>
 
 <!-- Fuentes: Outfit (display) + Inter Tight (body) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -3118,11 +3135,9 @@ function renderMovsPage(){
   });
 
   var totalGastos=movs.filter(function(m){return m.type==='gasto';}).reduce(function(s,m){return s+m.monto;},0);
-  var totalIngresos=movs.filter(function(m){return m.type==='ingreso';}).reduce(function(s,m){return s+m.monto;},0);
   var totalPagos=movs.filter(function(m){return m.type==='pago';}).reduce(function(s,m){return s+m.monto;},0);
 
   var hayFiltros=(f.tipo!=='todos'||f.tdc!=='todos'||f.cat!=='todos'||f.desde||f.hasta);
-  var totalNeto=totalIngresos-totalGastos;
 
   // Active filter tags
   var tags='';
@@ -3195,7 +3210,7 @@ function renderMovsPage(){
 
     '<div class="filter-summary">'+
       '<span>'+movs.length+' movimiento'+(movs.length===1?'':'s')+'</span>'+
-      '<span class="total" style="color:'+(totalNeto>=0?'var(--success)':'var(--danger)')+';">Neto: '+(totalNeto>=0?'+':'')+fmtK(totalNeto)+'</span>'+
+      '<span class="total" style="color:var(--danger);">Total: -'+fmtK(totalGastos)+'</span>'+
     '</div>'+
 
     listaHTML;
@@ -3208,7 +3223,7 @@ function renderMovsPage(){
 function openFilterSheet(){
   var f=_movsFiltros;
   // Build filter options
-  var tipoOpts=[{k:'todos',l:'Todos'},{k:'gasto',l:'Gastos'},{k:'ingreso',l:'Ingresos'},{k:'pago',l:'Pagos TDC'}]
+  var tipoOpts=[{k:'todos',l:'Todos'},{k:'gasto',l:'Gastos'},{k:'pago',l:'Pagos TDC'}]
     .map(function(c){return '<button class="filter-opt'+(f.tipo===c.k?' active':'')+'" onclick="setMovsFiltroSheet(\'tipo\',\''+c.k+'\')">'+c.l+'</button>';}).join('');
   var tdcOpts=[{k:'todos',l:'Todas'}].concat((DB.config.tdcs||[]).map(function(t){return {k:t,l:t};}))
     .map(function(c){var safe=c.k.replace(/'/g,"\\'");return '<button class="filter-opt'+(f.tdc===c.k?' active':'')+'" onclick="setMovsFiltroSheet(\'tdc\',\''+safe+'\')">'+c.l+'</button>';}).join('');
@@ -3454,15 +3469,7 @@ function combinarMovimientos(f){
       });
     });
   }
-  if(f.tipo==='todos' || f.tipo==='ingreso'){
-    DB.ingresos.forEach(function(i){
-      if(f.tdc!=='todos') return; // ingreso no tiene tdc
-      if(f.cat!=='todos') return; // ingreso no tiene cat
-      if(f.desde && (i.fecha||'')<f.desde) return;
-      if(f.hasta && (i.fecha||'')>f.hasta) return;
-      movs.push({type:'ingreso',id:i.id,fecha:i.fecha,desc:i.desc||i.tipo,monto:i.monto,meta:i.tipo});
-    });
-  }
+  // Ingresos se muestran en su propia página, no aquí
   if(f.tipo==='todos' || f.tipo==='pago'){
     DB.pagosTDC.forEach(function(p){
       if(f.tdc!=='todos' && p.tdc!==f.tdc) return;
