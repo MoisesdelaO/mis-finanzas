@@ -2827,11 +2827,8 @@ function calcularSaldoPendiente(tdc){
   var pagado=0;
   DB.pagosTDC.forEach(function(p){
     if(p.tdc!==tdc) return;
-    if(p.ciclo===cicloCorte){pagado+=p.monto;return;}
-    if(!p.ciclo){
-      var fp=new Date(String(p.fecha).split('T')[0]+'T12:00:00');
-      if(!isNaN(fp.getTime())&&fp>fechaCorteAnterior&&fp<=fechaLimitePago) pagado+=p.monto;
-    }
+    var cicloPago=p.ciclo||cicloDelPago(p.fecha,tdc);
+    if(cicloPago===cicloCorte) pagado+=p.monto;
   });
   var pendiente=Math.max(0,totalAPagar-pagado);
 
@@ -3548,7 +3545,7 @@ function verDetalleGasto(id){
     ],
     onResult:function(r){
       if(r==='edit') setTimeout(function(){editarGasto(id);},250);
-      else if(r==='del') eliminarGastoById(id);
+      else if(r==='del') setTimeout(function(){eliminarGastoById(id);},250);
     }
   });
 }
@@ -3571,7 +3568,7 @@ function verDetalleIngreso(id){
     ],
     onResult:function(r){
       if(r==='edit') setTimeout(function(){editarIngreso(id);},250);
-      else if(r==='del') eliminarIngresoById(id);
+      else if(r==='del') setTimeout(function(){eliminarIngresoById(id);},250);
     }
   });
 }
@@ -3850,11 +3847,9 @@ function renderTdcList(){
 
     var metaCorte=cfg.corte?'Corte día '+cfg.corte:'';
     var metaVence='';
-    if(calc.estado==='pagada') metaVence='Pagada ✓';
-    else if(calc.estado==='vencida') metaVence='Vencida';
-    else if(calc.estado==='pendiente' && calc.fechaLimitePago){
-      metaVence='Pagar antes del '+fechaLegible(calc.fechaLimitePago);
-    } else metaVence='Al corriente';
+    if(calc.fechaLimitePago){
+      metaVence='Fecha de pago '+fechaLegible(calc.fechaLimitePago);
+    }
     var metaTxt=(metaCorte?metaCorte:'')+(metaVence?' · '+metaVence:'');
 
     var msiBadge=calc.msiActivos>0
