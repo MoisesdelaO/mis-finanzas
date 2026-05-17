@@ -4173,9 +4173,12 @@ function onTdcClick(nombreTdc){
   // ── MSI ACTIVOS ──
   if(calc.msiActivos>0){
     bodyHTML+=
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">'+
+      '<div onclick="appModalClose();setTimeout(function(){verMsiDetalle(\''+nombreTdc.replace(/'/g,"\\'")+'\');},250);" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;">'+
         '<div style="font-size:13px;font-weight:600;color:var(--text);">MSI activos</div>'+
-        '<span class="tdc-badge-msi has-msi" style="font-size:12px;">'+calc.msiActivos+' compra'+(calc.msiActivos>1?'s':'')+'</span>'+
+        '<div style="display:flex;align-items:center;gap:6px;">'+
+          '<span class="tdc-badge-msi has-msi" style="font-size:12px;">'+calc.msiActivos+' compra'+(calc.msiActivos>1?'s':'')+'</span>'+
+          '<i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-3);"></i>'+
+        '</div>'+
       '</div>';
   }
 
@@ -4297,6 +4300,87 @@ function verDesgloseTDC(nombreTdc){
   appModalOpen({
     title:nombreTdc+' · Movimientos',
     subtitle:totalItems+' movimiento'+(totalItems===1?'':'s')+' en el corte',
+    bodyHTML:bodyHTML,
+    actions:[
+      {label:'← Regresar',style:'secondary',value:'back'},
+      {label:'Cerrar',style:'primary',value:true}
+    ],
+    onResult:function(r){
+      if(r==='back') setTimeout(function(){onTdcClick(nombreTdc);},200);
+    }
+  });
+}
+
+function verMsiDetalle(nombreTdc){
+  var cfg=DB.config.cortesTDC[nombreTdc]||{};
+  var diaCorte=parseInt(cfg.corte)||0;
+  var hoy=new Date();hoy.setHours(12,0,0,0);
+
+  var msiList=[];
+  DB.gastos.forEach(function(g){
+    if(g.tdc!==nombreTdc||g.msi!=='Si') return;
+    var cuotas=g.meses?parseInt(g.meses):1;
+    if(cuotas<=0) return;
+    var fc=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
+    if(isNaN(fc.getTime())) return;
+    var mesesDesde=(hoy.getFullYear()-fc.getFullYear())*12+(hoy.getMonth()-fc.getMonth());
+    if(fc.getDate()>diaCorte) mesesDesde--;
+    if(mesesDesde>=cuotas) return;
+    var cuotaMes=Math.round(g.monto/cuotas*100)/100;
+    var mesActual=Math.min(mesesDesde+1,cuotas);
+    var restantes=cuotas-mesActual;
+    var fechaCompra=String(g.fecha).split('T')[0];
+    msiList.push({
+      desc:g.desc||g.cat||'Compra MSI',
+      montoTotal:g.monto,
+      cuotaMes:cuotaMes,
+      cuotas:cuotas,
+      mesActual:mesActual,
+      restantes:restantes,
+      fechaCompra:fechaCompra,
+      id:g.id
+    });
+  });
+
+  if(msiList.length===0){
+    appAlert(nombreTdc,'No hay compras MSI activas en esta tarjeta.');
+    return;
+  }
+
+  var bodyHTML='';
+  msiList.forEach(function(m){
+    var fc=m.fechaCompra.substring(8,10)+'/'+m.fechaCompra.substring(5,7)+'/'+m.fechaCompra.substring(0,4);
+    var pct=Math.round(m.mesActual/m.cuotas*100);
+    bodyHTML+=
+      '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:10px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">'+
+          '<div style="font-size:14px;font-weight:600;color:var(--text);">'+m.desc+'</div>'+
+          '<div style="font-size:11px;color:var(--text-3);white-space:nowrap;margin-left:8px;">'+fc+'</div>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
+          '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Monto total</div><div style="font-size:15px;font-weight:700;font-family:\'JetBrains Mono\',monospace;">'+fmt(m.montoTotal)+'</div></div>'+
+          '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Cuota mensual</div><div style="font-size:15px;font-weight:700;font-family:\'JetBrains Mono\',monospace;color:var(--accent);">'+fmt(m.cuotaMes)+'</div></div>'+
+        '</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-2);margin-bottom:6px;">'+
+          '<span>Mes '+m.mesActual+' de '+m.cuotas+'</span>'+
+          '<span>'+m.restantes+' restante'+(m.restantes!==1?'s':'')+'</span>'+
+        '</div>'+
+        '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">'+
+          '<div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:3px;transition:width 0.4s ease;"></div>'+
+        '</div>'+
+      '</div>';
+  });
+
+  var totalMensual=msiList.reduce(function(s,m){return s+m.cuotaMes;},0);
+  bodyHTML+=
+    '<div class="tdc-detail-row" style="padding-top:8px;border-top:1px solid var(--border);">'+
+      '<span class="tdc-detail-label" style="font-weight:700;">Total mensual MSI</span>'+
+      '<span class="tdc-detail-value" style="color:var(--accent);font-weight:700;">'+fmt(totalMensual)+'</span>'+
+    '</div>';
+
+  appModalOpen({
+    title:nombreTdc+' · MSI',
+    subtitle:msiList.length+' compra'+(msiList.length>1?'s':'')+' a meses',
     bodyHTML:bodyHTML,
     actions:[
       {label:'← Regresar',style:'secondary',value:'back'},
