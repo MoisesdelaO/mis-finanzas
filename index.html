@@ -20,11 +20,10 @@
   var g=x.createLinearGradient(0,0,180,180);
   g.addColorStop(0,'#6c5dd3');g.addColorStop(1,'#8b5cf6');
   x.beginPath();x.roundRect(0,0,180,180,40);x.fillStyle=g;x.fill();
-  x.strokeStyle='#fff';x.lineWidth=9;x.lineCap='round';x.lineJoin='round';
-  x.beginPath();x.roundRect(41,55,98,70,13);x.stroke();
-  x.beginPath();x.moveTo(41,77);x.lineTo(139,77);x.stroke();
-  x.fillStyle='#fff';x.beginPath();x.roundRect(104,91,21,14,4);x.fill();
-  x.beginPath();x.moveTo(61,42);x.quadraticCurveTo(61,34,69,34);x.lineTo(100,34);x.quadraticCurveTo(108,34,108,42);x.lineTo(108,55);x.stroke();
+  x.strokeStyle='#fff';x.lineWidth=8;x.lineCap='round';x.lineJoin='round';
+  x.beginPath();x.roundRect(40,62,100,60,13);x.stroke();
+  x.beginPath();x.moveTo(52,62);x.lineTo(52,50);x.quadraticCurveTo(52,42,60,42);x.lineTo(95,42);x.stroke();
+  x.fillStyle='#fff';x.beginPath();x.arc(118,92,5,0,Math.PI*2);x.fill();
   var link=document.querySelector('link[rel="apple-touch-icon"]');
   if(link) link.href=c.toDataURL('image/png');
 })();
@@ -4022,7 +4021,7 @@ function renderTdcList(){
     var calc=calcularSaldoPendiente(tdc);
     var cfg=DB.config.cortesTDC[tdc]||{};
     var limite=DB.config.limitesTDC&&DB.config.limitesTDC[tdc]||0;
-    var saldo=calc.saldoActual;
+    var saldo=calc.pendiente;
     var pct=limite>0?Math.min(100,(saldo/limite)*100):0;
     var fillCls=pct>70?'danger':pct>40?'warn':'';
 
@@ -4129,7 +4128,7 @@ function togglePatrimonio(){
 function onTdcClick(nombreTdc){
   var calc=calcularSaldoPendiente(nombreTdc);
   var limite=DB.config.limitesTDC&&DB.config.limitesTDC[nombreTdc]||0;
-  var pctUso=limite>0?Math.min(100,(calc.saldoActual/limite)*100):0;
+  var pctUso=limite>0?Math.min(100,(calc.pendiente/limite)*100):0;
   var b=bankInfo(nombreTdc);
   var fillCls=pctUso>70?'danger':pctUso>40?'warn':'';
 
@@ -4181,7 +4180,7 @@ function onTdcClick(nombreTdc){
       '<div style="padding:10px 0;border-bottom:1px solid var(--border);">'+
         '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">'+
           '<span style="font-size:12px;color:var(--text-2);">Crédito disponible</span>'+
-          '<span style="font-size:12px;font-weight:600;color:var(--text-2);">'+fmtK(Math.max(0,limite-calc.saldoActual))+' / '+fmtK(limite)+'</span>'+
+          '<span style="font-size:12px;font-weight:600;color:var(--text-2);">'+fmtK(Math.max(0,limite-calc.pendiente))+' / '+fmtK(limite)+'</span>'+
         '</div>'+
         '<div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">'+
           '<div style="height:100%;width:'+pctUso+'%;background:'+(fillCls==='danger'?'var(--danger)':fillCls==='warn'?'var(--warning)':'var(--accent)')+';border-radius:2px;transition:width 0.4s ease;"></div>'+
