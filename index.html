@@ -15,16 +15,17 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <script>
 (function(){
+  function rr(ctx,x,y,w,h,r){ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
   var c=document.createElement('canvas');c.width=180;c.height=180;
   var x=c.getContext('2d');
   var g=x.createLinearGradient(0,0,180,180);
   g.addColorStop(0,'#6c5dd3');g.addColorStop(1,'#8b5cf6');
-  x.beginPath();x.roundRect(0,0,180,180,40);x.fillStyle=g;x.fill();
+  x.beginPath();rr(x,0,0,180,180,40);x.fillStyle=g;x.fill();
   x.strokeStyle='#fff';x.lineWidth=8.5;x.lineCap='round';x.lineJoin='round';
-  x.beginPath();x.roundRect(42,63,96,68,10);x.stroke();
+  x.beginPath();rr(x,42,63,96,68,10);x.stroke();
   x.beginPath();x.moveTo(42,80);x.lineTo(138,80);x.stroke();
   x.beginPath();x.moveTo(59,63);x.lineTo(59,52);x.quadraticCurveTo(59,44,67,44);x.lineTo(96,44);x.stroke();
-  x.fillStyle='#fff';x.beginPath();x.roundRect(114,93,14,11,3);x.fill();
+  x.fillStyle='#fff';x.beginPath();rr(x,114,93,14,11,3);x.fill();
   var link=document.querySelector('link[rel="apple-touch-icon"]');
   if(link) link.href=c.toDataURL('image/png');
 })();
@@ -2679,6 +2680,12 @@ async function syncSheetDelete(sheet,rows){
       method:'POST',
       body:JSON.stringify({action:'delete',sheet:sheetName,ids:rows})
     });
+    if(res.ok){
+      var ids=rows.map(String);
+      if(_pendingDeletes[sheet]){
+        _pendingDeletes[sheet]=_pendingDeletes[sheet].filter(function(id){return ids.indexOf(id)===-1;});
+      }
+    }
     return res.ok;
   }catch(e){return false;}
 }

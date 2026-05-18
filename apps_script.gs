@@ -14,6 +14,7 @@ function doGet(e) {
     ['Gastos','Ingresos','Inversiones','PagosTDC','Metas','Recurrentes'].forEach(function(name) {
       var sheet = ss.getSheetByName(name);
       if (sheet && sheet.getLastRow() > 1) {
+        migrateHeaders(sheet, name);
         var key = name.charAt(0).toLowerCase() + name.slice(1);
         result[key] = sheetToArray(sheet);
       }
@@ -57,6 +58,7 @@ function doPost(e) {
   // Agregar fila
   if (data.action === 'append') {
     var sheet = getOrCreateSheet(ss, data.sheet);
+    migrateHeaders(sheet, data.sheet);
     sheet.appendRow(data.row);
     return jsonResponse({ ok: true });
   }
@@ -65,6 +67,7 @@ function doPost(e) {
   if (data.action === 'delete') {
     var sheet = ss.getSheetByName(data.sheet);
     if (!sheet || sheet.getLastRow() <= 1) return jsonResponse({ ok: true });
+    migrateHeaders(sheet, data.sheet);
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     var idCol = headers.indexOf('id');
     if (idCol === -1) return jsonResponse({ error: 'No id column in ' + data.sheet });
@@ -76,7 +79,6 @@ function doPost(e) {
         rowsToDelete.push(i + 1);
       }
     }
-    // Eliminar de abajo hacia arriba para no desalinear índices
     rowsToDelete.sort(function(a, b) { return b - a; });
     rowsToDelete.forEach(function(row) { sheet.deleteRow(row); });
     return jsonResponse({ ok: true, deleted: rowsToDelete.length });
@@ -181,4 +183,64 @@ function getHeaders(sheetName) {
     'CuentasInv': ['nombre','saldo','ultimaAct','tramos']
   };
   return map[sheetName] || [];
+}
+
+/**
+ * Auto-migra columnas faltantes a hojas existentes.
+ * Compara los headers actuales de la hoja con los esperados y agrega las columnas que falten.
+ * Tambien genera IDs unicos para filas que no tengan.
+ */
+function migrateHeaders(sheet, sheetName) {
+  var expected = getHeaders(sheetName);
+  if (!expected.length) return;
+  if (sheet.getLastRow() < 1) return;
+
+  var currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+    .map(function(h) { return String(h).trim(); })
+    .filter(function(h) { return h !== ''; });
+
+  var missing = [];
+  expected.forEach(function(h) {
+    if (currentHeaders.indexOf(h) === -1) missing.push(h);
+  });
+
+  if (missing.length === 0) {
+    fillMissingIds(sheet, currentHeaders);
+    return;
+  }
+
+  // Agregar columnas faltantes al final
+  missing.forEach(function(col) {
+    var nextCol = currentHeaders.length + 1;
+    sheet.getRange(1, nextCol).setValue(col);
+    currentHeaders.push(col);
+  });
+
+  fillMissingIds(sheet, currentHeaders);
+}
+
+/**
+ * Rellena IDs vacíos en la columna 'id' con un timestamp único.
+ */
+function fillMissingIds(sheet, headers) {
+  var idCol = headers.indexOf('id');
+  if (idCol === -1) return;
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return;
+
+  var idRange = sheet.getRange(2, idCol + 1, lastRow - 1, 1);
+  var ids = idRange.getValues();
+  var changed = false;
+  var baseTs = Date.now();
+
+  for (var i = 0; i < ids.length; i++) {
+    if (!ids[i][0] || String(ids[i][0]).trim() === '') {
+      ids[i][0] = baseTs + i + 1;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    idRange.setValues(ids);
+  }
 }
