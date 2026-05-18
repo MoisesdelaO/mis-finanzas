@@ -1879,24 +1879,37 @@ input[type="date"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-e
 <body data-theme="light">
 
 <!-- PANEL DE LOGIN -->
-<div id="auth-panel" style="display:flex;align-items:center;justify-content:center;width:100%;height:100vh;background:var(--bg);flex-direction:column;gap:30px;">
-  <div style="text-align:center;gap:20px;display:flex;flex-direction:column;align-items:center;max-width:380px;">
-    <div style="font-size:32px;font-weight:800;color:var(--text);">Mis Finanzas</div>
-    <div style="font-size:14px;color:var(--text-2);">Accede con tu correo para sincronizar tus datos en todos tus dispositivos.</div>
-    
-    <!-- LOGIN CON USUARIO/PASSWORD -->
-    <div style="width:100%;display:flex;flex-direction:column;gap:8px;">
-      <label for="auth-username" class="sr-only">Usuario</label>
-      <input type="text" id="auth-username" placeholder="Usuario" autocomplete="username" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:16px;background:var(--surface);color:var(--text);font-family:inherit;">
-      <label for="auth-password" class="sr-only">Contraseña</label>
-      <input type="password" id="auth-password" placeholder="Contraseña" autocomplete="current-password" style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:16px;background:var(--surface);color:var(--text);font-family:inherit;" onkeydown="if(event.key==='Enter') loginWithEmailPassword();">
-      <button id="btn-email-login" onclick="loginWithEmailPassword()" style="padding:12px 24px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">
+<div id="auth-panel" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:100dvh;background:var(--bg);flex-direction:column;padding:40px 24px;">
+  <div style="width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;">
+
+    <div style="width:72px;height:72px;border-radius:22px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;margin-bottom:28px;box-shadow:0 8px 24px rgba(108,93,211,0.3);">
+      <i data-lucide="wallet" style="width:32px;height:32px;color:#fff;stroke-width:2;"></i>
+    </div>
+
+    <div style="font-size:28px;font-weight:800;color:var(--text);letter-spacing:-0.02em;margin-bottom:8px;">Mis Finanzas</div>
+    <div style="font-size:14px;color:var(--text-3);text-align:center;line-height:1.5;margin-bottom:36px;">
+      Tu control financiero personal
+    </div>
+
+    <div style="width:100%;display:flex;flex-direction:column;gap:12px;margin-bottom:24px;">
+      <div style="position:relative;">
+        <label for="auth-username" class="sr-only">Usuario</label>
+        <i data-lucide="user" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--text-3);pointer-events:none;"></i>
+        <input type="text" id="auth-username" placeholder="Usuario" autocomplete="username" style="width:100%;padding:14px 14px 14px 44px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:16px;background:var(--surface);color:var(--text);font-family:inherit;transition:border-color 0.2s ease,box-shadow 0.2s ease;" onfocus="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px var(--accent-soft)';" onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none';">
+      </div>
+      <div style="position:relative;">
+        <label for="auth-password" class="sr-only">Contraseña</label>
+        <i data-lucide="lock" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--text-3);pointer-events:none;"></i>
+        <input type="password" id="auth-password" placeholder="Contraseña" autocomplete="current-password" style="width:100%;padding:14px 14px 14px 44px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:16px;background:var(--surface);color:var(--text);font-family:inherit;transition:border-color 0.2s ease,box-shadow 0.2s ease;" onfocus="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px var(--accent-soft)';" onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none';" onkeydown="if(event.key==='Enter') loginWithEmailPassword();">
+      </div>
+      <button id="btn-email-login" onclick="loginWithEmailPassword()" style="padding:15px 24px;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border:none;border-radius:var(--r-md);font-size:15px;font-weight:700;cursor:pointer;width:100%;transition:transform 0.2s cubic-bezier(0.34,1.56,0.64,1),box-shadow 0.2s ease;box-shadow:0 4px 12px rgba(108,93,211,0.3);letter-spacing:0.01em;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'" ontouchstart="this.style.transform='scale(0.97)'" ontouchend="this.style.transform='scale(1)'">
         Entrar
       </button>
     </div>
 
-    <div style="font-size:11px;color:var(--text-3);margin-top:10px;text-align:center;max-width:320px;">
-      Tu configuración se guardará automáticamente en la nube y podrás acceder desde cualquier dispositivo.
+    <div style="font-size:12px;color:var(--text-3);text-align:center;line-height:1.6;max-width:280px;">
+      <i data-lucide="cloud" style="width:13px;height:13px;display:inline;vertical-align:-2px;margin-right:4px;"></i>
+      Sincronización automática en la nube
     </div>
   </div>
 </div>
@@ -2100,7 +2113,7 @@ input[type="date"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-e
 <!-- ═══════════════════════════════════════════════════════════════════════
      BOTTOM NAVIGATION
      ═══════════════════════════════════════════════════════════════════════ -->
-<nav class="bottom-nav">
+<nav class="bottom-nav" style="display:none;">
   <button class="nav-item active" data-page="inicio" onclick="navigate('inicio')">
     <i data-lucide="home"></i>
     <span class="nav-label">Inicio</span>
@@ -2390,6 +2403,7 @@ function initFirebase(){
       } else {
         document.getElementById('auth-panel').style.display='flex';
         document.getElementById('app-main').style.display='none';
+        document.querySelector('.bottom-nav').style.display='none';
       }
     });
   }catch(e){
@@ -2401,6 +2415,7 @@ function initFirebase(){
 function mostrarApp(user){
   document.getElementById('auth-panel').style.display='none';
   document.getElementById('app-main').style.display='block';
+  document.querySelector('.bottom-nav').style.display='';
   
   // Cargar config de Firestore primero
   var p = (user && firebaseDB)
@@ -4347,40 +4362,60 @@ function verMsiDetalle(nombreTdc){
     return;
   }
 
-  var bodyHTML='';
-  msiList.forEach(function(m){
+  var totalMensual=msiList.reduce(function(s,m){return s+m.cuotaMes;},0);
+  var totalPorPagar=msiList.reduce(function(s,m){return s+m.cuotaMes*m.restantes;},0);
+
+  var summaryHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">'+
+      '<div style="background:linear-gradient(135deg,var(--accent-soft),var(--surface));border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-sm);padding:12px;text-align:center;">'+
+        '<div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Cuota mensual</div>'+
+        '<div style="font-size:18px;font-weight:800;font-family:\'JetBrains Mono\',monospace;color:var(--accent);">'+fmt(totalMensual)+'</div>'+
+      '</div>'+
+      '<div style="background:var(--danger-soft);border:1px solid color-mix(in srgb,var(--danger) 15%,transparent);border-radius:var(--r-sm);padding:12px;text-align:center;">'+
+        '<div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Total por pagar</div>'+
+        '<div style="font-size:18px;font-weight:800;font-family:\'JetBrains Mono\',monospace;color:var(--danger);">'+fmt(totalPorPagar)+'</div>'+
+      '</div>'+
+    '</div>';
+
+  var cardsHTML='';
+  msiList.forEach(function(m,idx){
     var fc=m.fechaCompra.substring(8,10)+'/'+m.fechaCompra.substring(5,7)+'/'+m.fechaCompra.substring(0,4);
     var pct=Math.round(m.mesActual/m.cuotas*100);
-    bodyHTML+=
-      '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:10px;">'+
-        '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">'+
-          '<div style="font-size:14px;font-weight:600;color:var(--text);">'+m.desc+'</div>'+
-          '<div style="font-size:11px;color:var(--text-3);white-space:nowrap;margin-left:8px;">'+fc+'</div>'+
+    var porPagar=m.cuotaMes*m.restantes;
+    var safeId=String(m.id).replace(/'/g,"\\'");
+    cardsHTML+=
+      '<div style="min-width:260px;max-width:300px;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;scroll-snap-align:start;'+(idx===0?'':'')+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'+
+          '<div style="font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">'+m.desc+'</div>'+
+          '<button onclick="appModalClose();setTimeout(function(){_editObj=null;editarGasto(\''+safeId+'\');},250);" style="width:32px;height:32px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-left:8px;transition:background 0.15s ease;" title="Editar"><i data-lucide="pencil" style="width:13px;height:13px;color:var(--text-3);"></i></button>'+
         '</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
-          '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Monto total</div><div style="font-size:15px;font-weight:700;font-family:\'JetBrains Mono\',monospace;">'+fmt(m.montoTotal)+'</div></div>'+
-          '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Cuota mensual</div><div style="font-size:15px;font-weight:700;font-family:\'JetBrains Mono\',monospace;color:var(--accent);">'+fmt(m.cuotaMes)+'</div></div>'+
+        '<div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">'+fc+' · '+m.cuotas+' meses</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">'+
+          '<div style="font-size:20px;font-weight:800;font-family:\'JetBrains Mono\',monospace;letter-spacing:-0.02em;">'+fmt(m.montoTotal)+'</div>'+
+          '<div style="font-size:13px;font-weight:700;font-family:\'JetBrains Mono\',monospace;color:var(--accent);">'+fmt(m.cuotaMes)+'<span style="font-size:10px;font-weight:500;color:var(--text-3);">/mes</span></div>'+
         '</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
-          '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Pagado</div><div style="font-size:14px;font-weight:600;font-family:\'JetBrains Mono\',monospace;color:var(--success);">'+fmt(m.cuotaMes*m.mesActual)+'</div></div>'+
-          '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Por pagar</div><div style="font-size:14px;font-weight:600;font-family:\'JetBrains Mono\',monospace;color:var(--danger);">'+fmt(m.cuotaMes*m.restantes)+'</div></div>'+
+        '<div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin:10px 0 8px;">'+
+          '<div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:3px;transition:width 0.5s cubic-bezier(0.25,1,0.5,1);"></div>'+
         '</div>'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-2);margin-bottom:6px;">'+
-          '<span>Mes '+m.mesActual+' de '+m.cuotas+'</span>'+
-          '<span>'+m.restantes+' restante'+(m.restantes!==1?'s':'')+'</span>'+
-        '</div>'+
-        '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">'+
-          '<div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:3px;transition:width 0.4s ease;"></div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;">'+
+          '<span style="color:var(--success);font-weight:600;">Mes '+m.mesActual+'/'+m.cuotas+'</span>'+
+          '<span style="color:var(--text-3);">Resta <b style="color:var(--danger);">'+fmt(porPagar)+'</b></span>'+
         '</div>'+
       '</div>';
   });
 
-  var totalMensual=msiList.reduce(function(s,m){return s+m.cuotaMes;},0);
-  bodyHTML+=
-    '<div class="tdc-detail-row" style="padding-top:8px;border-top:1px solid var(--border);">'+
-      '<span class="tdc-detail-label" style="font-weight:700;">Total mensual MSI</span>'+
-      '<span class="tdc-detail-value" style="color:var(--accent);font-weight:700;">'+fmt(totalMensual)+'</span>'+
-    '</div>';
+  var bodyHTML=summaryHTML;
+  if(msiList.length>1){
+    bodyHTML+=
+      '<div style="margin:0 -20px;padding:0 20px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;">'+
+        '<div style="display:flex;gap:10px;padding-bottom:4px;">'+cardsHTML+'</div>'+
+      '</div>'+
+      '<div style="display:flex;justify-content:center;gap:5px;margin-top:10px;">'+
+        msiList.map(function(_,i){return '<div style="width:6px;height:6px;border-radius:50%;background:var('+(i===0?'--accent':'--border')+');transition:background 0.2s ease;"></div>';}).join('')+
+      '</div>';
+  } else {
+    bodyHTML+='<div>'+cardsHTML+'</div>';
+  }
 
   appModalOpen({
     title:nombreTdc+' · MSI',
@@ -4394,6 +4429,21 @@ function verMsiDetalle(nombreTdc){
       if(r==='back') setTimeout(function(){onTdcClick(nombreTdc);},200);
     }
   });
+  if(msiList.length>1){
+    setTimeout(function(){
+      var scroller=document.querySelector('.app-modal-body [style*="overflow-x"]');
+      var dots=document.querySelectorAll('.app-modal-body [style*="justify-content: center"] div, .app-modal-body [style*="justify-content:center"] div');
+      if(scroller&&dots.length>1){
+        scroller.addEventListener('scroll',function(){
+          var scrollLeft=scroller.scrollLeft;
+          var cardW=270;
+          var idx=Math.round(scrollLeft/cardW);
+          dots.forEach(function(d,i){d.style.background='var('+(i===idx?'--accent':'--border')+')';});
+        });
+      }
+    },200);
+  }
+  renderIcons();
 }
 
 function onCashClick(){
