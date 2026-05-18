@@ -2028,7 +2028,7 @@ input[type="date"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-e
   <section class="page" id="page-stats">
     <div class="placeholder">
       <div class="placeholder-icon"><i data-lucide="bar-chart-3"></i></div>
-      <div class="placeholder-title">Estadísticas</div>
+      <div class="placeholder-title">Datos</div>
       <div class="placeholder-desc">Aquí irán las gráficas estilo donut + bars (foto 3): gastos por categoría, ahorro vs disponible, tendencia mensual.</div>
     </div>
   </section>
@@ -2115,7 +2115,7 @@ input[type="date"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-e
   </button>
   <button class="nav-item" data-page="stats" onclick="navigate('stats')">
     <i data-lucide="bar-chart-3"></i>
-    <span class="nav-label">Estadísticas</span>
+    <span class="nav-label">Datos</span>
   </button>
   <button class="nav-item" data-page="anual" onclick="navigate('anual')">
     <i data-lucide="calendar-days"></i>
@@ -4357,9 +4357,13 @@ function verMsiDetalle(nombreTdc){
           '<div style="font-size:14px;font-weight:600;color:var(--text);">'+m.desc+'</div>'+
           '<div style="font-size:11px;color:var(--text-3);white-space:nowrap;margin-left:8px;">'+fc+'</div>'+
         '</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
           '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Monto total</div><div style="font-size:15px;font-weight:700;font-family:\'JetBrains Mono\',monospace;">'+fmt(m.montoTotal)+'</div></div>'+
           '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Cuota mensual</div><div style="font-size:15px;font-weight:700;font-family:\'JetBrains Mono\',monospace;color:var(--accent);">'+fmt(m.cuotaMes)+'</div></div>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
+          '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Pagado</div><div style="font-size:14px;font-weight:600;font-family:\'JetBrains Mono\',monospace;color:var(--success);">'+fmt(m.cuotaMes*m.mesActual)+'</div></div>'+
+          '<div><div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Por pagar</div><div style="font-size:14px;font-weight:600;font-family:\'JetBrains Mono\',monospace;color:var(--danger);">'+fmt(m.cuotaMes*m.restantes)+'</div></div>'+
         '</div>'+
         '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-2);margin-bottom:6px;">'+
           '<span>Mes '+m.mesActual+' de '+m.cuotas+'</span>'+
