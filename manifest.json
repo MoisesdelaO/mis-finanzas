@@ -4,8 +4,8 @@
   "description": "Control de gastos y tarjetas de crédito",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a",
+  "background_color": "#6c5dd3",
+  "theme_color": "#6c5dd3",
   "icons": [
     {
       "src": "icon.svg",

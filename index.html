@@ -5,7 +5,7 @@
 <!-- Mis Finanzas v5.2 build:20260514 -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0a0a0a">
+<meta name="theme-color" content="#6c5dd3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Mis Finanzas">
@@ -17,10 +17,14 @@
 (function(){
   var c=document.createElement('canvas');c.width=180;c.height=180;
   var x=c.getContext('2d');
-  x.fillStyle='#1a1a1a';x.beginPath();x.roundRect(0,0,180,180,32);x.fill();
-  x.fillStyle='#71b8e8';x.beginPath();x.roundRect(14,40,152,100,18);x.fill();
-  x.fillStyle='#4a7fa8';x.fillRect(14,61,152,25);
-  x.fillStyle='#f0c030';x.beginPath();x.roundRect(104,93,40,29,7);x.fill();
+  var g=x.createLinearGradient(0,0,180,180);
+  g.addColorStop(0,'#6c5dd3');g.addColorStop(1,'#8b5cf6');
+  x.beginPath();x.roundRect(0,0,180,180,40);x.fillStyle=g;x.fill();
+  x.strokeStyle='#fff';x.lineWidth=9;x.lineCap='round';x.lineJoin='round';
+  x.beginPath();x.roundRect(41,55,98,70,13);x.stroke();
+  x.beginPath();x.moveTo(41,77);x.lineTo(139,77);x.stroke();
+  x.fillStyle='#fff';x.beginPath();x.roundRect(104,91,21,14,4);x.fill();
+  x.beginPath();x.moveTo(61,42);x.quadraticCurveTo(61,34,69,34);x.lineTo(100,34);x.quadraticCurveTo(108,34,108,42);x.lineTo(108,55);x.stroke();
   var link=document.querySelector('link[rel="apple-touch-icon"]');
   if(link) link.href=c.toDataURL('image/png');
 })();
@@ -2551,7 +2555,8 @@ function saveConfigToFirestore(){
   .catch(function(e){console.error('Error saving to Firestore:',e);});
 }
 
-function normalizeId(v){if(!v&&v!==0)return Date.now();if(typeof v==='number')return v;var n=parseFloat(v);return isNaN(n)?Date.now():Math.round(n);}
+var _idCounter=0;
+function normalizeId(v){if(!v&&v!==0)return Date.now()+(++_idCounter);if(typeof v==='number')return v;var n=parseFloat(v);return isNaN(n)?Date.now()+(++_idCounter):Math.round(n);}
 
 // ══════════════════════════════════════════════════════════
 // SYNC CON SHEETS (idéntico a v3.0)
@@ -4406,12 +4411,17 @@ function verMsiDetalle(nombreTdc){
 
   var bodyHTML=summaryHTML;
   if(msiList.length>1){
+    var arrowStyle='position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;box-shadow:0 2px 8px rgba(0,0,0,0.1);transition:opacity 0.2s ease,transform 0.15s cubic-bezier(0.34,1.56,0.64,1);';
     bodyHTML+=
-      '<div style="margin:0 -20px;padding:0 20px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;">'+
-        '<div style="display:flex;gap:10px;padding-bottom:4px;">'+cardsHTML+'</div>'+
+      '<div id="msi-carousel-wrap" style="position:relative;">'+
+        '<button id="msi-arrow-left" onclick="msiCarouselNav(-1)" style="'+arrowStyle+'left:-6px;opacity:0;pointer-events:none;" aria-label="Anterior"><i data-lucide="chevron-left" style="width:16px;height:16px;color:var(--text);"></i></button>'+
+        '<button id="msi-arrow-right" onclick="msiCarouselNav(1)" style="'+arrowStyle+'right:-6px;" aria-label="Siguiente"><i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--text);"></i></button>'+
+        '<div id="msi-scroller" style="overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;scroll-behavior:smooth;">'+
+          '<div style="display:flex;gap:10px;padding:4px 2px;">'+cardsHTML+'</div>'+
+        '</div>'+
       '</div>'+
-      '<div style="display:flex;justify-content:center;gap:5px;margin-top:10px;">'+
-        msiList.map(function(_,i){return '<div style="width:6px;height:6px;border-radius:50%;background:var('+(i===0?'--accent':'--border')+');transition:background 0.2s ease;"></div>';}).join('')+
+      '<div id="msi-dots" style="display:flex;justify-content:center;gap:6px;margin-top:12px;">'+
+        msiList.map(function(_,i){return '<button onclick="msiCarouselGoTo('+i+')" style="width:8px;height:8px;border-radius:50%;border:none;padding:0;cursor:pointer;background:var('+(i===0?'--accent':'--border')+');transition:background 0.2s ease,transform 0.2s cubic-bezier(0.34,1.56,0.64,1);" aria-label="Ir a '+(i+1)+'"></button>';}).join('')+
       '</div>';
   } else {
     bodyHTML+='<div>'+cardsHTML+'</div>';
@@ -4431,19 +4441,49 @@ function verMsiDetalle(nombreTdc){
   });
   if(msiList.length>1){
     setTimeout(function(){
-      var scroller=document.querySelector('.app-modal-body [style*="overflow-x"]');
-      var dots=document.querySelectorAll('.app-modal-body [style*="justify-content: center"] div, .app-modal-body [style*="justify-content:center"] div');
-      if(scroller&&dots.length>1){
-        scroller.addEventListener('scroll',function(){
-          var scrollLeft=scroller.scrollLeft;
-          var cardW=270;
-          var idx=Math.round(scrollLeft/cardW);
-          dots.forEach(function(d,i){d.style.background='var('+(i===idx?'--accent':'--border')+')';});
+      var scroller=document.getElementById('msi-scroller');
+      var dots=document.querySelectorAll('#msi-dots button');
+      var arrowL=document.getElementById('msi-arrow-left');
+      var arrowR=document.getElementById('msi-arrow-right');
+      var total=msiList.length;
+      var currentIdx=0;
+
+      function updateControls(){
+        var cards=scroller.querySelectorAll('[style*="scroll-snap-align"]');
+        if(!cards.length) return;
+        var cardW=cards[0].offsetWidth+10;
+        currentIdx=Math.round(scroller.scrollLeft/cardW);
+        if(currentIdx<0)currentIdx=0;
+        if(currentIdx>=total)currentIdx=total-1;
+        dots.forEach(function(d,i){
+          d.style.background='var('+(i===currentIdx?'--accent':'--border')+')';
+          d.style.transform=i===currentIdx?'scale(1.3)':'scale(1)';
         });
+        if(arrowL){arrowL.style.opacity=currentIdx>0?'1':'0';arrowL.style.pointerEvents=currentIdx>0?'auto':'none';}
+        if(arrowR){arrowR.style.opacity=currentIdx<total-1?'1':'0';arrowR.style.pointerEvents=currentIdx<total-1?'auto':'none';}
       }
+
+      window._msiCarouselState={scroller:scroller,total:total};
+      scroller.addEventListener('scroll',updateControls);
+      updateControls();
     },200);
   }
   renderIcons();
+}
+
+function msiCarouselNav(dir){
+  var s=window._msiCarouselState;if(!s)return;
+  var cards=s.scroller.querySelectorAll('[style*="scroll-snap-align"]');
+  if(!cards.length)return;
+  var cardW=cards[0].offsetWidth+10;
+  s.scroller.scrollBy({left:dir*cardW,behavior:'smooth'});
+}
+function msiCarouselGoTo(idx){
+  var s=window._msiCarouselState;if(!s)return;
+  var cards=s.scroller.querySelectorAll('[style*="scroll-snap-align"]');
+  if(!cards.length)return;
+  var cardW=cards[0].offsetWidth+10;
+  s.scroller.scrollTo({left:idx*cardW,behavior:'smooth'});
 }
 
 function onCashClick(){
@@ -5373,7 +5413,10 @@ function renderPerfilNuevo(){
       '<input type="file" id="import-file" accept=".json" style="display:none;" onchange="importarDatos(this)">'+
     '</div>'+
 
-    '<div style="text-align:center;font-size:11px;color:var(--text-3);padding:20px 0 40px;">Mis Finanzas v5.0 · Fase 3</div>';
+    '<div style="text-align:center;padding:20px 0 40px;display:flex;flex-direction:column;align-items:center;gap:8px;">'+
+      '<div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(108,93,211,0.25);"><i data-lucide="wallet" style="width:16px;height:16px;color:#fff;stroke-width:2;"></i></div>'+
+      '<div style="font-size:11px;color:var(--text-3);">Mis Finanzas v5.2</div>'+
+    '</div>';
 
   page.innerHTML='<div style="padding:0 20px;">'+html+'</div>';
   renderIcons();
