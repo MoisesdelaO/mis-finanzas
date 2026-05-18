@@ -4150,17 +4150,24 @@ function onTdcClick(nombreTdc){
   var bodyHTML='';
 
   // ── SALDO AL CORTE ──
+  var disponibleTxt=limite>0?fmtK(Math.max(0,limite-calc.pendiente))+' disponible':'';
   if(calc.totalAPagar>0){
     bodyHTML+=
       '<div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;">'+
-        '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Saldo al corte'+(fechaCorteStr?' · '+fechaCorteStr:'')+'</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
+          '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;">Saldo al corte'+(fechaCorteStr?' · '+fechaCorteStr:'')+'</div>'+
+          (disponibleTxt?'<div style="font-size:11px;color:var(--text-3);font-weight:500;">'+disponibleTxt+'</div>':'')+
+        '</div>'+
         '<div style="font-size:26px;font-weight:700;color:var(--text);letter-spacing:-0.02em;font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.totalAPagar)+'</div>'+
         (calc.fechaLimitePago?'<div style="font-size:12px;color:var(--text-2);margin-top:6px;">Pagar antes del '+fechaLimiteStr+' · '+estadoPagoTxt+'</div>':'')+
       '</div>';
   } else {
     bodyHTML+=
-      '<div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;text-align:center;">'+
-        '<div style="font-size:13px;font-weight:600;color:var(--success);">Sin saldo al corte</div>'+
+      '<div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+          '<div style="font-size:13px;font-weight:600;color:var(--success);">Sin saldo al corte</div>'+
+          (disponibleTxt?'<div style="font-size:11px;color:var(--text-3);font-weight:500;">'+disponibleTxt+'</div>':'')+
+        '</div>'+
       '</div>';
   }
 
@@ -4173,21 +4180,6 @@ function onTdcClick(nombreTdc){
       '</div>'+
       '<div style="font-size:15px;font-weight:700;color:var(--accent);font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.consumoCicloAct)+'</div>'+
     '</div>';
-
-  // ── CRÉDITO DISPONIBLE ──
-  if(limite>0){
-    bodyHTML+=
-      '<div style="padding:10px 0;border-bottom:1px solid var(--border);">'+
-        '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">'+
-          '<span style="font-size:12px;color:var(--text-2);">Crédito disponible</span>'+
-          '<span style="font-size:12px;font-weight:600;color:var(--text-2);">'+fmtK(Math.max(0,limite-calc.pendiente))+' / '+fmtK(limite)+'</span>'+
-        '</div>'+
-        '<div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">'+
-          '<div style="height:100%;width:'+pctUso+'%;background:'+(fillCls==='danger'?'var(--danger)':fillCls==='warn'?'var(--warning)':'var(--accent)')+';border-radius:2px;transition:width 0.4s ease;"></div>'+
-        '</div>'+
-        '<div style="font-size:11px;color:var(--text-3);margin-top:4px;">'+Math.round(pctUso)+'% utilizado</div>'+
-      '</div>';
-  }
 
   // ── MSI ACTIVOS ──
   if(calc.msiActivos>0){
