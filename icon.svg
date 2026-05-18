@@ -6,9 +6,14 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <g fill="none" stroke="#fff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M148 175h216c22 0 40 18 40 40v122c0 22-18 40-40 40H148c-22 0-40-18-40-40V215c0-22 18-40 40-40z"/>
-    <path d="M148 175v-18c0-17 14-31 31-31h100"/>
-    <circle cx="340" cy="280" r="14" fill="#fff" stroke="none"/>
+  <g fill="none" stroke="#fff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <!-- wallet body -->
+    <rect x="120" y="180" width="272" height="192" rx="28"/>
+    <!-- flap line -->
+    <path d="M120 228h272"/>
+    <!-- top fold -->
+    <path d="M168 180v-24c0-16 13-29 29-29h82"/>
   </g>
+  <!-- clasp -->
+  <rect x="324" y="272" width="40" height="32" rx="8" fill="#fff"/>
 </svg>

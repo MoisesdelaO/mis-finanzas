@@ -20,10 +20,11 @@
   var g=x.createLinearGradient(0,0,180,180);
   g.addColorStop(0,'#6c5dd3');g.addColorStop(1,'#8b5cf6');
   x.beginPath();x.roundRect(0,0,180,180,40);x.fillStyle=g;x.fill();
-  x.strokeStyle='#fff';x.lineWidth=8;x.lineCap='round';x.lineJoin='round';
-  x.beginPath();x.roundRect(40,62,100,60,13);x.stroke();
-  x.beginPath();x.moveTo(52,62);x.lineTo(52,50);x.quadraticCurveTo(52,42,60,42);x.lineTo(95,42);x.stroke();
-  x.fillStyle='#fff';x.beginPath();x.arc(118,92,5,0,Math.PI*2);x.fill();
+  x.strokeStyle='#fff';x.lineWidth=8.5;x.lineCap='round';x.lineJoin='round';
+  x.beginPath();x.roundRect(42,63,96,68,10);x.stroke();
+  x.beginPath();x.moveTo(42,80);x.lineTo(138,80);x.stroke();
+  x.beginPath();x.moveTo(59,63);x.lineTo(59,52);x.quadraticCurveTo(59,44,67,44);x.lineTo(96,44);x.stroke();
+  x.fillStyle='#fff';x.beginPath();x.roundRect(114,93,14,11,3);x.fill();
   var link=document.querySelector('link[rel="apple-touch-icon"]');
   if(link) link.href=c.toDataURL('image/png');
 })();
