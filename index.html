@@ -3040,7 +3040,7 @@ function calcularSaldoPendiente(tdc){
   var pendiente=Math.max(0,totalAPagar-pagado);
 
   // ── NUEVAS COMPRAS (ciclo actual, se pagarán en el próximo corte) ──
-  var consumoCicloAct=0,msiEnCicloAct=0;
+  var consumoCicloAct=0,msiEnCicloAct=0,consumoRegularCicloAct=0;
   DB.gastos.forEach(function(g){
     if(g.tdc!==tdc) return;
     if(g.msi==='Si'){
@@ -3053,7 +3053,10 @@ function calcularSaldoPendiente(tdc){
       if(md>=0 && md<cuotas){consumoCicloAct+=g.monto/cuotas;msiEnCicloAct++;}
     } else {
       var cicloG=g.ciclo||cicloDeGastoCorrecto(g.fecha,tdc);
-      if(cicloG===cicloAct && cicloAct!==cicloCorte) consumoCicloAct+=g.monto;
+      if(cicloG===cicloAct && cicloAct!==cicloCorte){
+        consumoCicloAct+=g.monto;
+        consumoRegularCicloAct+=g.monto;
+      }
     }
   });
 
@@ -3070,8 +3073,9 @@ function calcularSaldoPendiente(tdc){
     if(mesDesdeCompra<cuotas) msiActivos++;
   });
 
-  // Saldo actual en tiempo real = lo que realmente debes
-  var saldoActual=pendiente+consumoCicloAct;
+  // Saldo actual = lo que el banco muestra en tiempo real: estado de cuenta pendiente + cargos regulares post-corte
+  // NO incluye cuotas MSI futuras (esas ya están en pendiente desde el corte anterior)
+  var saldoActual=pendiente+consumoRegularCicloAct;
 
   // Días restantes para pagar
   var diasRestantes=Math.ceil((fechaLimitePago-hoy)/(1000*60*60*24));
@@ -4029,7 +4033,7 @@ function renderTdcList(){
     var calc=calcularSaldoPendiente(tdc);
     var cfg=DB.config.cortesTDC[tdc]||{};
     var limite=DB.config.limitesTDC&&DB.config.limitesTDC[tdc]||0;
-    var saldo=calc.pendiente;
+    var saldo=calc.saldoActual;
     var pct=limite>0?Math.min(100,(saldo/limite)*100):0;
     var fillCls=pct>70?'danger':pct>40?'warn':'';
 
@@ -5953,6 +5957,7 @@ function eliminarCuenta(cuenta){
 function editarTDC(tdc){
   var cfg=DB.config.cortesTDC[tdc]||{};
   var lim=(DB.config.limitesTDC&&DB.config.limitesTDC[tdc])||0;
+  var adeudo=(DB.config.adeudosPendientes&&DB.config.adeudosPendientes[tdc])||0;
   var bodyHTML=
     '<div class="field"><label class="field-label">Nombre de la tarjeta</label>'+
       '<input type="text" id="et-nombre" class="field-input" value="'+tdc+'" placeholder="Ej: BBVA Azul" maxlength="50"></div>'+
@@ -5961,7 +5966,10 @@ function editarTDC(tdc){
     '<div class="field"><label class="field-label">Días al pago (típico: 20)</label>'+
       '<input type="number" id="et-dias" class="field-input mono" value="'+(cfg.diasPago||20)+'" min="1" max="31"></div>'+
     '<div class="field"><label class="field-label">Límite de crédito</label>'+
-      '<input type="number" id="et-lim" class="field-input mono" value="'+lim+'" placeholder="0.00" step="0.01"></div>';
+      '<input type="number" id="et-lim" class="field-input mono" value="'+lim+'" placeholder="0.00" step="0.01"></div>'+
+    '<div class="field"><label class="field-label">Adeudo anterior (saldo no cubierto de ciclos pasados)</label>'+
+      '<input type="number" id="et-adeudo" class="field-input mono" value="'+adeudo+'" placeholder="0.00" step="0.01" inputmode="decimal"></div>'+
+    '<div class="field-hint">Pon 0 si tu estado de cuenta está al corriente. Usa este campo solo cuando el saldo a pagar del banco difiera del calculado por la app por deuda de periodos anteriores.</div>';
   appModalOpen({
     title:'Editar tarjeta',
     subtitle:tdc,
@@ -6003,16 +6011,21 @@ function editarTDC(tdc){
         tdc=nuevoNombre; // actualizar referencia
       }
       
+      var newAdeudo=parseFloat(document.getElementById('et-adeudo').value)||0;
+
       // Guardar configuraciones
       if(!DB.config.cortesTDC[tdc]) DB.config.cortesTDC[tdc]={};
       DB.config.cortesTDC[tdc].corte=corte;
       DB.config.cortesTDC[tdc].diasPago=dias;
       if(!DB.config.limitesTDC) DB.config.limitesTDC={};
       DB.config.limitesTDC[tdc]=newLim;
+      if(!DB.config.adeudosPendientes) DB.config.adeudosPendientes={};
+      DB.config.adeudosPendientes[tdc]=newAdeudo;
       save();
       pushConfigToSheets();
       toast('TDC actualizada ✓');
       renderPerfilNuevo();
+      renderDashboard();
     }
   });
 }
