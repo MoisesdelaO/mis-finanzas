@@ -3025,8 +3025,7 @@ function calcularSaldoPendiente(tdc){
     }
   });
   var saldoAlCorte=consumoRegulares+montoMsiCorte;
-  var adeudo=(DB.config.adeudosPendientes&&DB.config.adeudosPendientes[tdc])||0;
-  var totalAPagar=saldoAlCorte+adeudo;
+  var totalAPagar=saldoAlCorte;
 
   // ── PAGOS EN EL PERIODO ──
   // Pagos que cubren el saldo al corte: realizados desde el corte anterior hasta la fecha límite
@@ -3091,7 +3090,7 @@ function calcularSaldoPendiente(tdc){
     pendiente:pendiente,
     consumoCicloAnt:saldoAlCorte,
     pagado:pagado,
-    adeudo:adeudo,
+    adeudo:0,
     consumoCicloAct:consumoCicloAct,
     msiActivos:msiActivos,
     msiEnCorte:msiEnCorte,
@@ -5957,7 +5956,6 @@ function eliminarCuenta(cuenta){
 function editarTDC(tdc){
   var cfg=DB.config.cortesTDC[tdc]||{};
   var lim=(DB.config.limitesTDC&&DB.config.limitesTDC[tdc])||0;
-  var adeudo=(DB.config.adeudosPendientes&&DB.config.adeudosPendientes[tdc])||0;
   var bodyHTML=
     '<div class="field"><label class="field-label">Nombre de la tarjeta</label>'+
       '<input type="text" id="et-nombre" class="field-input" value="'+tdc+'" placeholder="Ej: BBVA Azul" maxlength="50"></div>'+
@@ -5966,10 +5964,7 @@ function editarTDC(tdc){
     '<div class="field"><label class="field-label">Días al pago (típico: 20)</label>'+
       '<input type="number" id="et-dias" class="field-input mono" value="'+(cfg.diasPago||20)+'" min="1" max="31"></div>'+
     '<div class="field"><label class="field-label">Límite de crédito</label>'+
-      '<input type="number" id="et-lim" class="field-input mono" value="'+lim+'" placeholder="0.00" step="0.01"></div>'+
-    '<div class="field"><label class="field-label">Adeudo anterior (saldo no cubierto de ciclos pasados)</label>'+
-      '<input type="number" id="et-adeudo" class="field-input mono" value="'+adeudo+'" placeholder="0.00" step="0.01" inputmode="decimal"></div>'+
-    '<div class="field-hint">Pon 0 si tu estado de cuenta está al corriente. Usa este campo solo cuando el saldo a pagar del banco difiera del calculado por la app por deuda de periodos anteriores.</div>';
+      '<input type="number" id="et-lim" class="field-input mono" value="'+lim+'" placeholder="0.00" step="0.01"></div>';
   appModalOpen({
     title:'Editar tarjeta',
     subtitle:tdc,
@@ -6011,16 +6006,12 @@ function editarTDC(tdc){
         tdc=nuevoNombre; // actualizar referencia
       }
       
-      var newAdeudo=parseFloat(document.getElementById('et-adeudo').value)||0;
-
       // Guardar configuraciones
       if(!DB.config.cortesTDC[tdc]) DB.config.cortesTDC[tdc]={};
       DB.config.cortesTDC[tdc].corte=corte;
       DB.config.cortesTDC[tdc].diasPago=dias;
       if(!DB.config.limitesTDC) DB.config.limitesTDC={};
       DB.config.limitesTDC[tdc]=newLim;
-      if(!DB.config.adeudosPendientes) DB.config.adeudosPendientes={};
-      DB.config.adeudosPendientes[tdc]=newAdeudo;
       save();
       pushConfigToSheets();
       toast('TDC actualizada ✓');
