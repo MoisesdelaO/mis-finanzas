@@ -2665,7 +2665,10 @@ function objToSheetRow(sheetName,obj){
   var headers={
     'gastos':['fecha','desc','cat','monto','tdc','mes','msi','meses','notas','ciclo','id'],
     'ingresos':['fecha','tipo','desc','monto','mes','id'],
-    'pagosTDC':['fecha','tdc','mes','consumo','monto','dif','estado','notas','ciclo','id']
+    'pagosTDC':['fecha','tdc','mes','consumo','monto','dif','estado','notas','ciclo','id'],
+    'inversiones':['periodo','cuenta','ant','actual','dif','notas','id'],
+    'metas':['nombre','objetivo','fecha','actual','notas','id'],
+    'recurrentes':['desc','monto','dia','cat','tdc','id']
   };
   var h=headers[sheetName]||[];
   return h.map(function(k){return obj[k]!==undefined?obj[k]:'';});
@@ -2916,6 +2919,16 @@ function fechaLegible(fecha){
   var d=new Date(fecha);
   return d.getDate()+' de '+meses[d.getMonth()];
 }
+function fechaLegibleCompleta(fechaStr){
+  var meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var s=String(fechaStr||'').split('T')[0];
+  var p=s.split('-');
+  if(p.length<3) return s;
+  var dia=parseInt(p[2])||0;
+  var mes=parseInt(p[1])-1;
+  var anio=p[0];
+  return dia+' - '+(meses[mes]||'?')+' - '+anio;
+}
 
 function fechaPagoReal(corte,diasPago){
   var diaCorte=parseInt(corte)||0;
@@ -3072,9 +3085,8 @@ function calcularSaldoPendiente(tdc){
     if(mesDesdeCompra<cuotas) msiActivos++;
   });
 
-  // Saldo actual = lo que el banco muestra en tiempo real: estado de cuenta pendiente + cargos regulares post-corte
-  // NO incluye cuotas MSI futuras (esas ya están en pendiente desde el corte anterior)
-  var saldoActual=pendiente+consumoRegularCicloAct;
+  // Saldo actual = pendiente del corte + todas las compras del ciclo actual (regulares + MSI)
+  var saldoActual=pendiente+consumoCicloAct;
 
   // Días restantes para pagar
   var diasRestantes=Math.ceil((fechaLimitePago-hoy)/(1000*60*60*24));
@@ -3215,13 +3227,22 @@ function cicloDelPago(fechaPagoStr,tdc){
   var diaCorte=parseInt(cfg.corte);
   var d=new Date(String(fechaPagoStr).split('T')[0]+'T12:00:00');
   if(isNaN(d.getTime())) return '';
-  var fechaCorteRef;
+  var year,mes;
   if(d.getDate()>diaCorte){
-    fechaCorteRef=new Date(d.getFullYear(),d.getMonth(),diaCorte,12,0,0);
+    // El corte más reciente fue este mes
+    year=d.getFullYear();
+    mes=d.getMonth();
   } else {
-    fechaCorteRef=new Date(d.getFullYear(),d.getMonth()-1,diaCorte,12,0,0);
+    // El corte más reciente fue el mes pasado
+    year=d.getFullYear();
+    mes=d.getMonth()-1;
+    if(mes<0){mes=11;year--;}
   }
-  return cicloDeGastoCorrecto(fechaCorteRef.toISOString().split('T')[0],tdc);
+  // El ciclo que cortó se identifica por el mes al que pertenecen los gastos
+  // Un gasto con fecha <= diaCorte pertenece al ciclo de ese mes
+  // Un gasto con fecha > diaCorte pertenece al ciclo del mes siguiente
+  // El corte del mes X cierra el ciclo X → retornamos year-mes (1-based)
+  return year+'-'+String(mes+1).padStart(2,'0');
 }
 
 function eliminarGastoById(id){
@@ -3330,6 +3351,7 @@ function renderMovsPage(){
   });
 
   var totalGastos=movs.filter(function(m){return m.type==='gasto';}).reduce(function(s,m){return s+m.monto;},0);
+  var totalIngresos=movs.filter(function(m){return m.type==='ingreso';}).reduce(function(s,m){return s+m.monto;},0);
   var totalPagos=movs.filter(function(m){return m.type==='pago';}).reduce(function(s,m){return s+m.monto;},0);
 
   var hayFiltros=(f.tipo!=='todos'||f.tdc!=='todos'||f.cat!=='todos'||f.desde||f.hasta);
@@ -3377,7 +3399,7 @@ function renderMovsPage(){
   var html=''+
     '<div class="page-header-bar">'+
       '<button class="icon-btn" onclick="goBack()" aria-label="Volver"><i data-lucide="arrow-left"></i></button>'+
-      '<div class="title">Gastos</div>'+
+      '<div class="title">Movimientos</div>'+
       '<button class="icon-btn" onclick="exportarMovsCSV()" aria-label="Exportar CSV"><i data-lucide="download"></i></button>'+
     '</div>'+
 
@@ -3405,7 +3427,6 @@ function renderMovsPage(){
 
     '<div class="filter-summary">'+
       '<span>'+movs.length+' movimiento'+(movs.length===1?'':'s')+'</span>'+
-      '<span class="total" style="color:var(--danger);">Total: -'+fmtK(totalGastos)+'</span>'+
     '</div>'+
 
     listaHTML;
@@ -3664,7 +3685,20 @@ function combinarMovimientos(f){
       });
     });
   }
-  // Ingresos se muestran en su propia página, no aquí
+  if(f.tipo==='todos' || f.tipo==='ingreso'){
+    DB.ingresos.forEach(function(i){
+      if(f.tdc!=='todos') return;
+      if(f.cat!=='todos') return;
+      if(f.desde && (i.fecha||'')<f.desde) return;
+      if(f.hasta && (i.fecha||'')>f.hasta) return;
+      movs.push({
+        type:'ingreso',id:i.id,fecha:i.fecha,desc:i.desc||i.tipo,
+        cat:'',
+        monto:i.monto,
+        meta:i.tipo||'Ingreso'
+      });
+    });
+  }
   if(f.tipo==='todos' || f.tipo==='pago'){
     DB.pagosTDC.forEach(function(p){
       if(f.tdc!=='todos' && p.tdc!==f.tdc) return;
@@ -3720,7 +3754,7 @@ function verDetalleGasto(id){
   if(!g){toast('Gasto no encontrado','err');return;}
   var bodyHTML=
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Monto</span><span class="tdc-detail-value" style="color:var(--danger);font-size:15px;">'+fmt(g.monto)+'</span></div>'+
-    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value" style="font-family:inherit;">'+g.fecha+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value" style="font-family:inherit;">'+fechaLegibleCompleta(g.fecha)+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Descripción</span><span class="tdc-detail-value" style="font-family:inherit;">'+(g.desc||'—')+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Categoría</span><span class="tdc-detail-value" style="font-family:inherit;">'+(g.cat||'—')+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">TDC / Efectivo</span><span class="tdc-detail-value" style="font-family:inherit;">'+(g.tdc||'—')+'</span></div>'+
@@ -3728,7 +3762,7 @@ function verDetalleGasto(id){
     (g.notas?'<div class="tdc-detail-row"><span class="tdc-detail-label">Notas</span><span class="tdc-detail-value" style="font-family:inherit;font-weight:400;">'+g.notas+'</span></div>':'');
   appModalOpen({
     title:'Gasto',
-    subtitle:g.fecha,
+    subtitle:fechaLegibleCompleta(g.fecha),
     bodyHTML:bodyHTML,
     actions:[
       {label:'Eliminar',style:'danger',value:'del'},
@@ -3807,7 +3841,7 @@ function verDetalleGasto_obj(g){
     (g.notas?'<div class="tdc-detail-row"><span class="tdc-detail-label">Notas</span><span class="tdc-detail-value">'+g.notas+'</span></div>':'');
   var gastoRef=g;
   appModalOpen({
-    title:'Gasto',subtitle:String(g.fecha||'').split('T')[0],bodyHTML:bodyHTML,
+    title:'Gasto',subtitle:fechaLegibleCompleta(g.fecha),bodyHTML:bodyHTML,
     actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
     onResult:function(r){
       if(r==='edit') setTimeout(function(){_editObj=gastoRef;editarGasto(gastoRef.id);},250);
@@ -3819,12 +3853,12 @@ function verDetalleGasto_obj(g){
 function verDetalleIngreso_obj(i){
   var bodyHTML=
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Monto</span><span class="tdc-detail-value" style="color:var(--success);font-size:15px;">'+fmt(i.monto)+'</span></div>'+
-    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value">'+String(i.fecha||'').split('T')[0]+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value">'+fechaLegibleCompleta(i.fecha)+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Tipo</span><span class="tdc-detail-value">'+(i.tipo||'—')+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Descripción</span><span class="tdc-detail-value">'+(i.desc||'—')+'</span></div>';
   var ingRef=i;
   appModalOpen({
-    title:'Ingreso',subtitle:String(i.fecha||'').split('T')[0],bodyHTML:bodyHTML,
+    title:'Ingreso',subtitle:fechaLegibleCompleta(i.fecha),bodyHTML:bodyHTML,
     actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
     onResult:function(r){
       if(r==='edit') setTimeout(function(){_editObj=ingRef;editarIngreso(ingRef.id);},250);
@@ -3836,12 +3870,12 @@ function verDetalleIngreso_obj(i){
 function verDetallePago_obj(p){
   var bodyHTML=
     '<div class="tdc-detail-row"><span class="tdc-detail-label">Monto</span><span class="tdc-detail-value" style="color:var(--info);font-size:15px;">'+fmt(p.monto)+'</span></div>'+
-    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value">'+String(p.fecha||'').split('T')[0]+'</span></div>'+
+    '<div class="tdc-detail-row"><span class="tdc-detail-label">Fecha</span><span class="tdc-detail-value">'+fechaLegibleCompleta(p.fecha)+'</span></div>'+
     '<div class="tdc-detail-row"><span class="tdc-detail-label">TDC</span><span class="tdc-detail-value">'+(p.tdc||'—')+'</span></div>'+
     (p.notas?'<div class="tdc-detail-row"><span class="tdc-detail-label">Notas</span><span class="tdc-detail-value">'+p.notas+'</span></div>':'');
   var pagoRef=p;
   appModalOpen({
-    title:'Pago a TDC',subtitle:String(p.fecha||'').split('T')[0],bodyHTML:bodyHTML,
+    title:'Pago a TDC',subtitle:fechaLegibleCompleta(p.fecha),bodyHTML:bodyHTML,
     actions:[{label:'Eliminar',style:'danger',value:'del'},{label:'Editar',style:'primary',value:'edit'}],
     onResult:function(r){
       if(r==='edit') setTimeout(function(){_editObj=pagoRef;editarPago(pagoRef.id);},250);
@@ -3958,8 +3992,16 @@ function montoRealMensual(g){
 function gastoEnMes(g, mesKey){
   if(!g.fecha) return false;
   var p=mesKey.split('-');var year=parseInt(p[0]);var mesIdx=parseInt(p[1])-1;
+
+  if(g.msi==='Si' && g.meses && parseInt(g.meses)>0){
+    var cuotas=parseInt(g.meses);
+    var fc=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
+    if(isNaN(fc.getTime())) return false;
+    var mesesDiff=(year-fc.getFullYear())*12+(mesIdx-fc.getMonth());
+    return mesesDiff>=0 && mesesDiff<cuotas;
+  }
+
   var mesNombre=MESES_ES[mesIdx];
-  // Match por mes (campo de v3.0) + año (extraído de fecha)
   if(g.mes!==mesNombre) return false;
   var yr=parseInt(String(g.fecha||'').split('T')[0].split(' ')[0].substring(0,4));
   return yr===year;
@@ -4036,20 +4078,31 @@ function renderTdcList(){
     var pct=limite>0?Math.min(100,(saldo/limite)*100):0;
     var fillCls=pct>70?'danger':pct>40?'warn':'';
 
-    var metaCorte=cfg.corte?'Corte día '+cfg.corte:'';
-    var metaVence='';
-    if(calc.fechaLimitePago){
-      metaVence='Fecha de pago '+fechaLegible(calc.fechaLimitePago);
-    }
-    var metaTxt=(metaCorte?metaCorte:'')+(metaVence?' · '+metaVence:'');
-
     var msiBadge=calc.msiActivos>0
       ? '<span class="tdc-badge-msi has-msi">'+calc.msiActivos+' MSI</span>':'';
-    var saldoStr=fmtK(saldo);
-    var limStr=limite>0?'de '+fmtK(limite):'';
     var imgFallback=b.img
       ? '<img src="'+b.img+'" alt="'+tdc+'" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\''+b.ini+'\';">'
       : b.ini;
+
+    // Payment info line
+    var pagoLine='';
+    if(calc.pendiente>0){
+      var diasTxt=calc.diasRestantes===0?'Vence hoy':calc.diasRestantes===1?'Vence mañana':calc.diasRestantes<0?'Vencido':'Quedan '+calc.diasRestantes+' días';
+      var diasColor=calc.diasRestantes!==null&&calc.diasRestantes<=3?'var(--danger)':'var(--text-3)';
+      pagoLine='<div style="font-size:11px;color:'+diasColor+';font-weight:500;">Pagar antes del '+(calc.fechaLimitePago?fechaLegible(calc.fechaLimitePago):'')+' · '+diasTxt+'</div>';
+    } else if(calc.totalAPagar>0){
+      pagoLine='<div style="font-size:11px;color:var(--success);font-weight:600;">Pagada este corte</div>';
+    } else {
+      pagoLine='<div style="font-size:11px;color:var(--text-3);">Sin saldo al corte</div>';
+    }
+
+    // Secondary: total owed + available credit
+    var disponible=limite>0?Math.max(0,limite-saldo):0;
+    var secondLine='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:6px;">'+
+      '<span>Total adeudado: '+fmtK(saldo)+'</span>'+
+      (limite>0?'<span>Disponible: '+fmtK(disponible)+' de '+fmtK(limite)+'</span>':'')+
+    '</div>';
+
     return '<div class="tdc-row full" onclick="onTdcClick(\''+tdc.replace(/'/g,"\\'")+'\')">'+
       '<div class="tdc-top">'+
         '<div class="bank-logo '+b.cls+'">'+imgFallback+'</div>'+
@@ -4058,13 +4111,14 @@ function renderTdcList(){
             '<span class="tdc-name">'+tdc+'</span>'+
             msiBadge+
           '</div>'+
-          '<div class="tdc-meta">'+metaTxt+'</div>'+
+          pagoLine+
         '</div>'+
         '<div class="tdc-amount">'+
-          '<div class="saldo mono">'+saldoStr+'</div>'+
-          '<div class="util">'+limStr+'</div>'+
+          '<div class="saldo mono" style="color:'+(calc.pendiente>0?'var(--danger)':'var(--success)')+';">'+fmtK(calc.pendiente)+'</div>'+
+          '<div class="util" style="font-size:10px;">por pagar</div>'+
         '</div>'+
       '</div>'+
+      secondLine+
       '<div class="tdc-progress"><div class="tdc-progress-fill '+fillCls+'" style="width:'+pct+'%"></div></div>'+
     '</div>';
   }).join('');
@@ -4139,7 +4193,7 @@ function togglePatrimonio(){
 function onTdcClick(nombreTdc){
   var calc=calcularSaldoPendiente(nombreTdc);
   var limite=DB.config.limitesTDC&&DB.config.limitesTDC[nombreTdc]||0;
-  var pctUso=limite>0?Math.min(100,(calc.pendiente/limite)*100):0;
+  var pctUso=limite>0?Math.min(100,(calc.saldoActual/limite)*100):0;
   var b=bankInfo(nombreTdc);
   var fillCls=pctUso>70?'danger':pctUso>40?'warn':'';
 
@@ -4161,7 +4215,7 @@ function onTdcClick(nombreTdc){
   var bodyHTML='';
 
   // ── SALDO AL CORTE ──
-  var disponibleTxt=limite>0?fmtK(Math.max(0,limite-calc.pendiente))+' disponible':'';
+  var disponibleTxt=limite>0?fmtK(Math.max(0,limite-calc.saldoActual))+' disponible':'';
   if(calc.totalAPagar>0){
     bodyHTML+=
       '<div style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;">'+
@@ -4677,9 +4731,7 @@ function submitForm(){
         g.mes=mesEsFromKey(fecha.substring(0,7));
         g.ciclo=cicloDeGastoCorrecto(fecha,tdc);
         save();
-        // Para sincronizar edits con Sheets: borramos el viejo y agregamos nuevo
-        syncSheetDelete('gastos',[_formEditId]);
-        pushSheets('gastos',g);
+        syncSheetDelete('gastos',[_formEditId]).then(function(){pushSheets('gastos',g);});
         toast('Gasto actualizado ✓');
       }
     } else {
@@ -4696,8 +4748,7 @@ function submitForm(){
         i.fecha=fecha;i.monto=monto;i.tipo=tipo;i.desc=desc;
         i.mes=mesEsFromKey(fecha.substring(0,7));
         save();
-        syncSheetDelete('ingresos',[_formEditId]);
-        pushSheets('ingresos',i);
+        syncSheetDelete('ingresos',[_formEditId]).then(function(){pushSheets('ingresos',i);});
         toast('Ingreso actualizado ✓');
       }
     } else {
@@ -4716,8 +4767,7 @@ function submitForm(){
         p.mes=mesEsFromKey(fecha.substring(0,7));
         p.ciclo=cicloDelPago(fecha,tdc);
         save();
-        syncSheetDelete('pagosTDC',[_formEditId]);
-        pushSheets('pagosTDC',p);
+        syncSheetDelete('pagosTDC',[_formEditId]).then(function(){pushSheets('pagosTDC',p);});
         toast('Pago actualizado ✓');
       }
     } else {
@@ -6003,9 +6053,13 @@ function editarTDC(tdc){
           DB.config.adeudosPendientes[nuevoNombre]=DB.config.adeudosPendientes[tdc];
           delete DB.config.adeudosPendientes[tdc];
         }
-        tdc=nuevoNombre; // actualizar referencia
+        // Actualizar gastos y pagos que referencian el nombre viejo
+        DB.gastos.forEach(function(g){if(g.tdc===tdc) g.tdc=nuevoNombre;});
+        DB.pagosTDC.forEach(function(p){if(p.tdc===tdc) p.tdc=nuevoNombre;});
+        DB.recurrentes.forEach(function(r){if(r.tdc===tdc) r.tdc=nuevoNombre;});
+        tdc=nuevoNombre;
       }
-      
+
       // Guardar configuraciones
       if(!DB.config.cortesTDC[tdc]) DB.config.cortesTDC[tdc]={};
       DB.config.cortesTDC[tdc].corte=corte;
