@@ -55,10 +55,24 @@ function doPost(e) {
   var data = JSON.parse(e.postData.contents);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // Agregar fila
+  // Agregar fila (idempotente: no duplica si el ID ya existe)
   if (data.action === 'append') {
     var sheet = getOrCreateSheet(ss, data.sheet);
     migrateHeaders(sheet, data.sheet);
+    // Buscar columna de ID para verificar duplicados
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var idCol = headers.indexOf('id');
+    if (idCol !== -1 && data.row[idCol]) {
+      var newId = String(data.row[idCol]);
+      if (sheet.getLastRow() > 1) {
+        var existingIds = sheet.getRange(2, idCol + 1, sheet.getLastRow() - 1, 1).getValues();
+        for (var i = 0; i < existingIds.length; i++) {
+          if (String(existingIds[i][0]) === newId) {
+            return jsonResponse({ ok: true, duplicate: true });
+          }
+        }
+      }
+    }
     sheet.appendRow(data.row);
     return jsonResponse({ ok: true });
   }

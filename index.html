@@ -2494,13 +2494,13 @@ function mostrarApp(user){
         return pullFromSheets();
       }).then(function(ok){if(ok) renderAll();});
     }
-    // Auto-sync cada 2 minutos (120s) — suficiente margen para que los pushes completen
+    // Auto-sync cada 60s — _pushInProgress evita race conditions con pushes
     if(window._autoSyncInterval) clearInterval(window._autoSyncInterval);
     window._autoSyncInterval=setInterval(function(){
       if(DB.config.scriptURL && DB.config.scriptURL.trim()){
         pullFromSheets().then(function(ok){if(ok) renderAll();});
       }
-    }, 120*1000);
+    }, 60*1000);
   });
 }
 
@@ -2736,32 +2736,81 @@ async function pushSheets(sheet,row,_isRetry){
   var rowId=String(row.id||'');
   var rowArray=objToSheetRow(sheet,row);
   var sheetName=_sheetNameMap[sheet]||sheet;
+  var payload=JSON.stringify({action:'append',sheet:sheetName,row:rowArray});
 
   _pushInProgress++;
   try{
     console.log('Enviando a Sheets...',sheetName,rowArray);
-    var res=await fetch(DB.config.scriptURL,{
-      method:'POST',
-      redirect:'follow',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'append',sheet:sheetName,row:rowArray})
-    });
-    console.log('Respuesta Sheets:',res.ok,res.status,res.url);
-    // Leer body para confirmar que Apps Script procesó la solicitud
-    try{var txt=await res.text();console.log('Sheets body:',txt.substring(0,200));}catch(e2){}
-    // NO quitamos de _pendingPushIds aquí — se limpia en pullFromSheets
-    // cuando el item aparece confirmado en la data de Sheets
-    return res.ok;
+    var ok=false;
+    try{
+      // Intento 1: fetch normal con CORS
+      var res=await fetch(DB.config.scriptURL,{
+        method:'POST',
+        redirect:'follow',
+        headers:{'Content-Type':'text/plain'},
+        body:payload
+      });
+      console.log('Respuesta Sheets:',res.ok,res.status,res.type);
+      ok=res.ok;
+      try{var txt=await res.text();console.log('Sheets body:',txt.substring(0,200));}catch(e2){}
+    }catch(corsErr){
+      // Intento 2: si falla por CORS/redirect, usar no-cors
+      // Google Apps Script ejecuta doPost() ANTES del redirect,
+      // así que los datos SÍ llegan aunque la respuesta sea opaca
+      console.warn('CORS error, reintentando con no-cors:',corsErr.message);
+      try{
+        await fetch(DB.config.scriptURL,{
+          method:'POST',
+          mode:'no-cors',
+          headers:{'Content-Type':'text/plain'},
+          body:payload
+        });
+        console.log('✓ Enviado con no-cors (respuesta opaca, datos probablemente llegaron)');
+        ok=true; // Asumimos éxito — doPost() se ejecuta antes del redirect
+      }catch(e3){
+        console.error('Error también con no-cors:',e3);
+        throw e3;
+      }
+    }
+    // Programar un pull de confirmación 5 segundos después
+    // para verificar que el dato llegó a Sheets
+    _scheduleConfirmPull();
+    return ok;
   }catch(e){
     console.error('Error pushSheets:',e);
     if(!_isRetry){
       _pushQueue.push({sheet:sheet,row:row,retries:0});
       console.log('⏳ Encolado para reintento:',sheet,rowId);
     }
+    // Aun así programar un pull — doPost() pudo haber corrido antes del error
+    _scheduleConfirmPull();
     return false;
   }finally{
     _pushInProgress--;
   }
+}
+
+// Programar un pull de confirmación tras un push
+// Usa debounce para no hacer múltiples pulls si hay varios pushes seguidos
+var _confirmPullTimer=null;
+function _scheduleConfirmPull(){
+  if(_confirmPullTimer) clearTimeout(_confirmPullTimer);
+  _confirmPullTimer=setTimeout(function(){
+    _confirmPullTimer=null;
+    if(_pushInProgress>0){
+      // Aún hay pushes en vuelo, reprogramar
+      _scheduleConfirmPull();
+      return;
+    }
+    console.log('🔄 Pull de confirmación post-push...');
+    pullFromSheets().then(function(ok){
+      if(ok){
+        save();
+        renderAll();
+        console.log('✓ Pull de confirmación completado');
+      }
+    });
+  },5000); // 5 segundos después del último push
 }
 
 // Reintentar pushes fallidos
@@ -2825,33 +2874,48 @@ var _sheetNameMap={gastos:'Gastos',ingresos:'Ingresos',pagosTDC:'PagosTDC',inver
 async function syncSheetDelete(sheet,rows){
   if(!DB.config.scriptURL)return false;
   var sheetName=_sheetNameMap[sheet]||sheet;
+  var payload=JSON.stringify({action:'delete',sheet:sheetName,ids:rows});
   try{
-    var res=await fetch(DB.config.scriptURL,{
-      method:'POST',
-      redirect:'follow',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'delete',sheet:sheetName,ids:rows})
-    });
-    if(res.ok){
+    var ok=false;
+    try{
+      var res=await fetch(DB.config.scriptURL,{
+        method:'POST',redirect:'follow',
+        headers:{'Content-Type':'text/plain'},body:payload
+      });
+      ok=res.ok;
+    }catch(e){
+      // Fallback no-cors — doPost() se ejecuta antes del redirect
+      await fetch(DB.config.scriptURL,{
+        method:'POST',mode:'no-cors',
+        headers:{'Content-Type':'text/plain'},body:payload
+      });
+      ok=true;
+    }
+    if(ok){
       var ids=rows.map(String);
       if(_pendingDeletes[sheet]){
         _pendingDeletes[sheet]=_pendingDeletes[sheet].filter(function(id){return ids.indexOf(id)===-1;});
       }
+      save();
     }
-    return res.ok;
+    return ok;
   }catch(e){return false;}
 }
 
 async function pushCuentasInv(){
   if(!DB.config.scriptURL)return;
+  var payload=JSON.stringify({action:'syncCuentasInv',cuentas:DB.cuentasInv});
   try{
     await fetch(DB.config.scriptURL,{
-      method:'POST',
-      redirect:'follow',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'syncCuentasInv',cuentas:DB.cuentasInv})
+      method:'POST',redirect:'follow',
+      headers:{'Content-Type':'text/plain'},body:payload
     });
-  }catch(e){}
+  }catch(e){
+    try{await fetch(DB.config.scriptURL,{
+      method:'POST',mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},body:payload
+    });}catch(e2){}
+  }
 }
 
 async function pushConfigToSheets(){
@@ -2867,12 +2931,18 @@ async function pushConfigToSheets(){
       cuentas:DB.config.cuentas,
       tiposIngreso:DB.config.tiposIngreso
     };
-    await fetch(DB.config.scriptURL,{
-      method:'POST',
-      redirect:'follow',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'syncConfig',config:configToSync})
-    });
+    var payload=JSON.stringify({action:'syncConfig',config:configToSync});
+    try{
+      await fetch(DB.config.scriptURL,{
+        method:'POST',redirect:'follow',
+        headers:{'Content-Type':'text/plain'},body:payload
+      });
+    }catch(e){
+      await fetch(DB.config.scriptURL,{
+        method:'POST',mode:'no-cors',
+        headers:{'Content-Type':'text/plain'},body:payload
+      });
+    }
   }catch(e){console.error('Error syncing config:',e);}
 }
 
