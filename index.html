@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<!-- Mis Finanzas v5.2 build:20260514 -->
+<!-- Mis Finanzas v5.3 build:20260527 -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#6c5dd3">
@@ -2234,6 +2234,7 @@ var _pendingDeletes={gastos:[],ingresos:[],pagosTDC:[],inversiones:[]};
 var _pendingPushIds={gastos:[],ingresos:[],pagosTDC:[],inversiones:[],recurrentes:[]};
 var _pushQueue=[];
 var _pushInProgress=0;
+var _lastSuccessfulPull=0; // timestamp del último pull exitoso — items más recientes NUNCA se borran
 let connected=false;
 let syncing=false;
 let _patHidden=false;
@@ -2420,6 +2421,9 @@ function load(){
         if(pd.inversiones) _pendingDeletes.inversiones=pd.inversiones;
       }catch(e3){}
     }
+    // Restaurar timestamp del último pull exitoso
+    var lsp=localStorage.getItem('mf_lastSuccessfulPull');
+    if(lsp) _lastSuccessfulPull=parseInt(lsp)||0;
     sincronizarCuentasInv();
   }catch(e){console.error('Error loading data:',e);}
 }
@@ -2629,6 +2633,21 @@ async function pullFromSheets(){
     if(!res.ok)return false;
     var data=await res.json();
     if(data.error)return false;
+    console.log('📥 Pull recibido — gastos:',data.gastos?data.gastos.length:'N/A','ingresos:',data.ingresos?data.ingresos.length:'N/A','pagos:',data.pagosTDC?data.pagosTDC.length:'N/A');
+
+    // ── Función auxiliar: determinar si un item local se debe conservar ──
+    // Un item se conserva si:
+    //  1) Está en _pendingPushIds (fue creado/editado y aún no confirmado en Sheets)
+    //  2) Su ID (timestamp) es más reciente que el último pull exitoso (red de seguridad)
+    function _keepLocal(id, pendingList){
+      var sid=String(id);
+      if(pendingList.indexOf(sid)!==-1) return true;
+      // Red de seguridad: IDs basados en Date.now() → si es más reciente que el último pull, conservar
+      var numId=typeof id==='number'?id:parseFloat(sid);
+      if(!isNaN(numId) && numId>1700000000000 && numId>_lastSuccessfulPull) return true;
+      return false;
+    }
+
     // ── MERGE: conservar items locales pendientes, limpiar confirmados ──
     if(data.gastos){
       var pulled=data.gastos.map(function(r){
@@ -2642,10 +2661,9 @@ async function pullFromSheets(){
         return{id:normalizeId(r.id),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas,ciclo:r.ciclo};
       });
       var pulledIds={};pulled.forEach(function(g){pulledIds[String(g.id)]=true;});
-      // Conservar items locales que aún no llegaron a Sheets
-      var localOnly=DB.gastos.filter(function(g){return !pulledIds[String(g.id)] && _pendingPushIds.gastos.indexOf(String(g.id))!==-1;});
+      var localOnly=DB.gastos.filter(function(g){return !pulledIds[String(g.id)] && _keepLocal(g.id,_pendingPushIds.gastos);});
+      if(localOnly.length) console.log('🛡️ Conservando',localOnly.length,'gastos locales no confirmados');
       DB.gastos=pulled.concat(localOnly);
-      // Limpiar pendientes que ya están confirmados en Sheets
       _pendingPushIds.gastos=_pendingPushIds.gastos.filter(function(id){return !pulledIds[id];});
     }
     if(data.ingresos){
@@ -2656,7 +2674,8 @@ async function pullFromSheets(){
         return{id:normalizeId(r.id),fecha:fechaStr,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};
       });
       var pulledIds={};pulled.forEach(function(i){pulledIds[String(i.id)]=true;});
-      var localOnly=DB.ingresos.filter(function(i){return !pulledIds[String(i.id)] && _pendingPushIds.ingresos.indexOf(String(i.id))!==-1;});
+      var localOnly=DB.ingresos.filter(function(i){return !pulledIds[String(i.id)] && _keepLocal(i.id,_pendingPushIds.ingresos);});
+      if(localOnly.length) console.log('🛡️ Conservando',localOnly.length,'ingresos locales no confirmados');
       DB.ingresos=pulled.concat(localOnly);
       _pendingPushIds.ingresos=_pendingPushIds.ingresos.filter(function(id){return !pulledIds[id];});
     }
@@ -2666,7 +2685,7 @@ async function pullFromSheets(){
         return{id:normalizeId(r.id),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
       });
       var pulledIds={};pulled.forEach(function(v){pulledIds[String(v.id)]=true;});
-      var localOnly=DB.inversiones.filter(function(v){return !pulledIds[String(v.id)] && _pendingPushIds.inversiones.indexOf(String(v.id))!==-1;});
+      var localOnly=DB.inversiones.filter(function(v){return !pulledIds[String(v.id)] && _keepLocal(v.id,_pendingPushIds.inversiones);});
       DB.inversiones=pulled.concat(localOnly);
       _pendingPushIds.inversiones=_pendingPushIds.inversiones.filter(function(id){return !pulledIds[id];});
     }
@@ -2678,14 +2697,15 @@ async function pullFromSheets(){
         return{id:normalizeId(r.id),fecha:fechaStr,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas,ciclo:r.ciclo};
       });
       var pulledIds={};pulled.forEach(function(p){pulledIds[String(p.id)]=true;});
-      var localOnly=DB.pagosTDC.filter(function(p){return !pulledIds[String(p.id)] && _pendingPushIds.pagosTDC.indexOf(String(p.id))!==-1;});
+      var localOnly=DB.pagosTDC.filter(function(p){return !pulledIds[String(p.id)] && _keepLocal(p.id,_pendingPushIds.pagosTDC);});
+      if(localOnly.length) console.log('🛡️ Conservando',localOnly.length,'pagos locales no confirmados');
       DB.pagosTDC=pulled.concat(localOnly);
       _pendingPushIds.pagosTDC=_pendingPushIds.pagosTDC.filter(function(id){return !pulledIds[id];});
     }
     if(data.recurrentes){
       var pulled=data.recurrentes.map(function(r){return{id:normalizeId(r.id),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
       var pulledIds={};pulled.forEach(function(r){pulledIds[String(r.id)]=true;});
-      var localOnly=DB.recurrentes.filter(function(r){return !pulledIds[String(r.id)] && _pendingPushIds.recurrentes.indexOf(String(r.id))!==-1;});
+      var localOnly=DB.recurrentes.filter(function(r){return !pulledIds[String(r.id)] && _keepLocal(r.id,_pendingPushIds.recurrentes);});
       DB.recurrentes=pulled.concat(localOnly);
       _pendingPushIds.recurrentes=_pendingPushIds.recurrentes.filter(function(id){return !pulledIds[id];});
     }
@@ -2719,11 +2739,14 @@ async function pullFromSheets(){
     if(_pendingDeletes.ingresos.length) DB.ingresos=DB.ingresos.filter(function(i){return _pendingDeletes.ingresos.indexOf(String(i.id))===-1;});
     if(_pendingDeletes.pagosTDC.length) DB.pagosTDC=DB.pagosTDC.filter(function(p){return _pendingDeletes.pagosTDC.indexOf(String(p.id))===-1;});
     if(_pendingDeletes.inversiones.length) DB.inversiones=DB.inversiones.filter(function(v){return _pendingDeletes.inversiones.indexOf(String(v.id))===-1;});
+    // Registrar timestamp de pull exitoso
+    _lastSuccessfulPull=Date.now();
+    localStorage.setItem('mf_lastSuccessfulPull',String(_lastSuccessfulPull));
     save();
     // Reintentar pushes fallidos después de sync
     retryPendingPushes();
     return true;
-  }catch(e){return false;}
+  }catch(e){console.error('Pull error:',e);return false;}
 }
 
 async function pushSheets(sheet,row,_isRetry){
@@ -2944,6 +2967,41 @@ async function pushConfigToSheets(){
       });
     }
   }catch(e){console.error('Error syncing config:',e);}
+}
+
+// Sincronización manual forzada + diagnóstico visible
+async function forceSyncNow(){
+  var el=document.getElementById('sync-status-line');
+  if(!DB.config.scriptURL||!DB.config.scriptURL.trim()){
+    toast('No hay conexión a Sheets configurada','err');
+    if(el) el.textContent='❌ Sin scriptURL';
+    return;
+  }
+  if(el) el.textContent='⏳ Enviando pendientes...';
+  toast('Sincronizando...');
+
+  // 1. Re-push todos los pendientes
+  await rePushPendingItems();
+  await retryPendingPushes();
+
+  // 2. Esperar a que los pushes completen
+  if(el) el.textContent='⏳ Descargando de Sheets...';
+  var ok=await pullFromSheets();
+  if(ok){
+    save();
+    renderAll();
+    var pendCount=_pendingPushIds.gastos.length+_pendingPushIds.ingresos.length+_pendingPushIds.pagosTDC.length;
+    if(pendCount>0){
+      toast('Sync parcial — '+pendCount+' items aún no confirmados en Sheets','err');
+      if(el) el.textContent='⚠️ '+pendCount+' items pendientes · Sheets: '+DB.gastos.length+'g '+DB.ingresos.length+'i '+DB.pagosTDC.length+'p';
+    } else {
+      toast('Sincronizado ✓');
+      if(el) el.textContent='✓ Sync OK · Sheets: '+DB.gastos.length+'g '+DB.ingresos.length+'i '+DB.pagosTDC.length+'p';
+    }
+  } else {
+    toast('Error al sincronizar','err');
+    if(el) el.textContent='❌ Pull falló — verificar conexión';
+  }
 }
 
 function sincronizarCuentasInv(){
@@ -5731,13 +5789,22 @@ function renderPerfilNuevo(){
       '<input type="file" id="import-file" accept=".json" style="display:none;" onchange="importarDatos(this)">'+
     '</div>'+
 
-    '<div style="text-align:center;padding:20px 0 40px;display:flex;flex-direction:column;align-items:center;gap:8px;">'+
+    '<div style="text-align:center;padding:20px 0 12px;display:flex;flex-direction:column;align-items:center;gap:8px;">'+
       '<div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(108,93,211,0.25);"><i data-lucide="wallet" style="width:16px;height:16px;color:#fff;stroke-width:2;"></i></div>'+
-      '<div style="font-size:11px;color:var(--text-3);">Mis Finanzas v5.2</div>'+
+      '<div style="font-size:11px;color:var(--text-3);">Mis Finanzas v5.3</div>'+
+      '<div id="sync-status-line" style="font-size:10px;color:var(--text-3);margin-top:2px;"></div>'+
+      '<button onclick="forceSyncNow()" style="margin-top:6px;padding:8px 20px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">Sincronizar ahora</button>'+
     '</div>';
 
   page.innerHTML='<div style="padding:0 20px;">'+html+'</div>';
   renderIcons();
+  // Actualizar línea de sync status
+  var el=document.getElementById('sync-status-line');
+  if(el){
+    var pendCount=_pendingPushIds.gastos.length+_pendingPushIds.ingresos.length+_pendingPushIds.pagosTDC.length;
+    var lastPull=_lastSuccessfulPull>0?new Date(_lastSuccessfulPull).toLocaleTimeString():'nunca';
+    el.textContent=(pendCount>0?'⚠️ '+pendCount+' pendientes':'✓ Sync OK')+' · Último pull: '+lastPull;
+  }
 }
 
 function renderAnual(){
