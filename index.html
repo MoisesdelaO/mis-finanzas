@@ -15,19 +15,39 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <script>
 (function(){
-  function rr(ctx,x,y,w,h,r){ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
-  var c=document.createElement('canvas');c.width=180;c.height=180;
+  // Generar apple-touch-icon con el ícono Lucide wallet (coincide con login/perfil)
+  var sz=180,S=4.5,Ox=36,Oy=33;
+  var c=document.createElement('canvas');c.width=sz;c.height=sz;
   var x=c.getContext('2d');
-  var g=x.createLinearGradient(0,0,180,180);
-  g.addColorStop(0,'#6c5dd3');g.addColorStop(1,'#8b5cf6');
-  x.beginPath();rr(x,0,0,180,180,40);x.fillStyle=g;x.fill();
-  x.strokeStyle='#fff';x.lineWidth=8.5;x.lineCap='round';x.lineJoin='round';
-  x.beginPath();rr(x,42,63,96,68,10);x.stroke();
-  x.beginPath();x.moveTo(42,80);x.lineTo(138,80);x.stroke();
-  x.beginPath();x.moveTo(59,63);x.lineTo(59,52);x.quadraticCurveTo(59,44,67,44);x.lineTo(96,44);x.stroke();
-  x.fillStyle='#fff';x.beginPath();rr(x,114,93,14,11,3);x.fill();
-  var link=document.querySelector('link[rel="apple-touch-icon"]');
-  if(link) link.href=c.toDataURL('image/png');
+  function rr(x0,y0,w,h,r){x.moveTo(x0+r,y0);x.lineTo(x0+w-r,y0);x.quadraticCurveTo(x0+w,y0,x0+w,y0+r);x.lineTo(x0+w,y0+h-r);x.quadraticCurveTo(x0+w,y0+h,x0+w-r,y0+h);x.lineTo(x0+r,y0+h);x.quadraticCurveTo(x0,y0+h,x0,y0+h-r);x.lineTo(x0,y0+r);x.quadraticCurveTo(x0,y0,x0+r,y0);x.closePath();}
+  function tx(v){return v*S+Ox;} function ty(v){return v*S+Oy;} var R=2*S;
+  // Fondo gradiente
+  var g=x.createLinearGradient(0,0,sz,sz);g.addColorStop(0,'#6c5dd3');g.addColorStop(1,'#8b5cf6');
+  x.beginPath();rr(0,0,sz,sz,40);x.fillStyle=g;x.fill();
+  // Wallet icon (Lucide wallet paths escalados)
+  x.strokeStyle='#fff';x.lineWidth=R;x.lineCap='round';x.lineJoin='round';
+  // Path 1: M21 12V7H5a2 2 0 0 1 0-4h14v4 (tapa superior)
+  x.beginPath();
+  x.moveTo(tx(21),ty(12));x.lineTo(tx(21),ty(7));x.lineTo(tx(5),ty(7));
+  x.arc(tx(5),ty(5),R,Math.PI/2,-Math.PI/2,false);
+  x.lineTo(tx(19),ty(3));x.lineTo(tx(19),ty(7));
+  x.stroke();
+  // Path 2: M3 5v14a2 2 0 0 0 2 2h16v-5 (cuerpo)
+  x.beginPath();
+  x.moveTo(tx(3),ty(5));x.lineTo(tx(3),ty(19));
+  x.arc(tx(5),ty(19),R,Math.PI,Math.PI/2,true);
+  x.lineTo(tx(21),ty(21));x.lineTo(tx(21),ty(16));
+  x.stroke();
+  // Path 3: M18 12a2 2 0 0 0 0 4h4v-4Z (broche)
+  x.beginPath();
+  x.moveTo(tx(18),ty(12));
+  x.arc(tx(18),ty(14),R,-Math.PI/2,Math.PI/2,true);
+  x.lineTo(tx(22),ty(16));x.lineTo(tx(22),ty(12));
+  x.closePath();x.stroke();
+  // Aplicar
+  var url=c.toDataURL('image/png');
+  var link=document.querySelector('link[rel="apple-touch-icon"]');if(link)link.href=url;
+  var fav=document.querySelector('link[rel="icon"]');if(fav){fav.href=url;fav.type='image/png';}
 })();
 </script>
 
@@ -2211,6 +2231,8 @@ let DB={
   }
 };
 var _pendingDeletes={gastos:[],ingresos:[],pagosTDC:[],inversiones:[]};
+var _pendingPushIds={gastos:[],ingresos:[],pagosTDC:[],inversiones:[],recurrentes:[]};
+var _pushQueue=[];
 let connected=false;
 let syncing=false;
 let _patHidden=false;
@@ -2337,6 +2359,9 @@ function save(){
       gastos:DB.gastos,ingresos:DB.ingresos,inversiones:DB.inversiones,
       pagosTDC:DB.pagosTDC,recurrentes:DB.recurrentes
     }));
+    // Persistir IDs pendientes para que sobrevivan un refresh
+    localStorage.setItem('mf_pendingPushIds',JSON.stringify(_pendingPushIds));
+    localStorage.setItem('mf_pendingDeletes',JSON.stringify(_pendingDeletes));
     return true;
   }catch(e){console.error('Error saving:',e);return false;}
 }
@@ -2370,6 +2395,29 @@ function load(){
       if(p.cuentasInv)DB.cuentasInv={...DB.cuentasInv,...p.cuentasInv};
       if(p.config)DB.config={...DB.config,...p.config};
       save();
+    }
+    // Restaurar IDs pendientes de push
+    var pendPush=localStorage.getItem('mf_pendingPushIds');
+    if(pendPush){
+      try{
+        var pp=JSON.parse(pendPush);
+        if(pp.gastos) _pendingPushIds.gastos=pp.gastos;
+        if(pp.ingresos) _pendingPushIds.ingresos=pp.ingresos;
+        if(pp.pagosTDC) _pendingPushIds.pagosTDC=pp.pagosTDC;
+        if(pp.inversiones) _pendingPushIds.inversiones=pp.inversiones;
+        if(pp.recurrentes) _pendingPushIds.recurrentes=pp.recurrentes;
+      }catch(e2){}
+    }
+    // Restaurar IDs pendientes de eliminación
+    var pendDel=localStorage.getItem('mf_pendingDeletes');
+    if(pendDel){
+      try{
+        var pd=JSON.parse(pendDel);
+        if(pd.gastos) _pendingDeletes.gastos=pd.gastos;
+        if(pd.ingresos) _pendingDeletes.ingresos=pd.ingresos;
+        if(pd.pagosTDC) _pendingDeletes.pagosTDC=pd.pagosTDC;
+        if(pd.inversiones) _pendingDeletes.inversiones=pd.inversiones;
+      }catch(e3){}
     }
     sincronizarCuentasInv();
   }catch(e){console.error('Error loading data:',e);}
@@ -2440,7 +2488,10 @@ function mostrarApp(user){
     renderAll();
     // Auto-sync con Sheets al abrir
     if(DB.config.scriptURL && DB.config.scriptURL.trim()){
-      pullFromSheets().then(function(ok){if(ok) renderAll();});
+      // Primero re-pushear items pendientes que sobrevivieron un refresh
+      rePushPendingItems().then(function(){
+        return pullFromSheets();
+      }).then(function(ok){if(ok) renderAll();});
     }
     // Auto-sync cada 30 segundos
     if(window._autoSyncInterval) clearInterval(window._autoSyncInterval);
@@ -2572,33 +2623,59 @@ async function pullFromSheets(){
     if(!res.ok)return false;
     var data=await res.json();
     if(data.error)return false;
-    if(data.gastos)DB.gastos=data.gastos.map(function(r){
-      var fechaStr=r.fecha?String(r.fecha):'';
-      if(fechaStr.length>10&&!fechaStr.match(/^\d{4}-/)){
-        try{var d=new Date(fechaStr);if(!isNaN(d))fechaStr=d.toISOString().split('T')[0];}catch(e){}
-      }
-      if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){
-        var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];
-      }
-      return{id:normalizeId(r.id),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas,ciclo:r.ciclo};
-    });
-    if(data.ingresos)DB.ingresos=data.ingresos.map(function(r){
-      var fechaStr=r.fecha?String(r.fecha):'';
-      if(fechaStr.length>10&&fechaStr.indexOf('T')>=0) fechaStr=fechaStr.split('T')[0];
-      if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];}
-      return{id:normalizeId(r.id),fecha:fechaStr,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};
-    });
-    if(data.inversiones)DB.inversiones=data.inversiones.map(function(r){
-      var per=r.periodo?String(r.periodo).split('T')[0]:r.periodo;
-      return{id:normalizeId(r.id),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
-    });
-    if(data.pagosTDC)DB.pagosTDC=data.pagosTDC.map(function(r){
-      var fechaStr=r.fecha?String(r.fecha):'';
-      if(fechaStr.length>10&&fechaStr.indexOf('T')>=0) fechaStr=fechaStr.split('T')[0];
-      if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];}
-      return{id:normalizeId(r.id),fecha:fechaStr,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas,ciclo:r.ciclo};
-    });
-    if(data.recurrentes)DB.recurrentes=data.recurrentes.map(function(r){return{id:normalizeId(r.id),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
+    // ── MERGE en vez de REPLACE: conservar items locales pendientes de sync ──
+    if(data.gastos){
+      var pulled=data.gastos.map(function(r){
+        var fechaStr=r.fecha?String(r.fecha):'';
+        if(fechaStr.length>10&&!fechaStr.match(/^\d{4}-/)){
+          try{var d=new Date(fechaStr);if(!isNaN(d))fechaStr=d.toISOString().split('T')[0];}catch(e){}
+        }
+        if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+          var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];
+        }
+        return{id:normalizeId(r.id),fecha:fechaStr,desc:r.desc,cat:r.cat,monto:parseFloat(r.monto)||0,tdc:r.tdc,mes:r.mes,msi:r.msi,meses:r.meses,notas:r.notas,ciclo:r.ciclo};
+      });
+      var pulledIds={};pulled.forEach(function(g){pulledIds[String(g.id)]=true;});
+      var localOnly=DB.gastos.filter(function(g){return !pulledIds[String(g.id)] && _pendingPushIds.gastos.indexOf(String(g.id))!==-1;});
+      DB.gastos=pulled.concat(localOnly);
+    }
+    if(data.ingresos){
+      var pulled=data.ingresos.map(function(r){
+        var fechaStr=r.fecha?String(r.fecha):'';
+        if(fechaStr.length>10&&fechaStr.indexOf('T')>=0) fechaStr=fechaStr.split('T')[0];
+        if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];}
+        return{id:normalizeId(r.id),fecha:fechaStr,tipo:r.tipo,desc:r.desc,monto:parseFloat(r.monto)||0,mes:r.mes};
+      });
+      var pulledIds={};pulled.forEach(function(i){pulledIds[String(i.id)]=true;});
+      var localOnly=DB.ingresos.filter(function(i){return !pulledIds[String(i.id)] && _pendingPushIds.ingresos.indexOf(String(i.id))!==-1;});
+      DB.ingresos=pulled.concat(localOnly);
+    }
+    if(data.inversiones){
+      var pulled=data.inversiones.map(function(r){
+        var per=r.periodo?String(r.periodo).split('T')[0]:r.periodo;
+        return{id:normalizeId(r.id),periodo:per,cuenta:r.cuenta,ant:parseFloat(r.ant)||0,actual:parseFloat(r.actual)||0,dif:parseFloat(r.dif)||0,notas:r.notas};
+      });
+      var pulledIds={};pulled.forEach(function(v){pulledIds[String(v.id)]=true;});
+      var localOnly=DB.inversiones.filter(function(v){return !pulledIds[String(v.id)] && _pendingPushIds.inversiones.indexOf(String(v.id))!==-1;});
+      DB.inversiones=pulled.concat(localOnly);
+    }
+    if(data.pagosTDC){
+      var pulled=data.pagosTDC.map(function(r){
+        var fechaStr=r.fecha?String(r.fecha):'';
+        if(fechaStr.length>10&&fechaStr.indexOf('T')>=0) fechaStr=fechaStr.split('T')[0];
+        if(fechaStr.match(/^\d{2}\/\d{2}\/\d{4}$/)){var p=fechaStr.split('/');fechaStr=p[2]+'-'+p[1]+'-'+p[0];}
+        return{id:normalizeId(r.id),fecha:fechaStr,tdc:r.tdc,mes:r.mes,consumo:parseFloat(r.consumo)||0,monto:parseFloat(r.monto)||0,dif:parseFloat(r.dif)||0,estado:r.estado,notas:r.notas,ciclo:r.ciclo};
+      });
+      var pulledIds={};pulled.forEach(function(p){pulledIds[String(p.id)]=true;});
+      var localOnly=DB.pagosTDC.filter(function(p){return !pulledIds[String(p.id)] && _pendingPushIds.pagosTDC.indexOf(String(p.id))!==-1;});
+      DB.pagosTDC=pulled.concat(localOnly);
+    }
+    if(data.recurrentes){
+      var pulled=data.recurrentes.map(function(r){return{id:normalizeId(r.id),desc:r.desc,monto:parseFloat(r.monto)||0,dia:parseInt(r.dia)||1,cat:r.cat,tdc:r.tdc};});
+      var pulledIds={};pulled.forEach(function(r){pulledIds[String(r.id)]=true;});
+      var localOnly=DB.recurrentes.filter(function(r){return !pulledIds[String(r.id)] && _pendingPushIds.recurrentes.indexOf(String(r.id))!==-1;});
+      DB.recurrentes=pulled.concat(localOnly);
+    }
     if(data.appConfig&&typeof data.appConfig==='object'){
       var sc=data.appConfig;
       if(sc.cortesTDC) DB.config.cortesTDC={...DB.config.cortesTDC,...sc.cortesTDC};
@@ -2630,33 +2707,97 @@ async function pullFromSheets(){
     if(_pendingDeletes.pagosTDC.length) DB.pagosTDC=DB.pagosTDC.filter(function(p){return _pendingDeletes.pagosTDC.indexOf(String(p.id))===-1;});
     if(_pendingDeletes.inversiones.length) DB.inversiones=DB.inversiones.filter(function(v){return _pendingDeletes.inversiones.indexOf(String(v.id))===-1;});
     save();
+    // Reintentar pushes fallidos después de sync
+    retryPendingPushes();
     return true;
   }catch(e){return false;}
 }
 
-async function pushSheets(sheet,row){
+async function pushSheets(sheet,row,_isRetry){
   console.log('pushSheets llamado:',sheet,row);
-  console.log('scriptURL actual:',DB.config.scriptURL);
   if(!DB.config.scriptURL){
     console.error('❌ No hay scriptURL configurado');
     return false;
   }
-  
+
+  // Marcar ID como pendiente de sync (evitar duplicados)
+  var rowId=String(row.id||'');
+  if(rowId && _pendingPushIds[sheet] && _pendingPushIds[sheet].indexOf(rowId)===-1){
+    _pendingPushIds[sheet].push(rowId);
+  }
+
   // Convertir objeto a array en el orden correcto
   var rowArray=objToSheetRow(sheet,row);
   var sheetName=_sheetNameMap[sheet]||sheet;
 
   try{
-    console.log('Enviando a Sheets...',rowArray);
+    console.log('Enviando a Sheets...',sheetName,rowArray);
     var res=await fetch(DB.config.scriptURL,{
       method:'POST',
+      headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'append',sheet:sheetName,row:rowArray})
     });
     console.log('Respuesta Sheets:',res.ok,res.status);
+    // Quitar de pendientes al confirmar
+    if(rowId && _pendingPushIds[sheet]){
+      _pendingPushIds[sheet]=_pendingPushIds[sheet].filter(function(id){return id!==rowId;});
+    }
     return res.ok;
   }catch(e){
     console.error('Error pushSheets:',e);
+    // Encolar para reintento solo si no es ya un reintento
+    if(!_isRetry){
+      _pushQueue.push({sheet:sheet,row:row,retries:0});
+      console.log('⏳ Encolado para reintento:',sheet,rowId);
+    }
     return false;
+  }
+}
+
+// Reintentar pushes fallidos
+async function retryPendingPushes(){
+  if(!_pushQueue.length) return;
+  var queue=_pushQueue.slice();
+  _pushQueue=[];
+  for(var i=0;i<queue.length;i++){
+    var item=queue[i];
+    if(item.retries>=3){
+      console.error('❌ Push descartado tras 3 reintentos:',item.sheet,item.row.id);
+      // Quitar de pendientes
+      var sid=String(item.row.id||'');
+      if(sid && _pendingPushIds[item.sheet]){
+        _pendingPushIds[item.sheet]=_pendingPushIds[item.sheet].filter(function(id){return id!==sid;});
+      }
+      continue;
+    }
+    item.retries++;
+    var ok=await pushSheets(item.sheet,item.row,true);
+    if(!ok && item.retries<3){
+      _pushQueue.push(item);
+    }
+  }
+}
+
+// Re-pushear items que quedaron pendientes tras un refresh
+async function rePushPendingItems(){
+  var sheets=['gastos','ingresos','pagosTDC','inversiones','recurrentes'];
+  var dbMap={gastos:DB.gastos,ingresos:DB.ingresos,pagosTDC:DB.pagosTDC,inversiones:DB.inversiones,recurrentes:DB.recurrentes};
+  for(var s=0;s<sheets.length;s++){
+    var sheet=sheets[s];
+    var pendIds=(_pendingPushIds[sheet]||[]).slice(); // Copia para iterar seguro
+    if(!pendIds.length) continue;
+    var items=dbMap[sheet]||[];
+    for(var i=0;i<pendIds.length;i++){
+      var pid=pendIds[i];
+      var item=items.find(function(x){return String(x.id)===pid;});
+      if(item){
+        console.log('🔄 Re-pushing pendiente:',sheet,pid);
+        await pushSheets(sheet,item,true);
+      } else {
+        // Item ya no existe localmente, limpiar
+        _pendingPushIds[sheet]=_pendingPushIds[sheet].filter(function(id){return id!==pid;});
+      }
+    }
   }
 }
 
@@ -3038,17 +3179,48 @@ function calcularSaldoPendiente(tdc){
     }
   });
   var saldoAlCorte=consumoRegulares+montoMsiCorte;
-  var totalAPagar=saldoAlCorte;
 
   // ── PAGOS EN EL PERIODO ──
-  // Pagos que cubren el saldo al corte: realizados desde el corte anterior hasta la fecha límite
-  var fechaCorteAnterior=new Date(fechaCorte.getFullYear(),fechaCorte.getMonth()-1,diaCorte,12,0,0);
   var pagado=0;
   DB.pagosTDC.forEach(function(p){
     if(p.tdc!==tdc) return;
     var cicloPago=p.ciclo||cicloDelPago(p.fecha,tdc);
-    if(cicloPago===cicloCorte) pagado+=p.monto;
+    if(cicloPago===cicloCorte) pagado+=(parseFloat(p.monto)||0);
   });
+
+  // ── SALDO ARRASTRADO (deuda no pagada de ciclos anteriores) ──
+  // Igual que el banco: si no pagaste todo el ciclo anterior, se acumula
+  var saldoArrastrado=0;
+  var fechaCorteAnt=new Date(fechaCorte.getFullYear(),fechaCorte.getMonth()-1,diaCorte,12,0,0);
+  var cicloCorteAnt=cicloDeGastoCorrecto(fechaCorteAnt.toISOString().split('T')[0],tdc);
+  if(cicloCorteAnt){
+    var regAnt=0,msiAnt=0;
+    DB.gastos.forEach(function(g){
+      if(g.tdc!==tdc) return;
+      if(g.msi==='Si'){
+        var cuotas=g.meses?parseInt(g.meses):1;
+        if(cuotas<=0) return;
+        var fc=new Date(String(g.fecha).split('T')[0]+'T12:00:00');
+        if(isNaN(fc.getTime())) return;
+        var md=(fechaCorteAnt.getFullYear()-fc.getFullYear())*12+(fechaCorteAnt.getMonth()-fc.getMonth());
+        if(fc.getDate()>diaCorte) md--;
+        if(md>=0 && md<cuotas) msiAnt+=(parseFloat(g.monto)||0)/cuotas;
+      } else {
+        var cg=g.ciclo||cicloDeGastoCorrecto(g.fecha,tdc);
+        if(cg===cicloCorteAnt) regAnt+=(parseFloat(g.monto)||0);
+      }
+    });
+    var saldoAlCorteAnt=regAnt+msiAnt;
+    var pagadoAnt=0;
+    DB.pagosTDC.forEach(function(p){
+      if(p.tdc!==tdc) return;
+      var cp=p.ciclo||cicloDelPago(p.fecha,tdc);
+      if(cp===cicloCorteAnt) pagadoAnt+=(parseFloat(p.monto)||0);
+    });
+    saldoArrastrado=Math.max(0,Math.round((saldoAlCorteAnt-pagadoAnt)*100)/100);
+  }
+
+  var totalAPagar=saldoAlCorte+saldoArrastrado;
   var pendiente=Math.max(0,totalAPagar-pagado);
 
   // ── NUEVAS COMPRAS (ciclo actual, se pagarán en el próximo corte) ──
@@ -3102,6 +3274,7 @@ function calcularSaldoPendiente(tdc){
     pendiente:pendiente,
     consumoCicloAnt:saldoAlCorte,
     pagado:pagado,
+    saldoArrastrado:saldoArrastrado,
     adeudo:0,
     consumoCicloAct:consumoCicloAct,
     msiActivos:msiActivos,
@@ -3250,6 +3423,7 @@ function eliminarGastoById(id){
   if(idx<0) return;
   DB.gastos.splice(idx,1);
   _pendingDeletes.gastos.push(String(id));
+  _pendingPushIds.gastos=_pendingPushIds.gastos.filter(function(pid){return pid!==String(id);});
   save();
   syncSheetDelete('gastos',[id]);
   renderAll();
@@ -3260,6 +3434,7 @@ function eliminarIngresoById(id){
   if(idx<0) return;
   DB.ingresos.splice(idx,1);
   _pendingDeletes.ingresos.push(String(id));
+  _pendingPushIds.ingresos=_pendingPushIds.ingresos.filter(function(pid){return pid!==String(id);});
   save();
   syncSheetDelete('ingresos',[id]);
   renderAll();
@@ -3270,6 +3445,7 @@ function eliminarPagoById(id){
   if(idx<0) return;
   DB.pagosTDC.splice(idx,1);
   _pendingDeletes.pagosTDC.push(String(id));
+  _pendingPushIds.pagosTDC=_pendingPushIds.pagosTDC.filter(function(pid){return pid!==String(id);});
   save();
   syncSheetDelete('pagosTDC',[id]);
   renderAll();
@@ -4224,6 +4400,7 @@ function onTdcClick(nombreTdc){
           (disponibleTxt?'<div style="font-size:11px;color:var(--text-3);font-weight:500;">'+disponibleTxt+'</div>':'')+
         '</div>'+
         '<div style="font-size:26px;font-weight:700;color:var(--text);letter-spacing:-0.02em;font-family:\'JetBrains Mono\',monospace;">'+fmt(calc.totalAPagar)+'</div>'+
+        (calc.saldoArrastrado>0?'<div style="font-size:11px;color:var(--warning);margin-top:2px;">Incluye '+fmt(calc.saldoArrastrado)+' no pagado del ciclo anterior</div>':'')+
         (calc.fechaLimitePago?'<div style="font-size:12px;color:var(--text-2);margin-top:6px;">Pagar antes del '+fechaLimiteStr+' · '+estadoPagoTxt+'</div>':'')+
       '</div>';
   } else {
@@ -4352,11 +4529,11 @@ function verDesgloseTDC(nombreTdc){
     );
   }
 
-  if(calc.adeudo>0){
+  if(calc.saldoArrastrado>0){
     bodyParts.push(
       '<div class="tdc-detail-row" style="margin-top:6px;">'+
-        '<span class="tdc-detail-label" style="font-weight:600;">Adeudo anterior</span>'+
-        '<span class="tdc-detail-value" style="color:var(--danger);">'+fmt(calc.adeudo)+'</span>'+
+        '<span class="tdc-detail-label" style="font-weight:600;color:var(--warning);">No pagado ciclo anterior</span>'+
+        '<span class="tdc-detail-value" style="color:var(--warning);">'+fmt(calc.saldoArrastrado)+'</span>'+
       '</div>'
     );
   }
@@ -4364,7 +4541,7 @@ function verDesgloseTDC(nombreTdc){
   bodyParts.push(
     '<div class="tdc-detail-section" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
       '<div class="tdc-detail-row">'+
-        '<span class="tdc-detail-label" style="font-weight:700;">Saldo al corte</span>'+
+        '<span class="tdc-detail-label" style="font-weight:700;">Total por pagar</span>'+
         '<span class="tdc-detail-value" style="color:var(--accent);font-size:16px;font-weight:700;">'+fmt(calc.totalAPagar)+'</span>'+
       '</div>'+
     '</div>'
@@ -4731,6 +4908,7 @@ function submitForm(){
         g.mes=mesEsFromKey(fecha.substring(0,7));
         g.ciclo=cicloDeGastoCorrecto(fecha,tdc);
         save();
+        _pendingPushIds.gastos.push(String(g.id));
         syncSheetDelete('gastos',[_formEditId]).then(function(){pushSheets('gastos',g);});
         toast('Gasto actualizado ✓');
       }
@@ -4748,6 +4926,7 @@ function submitForm(){
         i.fecha=fecha;i.monto=monto;i.tipo=tipo;i.desc=desc;
         i.mes=mesEsFromKey(fecha.substring(0,7));
         save();
+        _pendingPushIds.ingresos.push(String(i.id));
         syncSheetDelete('ingresos',[_formEditId]).then(function(){pushSheets('ingresos',i);});
         toast('Ingreso actualizado ✓');
       }
@@ -4767,6 +4946,7 @@ function submitForm(){
         p.mes=mesEsFromKey(fecha.substring(0,7));
         p.ciclo=cicloDelPago(fecha,tdc);
         save();
+        _pendingPushIds.pagosTDC.push(String(p.id));
         syncSheetDelete('pagosTDC',[_formEditId]).then(function(){pushSheets('pagosTDC',p);});
         toast('Pago actualizado ✓');
       }
