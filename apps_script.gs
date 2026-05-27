@@ -59,11 +59,27 @@ function doPost(e) {
   if (data.action === 'append') {
     var sheet = getOrCreateSheet(ss, data.sheet);
     migrateHeaders(sheet, data.sheet);
-    // Buscar columna de ID para verificar duplicados
-    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+      .map(function(h) { return String(h).trim(); });
+
+    // Remapear array del cliente al orden REAL de columnas de la hoja
+    // El cliente envía en el orden de getHeaders(), la hoja puede tener otro orden
+    var expectedHeaders = getHeaders(data.sheet);
+    var rowToAppend;
+    if (data.row && expectedHeaders.length > 0 && data.row.length === expectedHeaders.length) {
+      var named = {};
+      for (var j = 0; j < expectedHeaders.length; j++) {
+        named[expectedHeaders[j]] = data.row[j];
+      }
+      rowToAppend = headers.map(function(h) { return named[h] !== undefined ? named[h] : ''; });
+    } else {
+      rowToAppend = data.row;
+    }
+
+    // Verificar duplicados por ID
     var idCol = headers.indexOf('id');
-    if (idCol !== -1 && data.row[idCol]) {
-      var newId = String(data.row[idCol]);
+    if (idCol !== -1 && rowToAppend[idCol]) {
+      var newId = String(rowToAppend[idCol]);
       if (sheet.getLastRow() > 1) {
         var existingIds = sheet.getRange(2, idCol + 1, sheet.getLastRow() - 1, 1).getValues();
         for (var i = 0; i < existingIds.length; i++) {
@@ -73,7 +89,8 @@ function doPost(e) {
         }
       }
     }
-    sheet.appendRow(data.row);
+    sheet.appendRow(rowToAppend);
+    SpreadsheetApp.flush();
     return jsonResponse({ ok: true });
   }
 
@@ -95,6 +112,7 @@ function doPost(e) {
     }
     rowsToDelete.sort(function(a, b) { return b - a; });
     rowsToDelete.forEach(function(row) { sheet.deleteRow(row); });
+    SpreadsheetApp.flush();
     return jsonResponse({ ok: true, deleted: rowsToDelete.length });
   }
 
@@ -110,6 +128,7 @@ function doPost(e) {
         sheet.appendRow(r);
       });
     }
+    SpreadsheetApp.flush();
     return jsonResponse({ ok: true });
   }
 
@@ -122,6 +141,7 @@ function doPost(e) {
       sheet.clear();
       if (headers.length) sheet.appendRow(headers);
     }
+    SpreadsheetApp.flush();
     return jsonResponse({ ok: true });
   }
 
@@ -139,6 +159,7 @@ function doPost(e) {
         JSON.stringify(c.tramos || [])
       ]);
     });
+    SpreadsheetApp.flush();
     return jsonResponse({ ok: true });
   }
 
@@ -147,6 +168,7 @@ function doPost(e) {
     var sheet = getOrCreateSheet(ss, 'AppConfig');
     sheet.clear();
     sheet.getRange('A1').setValue(JSON.stringify(data.config));
+    SpreadsheetApp.flush();
     return jsonResponse({ ok: true });
   }
 
@@ -200,8 +222,9 @@ function getHeaders(sheetName) {
 }
 
 /**
- * Auto-migra columnas faltantes a hojas existentes.
- * Compara los headers actuales de la hoja con los esperados y agrega las columnas que falten.
+ * Auto-migra columnas faltantes a hojas existentes y reordena al orden esperado.
+ * Compara los headers actuales de la hoja con los esperados, agrega las que falten,
+ * y reordena todas las columnas (incluidos datos) para que coincidan con getHeaders().
  * Tambien genera IDs unicos para filas que no tengan.
  */
 function migrateHeaders(sheet, sheetName) {
@@ -218,19 +241,42 @@ function migrateHeaders(sheet, sheetName) {
     if (currentHeaders.indexOf(h) === -1) missing.push(h);
   });
 
-  if (missing.length === 0) {
-    fillMissingIds(sheet, currentHeaders);
-    return;
+  // Si faltan columnas, agregarlas al final primero
+  if (missing.length > 0) {
+    missing.forEach(function(col) {
+      var nextCol = currentHeaders.length + 1;
+      sheet.getRange(1, nextCol).setValue(col);
+      currentHeaders.push(col);
+    });
   }
 
-  // Agregar columnas faltantes al final
-  missing.forEach(function(col) {
-    var nextCol = currentHeaders.length + 1;
-    sheet.getRange(1, nextCol).setValue(col);
-    currentHeaders.push(col);
-  });
+  // Verificar si el orden actual coincide con el esperado
+  var needsReorder = false;
+  for (var i = 0; i < expected.length; i++) {
+    if (currentHeaders[i] !== expected[i]) { needsReorder = true; break; }
+  }
 
-  fillMissingIds(sheet, currentHeaders);
+  if (needsReorder && sheet.getLastRow() >= 1) {
+    // Leer TODOS los datos, reordenar columnas, reescribir
+    var allData = sheet.getDataRange().getValues();
+    var colMap = {};
+    for (var c = 0; c < currentHeaders.length; c++) {
+      colMap[currentHeaders[c]] = c;
+    }
+    var reordered = allData.map(function(row, idx) {
+      if (idx === 0) return expected; // header row
+      return expected.map(function(h) {
+        return colMap[h] !== undefined ? row[colMap[h]] : '';
+      });
+    });
+    sheet.clear();
+    if (reordered.length > 0) {
+      sheet.getRange(1, 1, reordered.length, expected.length).setValues(reordered);
+    }
+    SpreadsheetApp.flush();
+  }
+
+  fillMissingIds(sheet, expected);
 }
 
 /**
