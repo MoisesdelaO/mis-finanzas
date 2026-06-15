@@ -163,6 +163,40 @@ function doPost(e) {
     return jsonResponse({ ok: true });
   }
 
+  // Deduplicar filas con mismo contenido (distinto ID)
+  if (data.action === 'dedup') {
+    var sheetNames = ['Gastos','Ingresos','Inversiones','PagosTDC','Metas','Recurrentes'];
+    var totalRemoved = 0;
+    sheetNames.forEach(function(name) {
+      var sheet = ss.getSheetByName(name);
+      if (!sheet || sheet.getLastRow() <= 1) return;
+      migrateHeaders(sheet, name);
+      var all = sheet.getDataRange().getValues();
+      var hdrs = all[0];
+      var idCol = hdrs.indexOf('id');
+      var seen = {};
+      var rowsToDelete = [];
+      for (var i = 1; i < all.length; i++) {
+        var sig = [];
+        for (var j = 0; j < hdrs.length; j++) {
+          if (j === idCol) continue;
+          sig.push(String(all[i][j] || ''));
+        }
+        var key = sig.join('|');
+        if (seen[key]) {
+          rowsToDelete.push(i + 1);
+        } else {
+          seen[key] = true;
+        }
+      }
+      rowsToDelete.sort(function(a, b) { return b - a; });
+      rowsToDelete.forEach(function(row) { sheet.deleteRow(row); });
+      totalRemoved += rowsToDelete.length;
+    });
+    SpreadsheetApp.flush();
+    return jsonResponse({ ok: true, removed: totalRemoved });
+  }
+
   // Sincronizar configuración
   if (data.action === 'syncConfig') {
     var sheet = getOrCreateSheet(ss, 'AppConfig');
