@@ -1996,7 +1996,7 @@ input[type="date"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-e
         <span class="patr-label"><i data-lucide="arrow-down-circle"></i> Ingresos</span>
         <span class="patr-value success mono" id="strip-ingresos">$42,120</span>
       </div>
-      <div class="patr-card clickable" onclick="irAMovsFiltrado('gasto')" title="Ver gastos">
+      <div class="patr-card clickable" onclick="navigate('gastos')" title="Ver gastos">
         <span class="patr-label"><i data-lucide="arrow-up-circle"></i> Gastos</span>
         <span class="patr-value danger mono" id="strip-gastos">$13,580</span>
       </div>
@@ -2090,6 +2090,7 @@ input[type="date"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-e
   </section>
 
   <section class="page" id="page-ingresos"></section>
+  <section class="page" id="page-gastos"></section>
   <section class="page" id="page-pagos-tdc"></section>
 
 </div>
@@ -3705,6 +3706,7 @@ function navigate(pageId, skipHistory){
   if(pageId==='perfil') renderPerfilNuevo();
   if(pageId==='movs') renderMovsPage();
   if(pageId==='ingresos') renderIngresosPage();
+  if(pageId==='gastos') renderGastosPage();
   if(pageId==='pagos-tdc') renderPagosTDCPage();
 }
 
@@ -3889,13 +3891,6 @@ function setMovsFiltro(campo,valor){
   renderMovsPage();
 }
 
-// Navega a la página de movimientos pre-filtrada por tipo (gasto/ingreso/pago)
-function irAMovsFiltrado(tipo){
-  _movsFiltros={tipo:tipo,tdc:'todos',cat:'todos',desde:'',hasta:'',orden:'reciente'};
-  _movsPagina=1;
-  navigate('movs');
-}
-
 function limpiarFiltrosMovs(){
   _movsFiltros={tipo:'todos',tdc:'todos',cat:'todos',desde:'',hasta:'',orden:'reciente'};
   renderMovsPage();
@@ -3984,6 +3979,92 @@ function renderIngresosPage(){
 }
 function setIngFiltro(c,v){_ingFiltros[c]=v;_ingPagina=1;renderIngresosPage();}
 function limpiarIngFiltros(){_ingFiltros={tipo:'todos',desde:'',hasta:'',orden:'reciente'};_ingPagina=1;renderIngresosPage();}
+
+// ══════════════════════════════════════════════════════════
+// PÁGINA: GASTOS
+// ══════════════════════════════════════════════════════════
+var _gastosPagina=1, _GASTOS_POR_PAG=15;
+var _gastosFiltros={cat:'todos',tdc:'todos',desde:'',hasta:'',orden:'reciente'};
+
+function renderGastosPage(){
+  var page=document.getElementById('page-gastos');
+  if(!page) return;
+  _movsRef=[];
+  var f=_gastosFiltros;
+  var lista=DB.gastos.filter(function(g){
+    if(f.cat!=='todos'&&g.cat!==f.cat)return false;
+    if(f.tdc!=='todos'&&g.tdc!==f.tdc)return false;
+    var fd=String(g.fecha||'').split('T')[0];
+    if(f.desde&&fd<f.desde)return false;
+    if(f.hasta&&fd>f.hasta)return false;
+    return true;
+  });
+  lista.sort(function(a,b){
+    if(f.orden==='antiguo')return String(a.fecha||'').localeCompare(String(b.fecha||''));
+    if(f.orden==='mayor')return b.monto-a.monto;
+    if(f.orden==='menor')return a.monto-b.monto;
+    return String(b.fecha||'').localeCompare(String(a.fecha||''));
+  });
+  var totalMonto=lista.reduce(function(s,g){return s+g.monto;},0);
+  var hayFiltros=(f.cat!=='todos'||f.tdc!=='todos'||f.desde||f.hasta);
+  var catsUnicas=['todos'].concat(DB.gastos.map(function(g){return g.cat||'';}).filter(function(c,i,a){return c&&a.indexOf(c)===i;}).sort());
+
+  var listaHTML='';
+  if(lista.length===0){
+    listaHTML='<div class="empty-state"><div class="empty-state-icon"><i data-lucide="inbox"></i></div><div class="empty-state-text">Sin gastos con estos filtros.</div></div>';
+  } else {
+    var totalPags=Math.ceil(lista.length/_GASTOS_POR_PAG);
+    if(_gastosPagina>totalPags)_gastosPagina=totalPags;
+    var inicio=(_gastosPagina-1)*_GASTOS_POR_PAG;
+    var items=lista.slice(inicio,inicio+_GASTOS_POR_PAG);
+    var rows=items.map(function(g){
+      var fc=String(g.fecha||'').split('T')[0];
+      fc=fc.substring(8,10)+'/'+fc.substring(5,7)+'/'+fc.substring(0,4);
+      var refIdx=_movsRef.length;
+      _movsRef.push({type:'gasto',obj:g});
+      var icono=iconoDeCategoria(g.cat);
+      return '<div class="item-row clickable" onclick="verMovRef('+refIdx+')">'+
+        '<div class="item-icon gasto"><i data-lucide="'+icono+'"></i></div>'+
+        '<div class="item-info"><div class="item-title">'+(g.desc||g.cat||'Gasto')+'</div><div class="item-meta">'+fc+(g.cat?' · '+g.cat:'')+(g.tdc?' · '+g.tdc:'')+'</div></div>'+
+        '<div class="item-amount gasto">-'+fmtK(g.monto)+'</div></div>';
+    }).join('');
+    var pagCtrl=totalPags>1?'<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-top:8px;">'+
+      '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+(_gastosPagina<=1?'opacity:0.35;pointer-events:none;':'')+'" onclick="_gastosPagina--;renderGastosPage();document.querySelector(\'.app\').scrollTop=0;">← Anterior</button>'+
+      '<span style="font-size:12px;color:var(--text-3);">'+_gastosPagina+'/'+totalPags+'</span>'+
+      '<button class="btn-secondary" style="font-size:12px;padding:6px 14px;'+(_gastosPagina>=totalPags?'opacity:0.35;pointer-events:none;':'')+'" onclick="_gastosPagina++;renderGastosPage();document.querySelector(\'.app\').scrollTop=0;">Siguiente →</button></div>':'';
+    listaHTML='<div class="item-list">'+rows+'</div>'+pagCtrl;
+  }
+
+  var html=
+    '<div class="page-header-bar"><button class="icon-btn" onclick="goBack()" aria-label="Volver"><i data-lucide="arrow-left"></i></button><div class="title">Gastos</div><div></div></div>'+
+    '<div style="background:linear-gradient(135deg,#e5484d,#f87171);border-radius:var(--r-lg);padding:18px 20px;margin-bottom:16px;color:#fff;">'+
+      '<div style="font-size:11px;font-weight:600;opacity:0.85;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Total gastos</div>'+
+      '<div style="font-size:28px;font-weight:800;letter-spacing:-0.02em;">'+fmtK(totalMonto)+'</div>'+
+      '<div style="font-size:12px;opacity:0.7;margin-top:4px;">'+lista.length+' registro'+(lista.length===1?'':'s')+'</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+catsUnicas.map(function(c){
+      var active=f.cat===c;
+      return '<button onclick="setGastosFiltro(\'cat\',\''+c.replace(/'/g,"\\'")+'\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid;'+(active?'background:var(--danger);color:#fff;border-color:var(--danger);':'background:var(--surface);color:var(--text-2);border-color:var(--border);')+'">'+
+        (c==='todos'?'Todas':c)+'</button>';
+    }).join('')+'</div>'+
+    '<div class="filter-bar" style="margin-bottom:12px;">'+
+      (hayFiltros?'<button class="filter-toggle-btn has-filters" onclick="limpiarGastosFiltros()"><i data-lucide="x"></i> Limpiar</button>':'<span style="font-size:12px;color:var(--text-3);">Todos</span>')+
+      '<div style="flex:1;"></div>'+
+      '<div style="position:relative;display:inline-flex;align-items:center;">'+
+        '<select class="filter-toggle-btn" style="appearance:none;-webkit-appearance:none;padding-right:28px;cursor:pointer;background:var(--surface);border:1px solid var(--border);color:var(--text-2);" onchange="setGastosFiltro(\'orden\',this.value)">'+
+          '<option value="reciente"'+(f.orden==='reciente'?' selected':'')+'>Reciente</option><option value="antiguo"'+(f.orden==='antiguo'?' selected':'')+'>Antiguo</option>'+
+          '<option value="mayor"'+(f.orden==='mayor'?' selected':'')+'>Mayor $</option><option value="menor"'+(f.orden==='menor'?' selected':'')+'>Menor $</option>'+
+        '</select><span style="position:absolute;right:10px;pointer-events:none;display:flex;align-items:center;"><i data-lucide="arrow-up-down" style="width:12px;height:12px;color:var(--text-3);"></i></span></div>'+
+    '</div>'+
+    '<div class="field-row" style="margin-bottom:14px;">'+
+      '<div><label class="field-label">Desde</label><input type="date" class="field-input" value="'+f.desde+'" onchange="setGastosFiltro(\'desde\',this.value)"></div>'+
+      '<div><label class="field-label">Hasta</label><input type="date" class="field-input" value="'+f.hasta+'" onchange="setGastosFiltro(\'hasta\',this.value)"></div></div>'+
+    listaHTML;
+  page.innerHTML='<div style="padding:0 20px;">'+html+'</div>';
+  renderIcons();
+}
+function setGastosFiltro(c,v){_gastosFiltros[c]=v;_gastosPagina=1;renderGastosPage();}
+function limpiarGastosFiltros(){_gastosFiltros={cat:'todos',tdc:'todos',desde:'',hasta:'',orden:'reciente'};_gastosPagina=1;renderGastosPage();}
 
 // ══════════════════════════════════════════════════════════
 // PÁGINA: PAGOS TDC
@@ -5547,7 +5628,7 @@ function renderStatsNuevo(){
     var totalPagosMes=pagosMesList.reduce(function(s,p){return s+p.monto;},0);
 
     html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
-      '<div onclick="irAMovsFiltrado(\'gasto\')" style="background:linear-gradient(135deg,#e5484d,#f87171);border-radius:var(--r-lg);padding:16px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(229,72,77,0.28);">'+
+      '<div onclick="navigate(\'gastos\')" style="background:linear-gradient(135deg,#e5484d,#f87171);border-radius:var(--r-lg);padding:16px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(229,72,77,0.28);">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><div style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;"><i data-lucide="trending-down" style="width:16px;height:16px;color:#fff;"></i></div><i data-lucide="chevron-right" style="width:14px;height:14px;color:rgba(255,255,255,0.7);"></i></div>'+
         '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Gastos</div>'+
         '<div style="font-size:20px;font-weight:800;color:#fff;">'+fmtK(totalMes)+'</div>'+
