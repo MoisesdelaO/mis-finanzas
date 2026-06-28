@@ -4051,6 +4051,11 @@ function renderGastosPage(){
       (hayFiltros?'<button class="filter-toggle-btn has-filters" onclick="limpiarGastosFiltros()"><i data-lucide="x"></i> Limpiar</button>':'<span style="font-size:12px;color:var(--text-3);">Todos</span>')+
       '<div style="flex:1;"></div>'+
       '<div style="position:relative;display:inline-flex;align-items:center;">'+
+        '<select class="filter-toggle-btn" style="appearance:none;-webkit-appearance:none;padding-right:28px;cursor:pointer;background:var(--surface);border:1px solid var(--border);color:var(--text-2);" onchange="setGastosFiltro(\'tdc\',this.value)">'+
+          '<option value="todos"'+(f.tdc==='todos'?' selected':'')+'>Todas las TDC</option>'+
+          (DB.config.tdcs||[]).map(function(t){return '<option value="'+t.replace(/"/g,'&quot;')+'"'+(f.tdc===t?' selected':'')+'>'+t+'</option>';}).join('')+
+        '</select><span style="position:absolute;right:10px;pointer-events:none;display:flex;align-items:center;"><i data-lucide="credit-card" style="width:12px;height:12px;color:var(--text-3);"></i></span></div>'+
+      '<div style="position:relative;display:inline-flex;align-items:center;">'+
         '<select class="filter-toggle-btn" style="appearance:none;-webkit-appearance:none;padding-right:28px;cursor:pointer;background:var(--surface);border:1px solid var(--border);color:var(--text-2);" onchange="setGastosFiltro(\'orden\',this.value)">'+
           '<option value="reciente"'+(f.orden==='reciente'?' selected':'')+'>Reciente</option><option value="antiguo"'+(f.orden==='antiguo'?' selected':'')+'>Antiguo</option>'+
           '<option value="mayor"'+(f.orden==='mayor'?' selected':'')+'>Mayor $</option><option value="menor"'+(f.orden==='menor'?' selected':'')+'>Menor $</option>'+
