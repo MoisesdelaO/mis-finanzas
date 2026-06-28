@@ -1996,7 +1996,7 @@ input[type="date"]::-webkit-datetime-edit,input[type="date"]::-webkit-datetime-e
         <span class="patr-label"><i data-lucide="arrow-down-circle"></i> Ingresos</span>
         <span class="patr-value success mono" id="strip-ingresos">$42,120</span>
       </div>
-      <div class="patr-card clickable" onclick="navigate('movs')" title="Ver gastos">
+      <div class="patr-card clickable" onclick="irAMovsFiltrado('gasto')" title="Ver gastos">
         <span class="patr-label"><i data-lucide="arrow-up-circle"></i> Gastos</span>
         <span class="patr-value danger mono" id="strip-gastos">$13,580</span>
       </div>
@@ -3889,6 +3889,13 @@ function setMovsFiltro(campo,valor){
   renderMovsPage();
 }
 
+// Navega a la página de movimientos pre-filtrada por tipo (gasto/ingreso/pago)
+function irAMovsFiltrado(tipo){
+  _movsFiltros={tipo:tipo,tdc:'todos',cat:'todos',desde:'',hasta:'',orden:'reciente'};
+  _movsPagina=1;
+  navigate('movs');
+}
+
 function limpiarFiltrosMovs(){
   _movsFiltros={tipo:'todos',tdc:'todos',cat:'todos',desde:'',hasta:'',orden:'reciente'};
   renderMovsPage();
@@ -5540,7 +5547,7 @@ function renderStatsNuevo(){
     var totalPagosMes=pagosMesList.reduce(function(s,p){return s+p.monto;},0);
 
     html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
-      '<div onclick="navigate(\'movs\')" style="background:linear-gradient(135deg,#e5484d,#f87171);border-radius:var(--r-lg);padding:16px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(229,72,77,0.28);">'+
+      '<div onclick="irAMovsFiltrado(\'gasto\')" style="background:linear-gradient(135deg,#e5484d,#f87171);border-radius:var(--r-lg);padding:16px 14px;cursor:pointer;box-shadow:0 4px 14px rgba(229,72,77,0.28);">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><div style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;"><i data-lucide="trending-down" style="width:16px;height:16px;color:#fff;"></i></div><i data-lucide="chevron-right" style="width:14px;height:14px;color:rgba(255,255,255,0.7);"></i></div>'+
         '<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Gastos</div>'+
         '<div style="font-size:20px;font-weight:800;color:#fff;">'+fmtK(totalMes)+'</div>'+
